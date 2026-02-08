@@ -13,6 +13,7 @@ from urllib.parse import quote
 from app.services.application_record_service import ApplicationRecordService
 from app.services.job_providers.base import JobSearchParams
 from app.services.job_providers.jooble_provider import JoobleProvider
+from app.services.job_providers.bing_provider import BingWebSearchProvider
 
 class RealJobService:
     """真实招聘数据服务"""
@@ -23,6 +24,7 @@ class RealJobService:
         # - Otherwise fall back to the bundled local dataset generator.
         self.provider_name = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
         self.jooble = JoobleProvider()
+        self.bing = BingWebSearchProvider()
 
         # 本地岗位数据库（fallback；用于无API Key时的演示/离线运行）
         self.real_jobs_database = self._load_real_jobs()
@@ -233,6 +235,14 @@ class RealJobService:
             return False
         # auto
         return bool(self.jooble.api_key)
+
+    def _use_bing(self) -> bool:
+        if self.provider_name in ("bing", "bing_search"):
+            return True
+        if self.provider_name in ("local", "offline"):
+            return False
+        # auto (only if jooble is not enabled)
+        return (not self._use_jooble()) and bool(self.bing.api_key)
     
     def search_jobs(self, 
                    keywords: List[str] = None,
@@ -266,6 +276,17 @@ class RealJobService:
                 limit=limit,
             )
             return self.jooble.search_jobs(params)
+
+        # Real-time link discovery via search engine.
+        if self._use_bing():
+            params = JobSearchParams(
+                keywords=keywords,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=limit,
+            )
+            return self.bing.search_jobs(params)
 
         matched_jobs: List[Dict[str, Any]] = []
         
@@ -315,6 +336,10 @@ class RealJobService:
         """获取岗位详情"""
         if job_id and job_id.startswith("jooble_"):
             job = self.jooble.get_job_detail(job_id)
+            if job:
+                return job
+        if job_id and job_id.startswith("bing_"):
+            job = self.bing.get_job_detail(job_id)
             if job:
                 return job
         for job in self.real_jobs_database:
@@ -390,7 +415,7 @@ class RealJobService:
         return {
             "total_jobs": len(self.real_jobs_database),
             "total_companies": len(set(job['company'] for job in self.real_jobs_database)),
-            "provider_mode": ("jooble" if self._use_jooble() else "local"),
+            "provider_mode": ("jooble" if self._use_jooble() else ("bing" if self._use_bing() else "local")),
             "platforms": {
                 "Boss直聘": len([j for j in self.real_jobs_database if j['platform'] == 'Boss直聘']),
                 "猎聘": len([j for j in self.real_jobs_database if j['platform'] == '猎聘']),

@@ -16,4 +16,5 @@ data/
 .idea/
 *.log
 .cursor/
+~$*
 

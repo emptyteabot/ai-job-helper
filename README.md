@@ -1,29 +1,24 @@
-# 🚀 AI求职助手
+# 🚀 AI求职助手（本机 MVP + 云端部署）
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/你的用户名/ai-job-helper)
 
-## 在线访问
+## 文档
 
-🌐 **24小时在线**: https://你的域名.vercel.app
+- 最新文档索引：`docs/README.md`
 
-## 功能特点
+## 功能特点（当前代码已实现）
 
 - 🤖 6个AI协作引擎
 - 🎯 市场驱动架构
-- 📊 真实岗位数据（1000+）
-- ⚡ 5秒完成分析
+- 🔎 本机实时抓岗位链接（OpenClaw + Boss，手动投递）
+- 📊 本地岗位数据兜底（无 API Key 也能跑）
 - 🌐 24小时在线访问
 
-## 快速部署
+## 快速部署（云端 24h）
 
-### 方法1: Vercel一键部署（推荐）
+### 推荐：Zeabur / Railway / Render
 
-1. 点击上方 "Deploy with Vercel" 按钮
-2. 使用GitHub登录
-3. 创建新仓库
-4. 添加环境变量 `DEEPSEEK_API_KEY`
-5. 点击Deploy
-6. 等待部署完成（约2分钟）
+见 `docs/deploy/云端部署指南.md`。
 
 ### 方法2: 手动部署
 
@@ -39,7 +34,7 @@ npm i -g vercel
 vercel --prod
 ```
 
-## 本地运行
+## 本地运行（推荐）
 
 ```bash
 # 1. 安装依赖
@@ -53,7 +48,7 @@ DEEPSEEK_API_KEY=your_api_key_here
 python web_app.py
 
 # 4. 访问
-http://localhost:8000
+http://localhost:8000/app
 ```
 
 ## 环境变量
@@ -70,18 +65,9 @@ http://localhost:8000
 - **AI**: DeepSeek + AsyncOpenAI
 - **部署**: Vercel + GitHub
 
-## 更新日志
+## 备注
 
-### v3.0.0 (2024-02-08)
-- ✅ 市场驱动架构
-- ✅ 真实岗位数据
-- ✅ 并行处理（5秒完成）
-- ✅ 自动部署脚本
-
-### v2.0.0 (2024-02-08)
-- ✅ WebSocket实时进度
-- ✅ 技能图谱系统
-- ✅ Agent协调器
+- OpenClaw 抓取 Boss 链接只适用于本机（依赖你的浏览器登录态），不适合云端共享。
 
 ## 许可证
 

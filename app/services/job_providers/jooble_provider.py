@@ -42,17 +42,19 @@ class JoobleProvider(JobProvider):
 
         endpoint = f"https://jooble.org/api/{self.api_key}"
 
-        # Jooble expects a query string "keywords". We'll combine keywords and
-        # add location as part of query too (works better than relying on a
-        # separate field since Jooble API is query-driven).
+        # Jooble REST API parameters: keywords + optional location/salary/etc.
+        # We'll keep location as a dedicated field (per docs) but still allow
+        # extra qualifiers in keywords for better relevance.
         q_parts = [k.strip() for k in (params.keywords or []) if k and k.strip()]
-        if params.location:
-            q_parts.append(params.location.strip())
         if params.experience:
             q_parts.append(params.experience.strip())
-        query = " ".join(q_parts) if q_parts else (params.location or "jobs")
+        query = " ".join(q_parts) if q_parts else "jobs"
 
         payload: Dict[str, Any] = {"keywords": query}
+        if params.location:
+            payload["location"] = params.location.strip()
+        if params.salary_min:
+            payload["salary"] = int(params.salary_min)
 
         try:
             resp = requests.post(endpoint, json=payload, timeout=self.timeout_s)
@@ -91,4 +93,3 @@ class JoobleProvider(JobProvider):
         # Jooble API doesn't provide a detail endpoint; we return cached entry
         # from the most recent search.
         return self._cache.get(job_id)
-

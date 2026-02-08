@@ -14,6 +14,8 @@ from app.services.application_record_service import ApplicationRecordService
 from app.services.job_providers.base import JobSearchParams
 from app.services.job_providers.jooble_provider import JoobleProvider
 from app.services.job_providers.bing_provider import BingWebSearchProvider
+from app.services.job_providers.baidu_provider import BaiduSearchProvider
+from app.services.job_providers.brave_provider import BraveSearchProvider
 
 class RealJobService:
     """真实招聘数据服务"""
@@ -25,6 +27,8 @@ class RealJobService:
         self.provider_name = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
         self.jooble = JoobleProvider()
         self.bing = BingWebSearchProvider()
+        self.baidu = BaiduSearchProvider()
+        self.brave = BraveSearchProvider()
 
         # 本地岗位数据库（fallback；用于无API Key时的演示/离线运行）
         self.real_jobs_database = self._load_real_jobs()
@@ -243,6 +247,22 @@ class RealJobService:
             return False
         # auto (only if jooble is not enabled)
         return (not self._use_jooble()) and bool(self.bing.api_key)
+
+    def _use_brave(self) -> bool:
+        if self.provider_name in ("brave", "brave_search"):
+            return True
+        if self.provider_name in ("local", "offline"):
+            return False
+        # auto (only if jooble is not enabled)
+        return (not self._use_jooble()) and bool(self.brave.api_key)
+
+    def _use_baidu(self) -> bool:
+        if self.provider_name in ("baidu", "baidu_search", "deepseek_search"):
+            return True
+        if self.provider_name in ("local", "offline"):
+            return False
+        # auto fallback: if no API-based provider is enabled, use Baidu.
+        return (not self._use_jooble()) and (not self._use_brave()) and (not self._use_bing())
     
     def search_jobs(self, 
                    keywords: List[str] = None,
@@ -277,6 +297,16 @@ class RealJobService:
             )
             return self.jooble.search_jobs(params)
 
+        if self._use_brave():
+            params = JobSearchParams(
+                keywords=keywords,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=limit,
+            )
+            return self.brave.search_jobs(params)
+
         # Real-time link discovery via search engine.
         if self._use_bing():
             params = JobSearchParams(
@@ -287,6 +317,17 @@ class RealJobService:
                 limit=limit,
             )
             return self.bing.search_jobs(params)
+
+        # No-key China-friendly option: Baidu SERP -> real job URLs.
+        if self._use_baidu():
+            params = JobSearchParams(
+                keywords=keywords,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=limit,
+            )
+            return self.baidu.search_jobs(params)
 
         matched_jobs: List[Dict[str, Any]] = []
         
@@ -340,6 +381,14 @@ class RealJobService:
                 return job
         if job_id and job_id.startswith("bing_"):
             job = self.bing.get_job_detail(job_id)
+            if job:
+                return job
+        if job_id and job_id.startswith("baidu_"):
+            job = self.baidu.get_job_detail(job_id)
+            if job:
+                return job
+        if job_id and job_id.startswith("brave_"):
+            job = self.brave.get_job_detail(job_id)
             if job:
                 return job
         for job in self.real_jobs_database:
@@ -415,7 +464,15 @@ class RealJobService:
         return {
             "total_jobs": len(self.real_jobs_database),
             "total_companies": len(set(job['company'] for job in self.real_jobs_database)),
-            "provider_mode": ("jooble" if self._use_jooble() else ("bing" if self._use_bing() else "local")),
+            "provider_mode": (
+                "jooble"
+                if self._use_jooble()
+                else (
+                    "brave"
+                    if self._use_brave()
+                    else ("bing" if self._use_bing() else ("baidu" if self._use_baidu() else "local"))
+                )
+            ),
             "platforms": {
                 "Boss直聘": len([j for j in self.real_jobs_database if j['platform'] == 'Boss直聘']),
                 "猎聘": len([j for j in self.real_jobs_database if j['platform'] == '猎聘']),

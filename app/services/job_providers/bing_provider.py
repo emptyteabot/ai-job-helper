@@ -16,6 +16,10 @@ class BingWebSearchProvider(JobProvider):
 
     This is not scraping job boards directly. It queries Bing and returns result URLs/snippets.
 
+    Note: Microsoft announced Bing Search APIs retirement on 11 Aug 2025. If you
+    don't already have an existing subscription, you likely can't obtain new keys.
+    Prefer Jooble (JOOBLE_API_KEY) for real-time job search.
+
     Env:
       - BING_SEARCH_API_KEY: required
       - BING_SEARCH_ENDPOINT: optional, defaults to https://api.bing.microsoft.com/v7.0/search
@@ -112,4 +116,3 @@ class BingWebSearchProvider(JobProvider):
 
     def get_job_detail(self, job_id: str) -> Optional[Dict[str, Any]]:
         return self._cache.get(job_id)
-

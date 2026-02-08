@@ -41,7 +41,8 @@ class ResumeAnalyzer:
             "skills": self._extract_skills(resume_text),
             "skill_categories": self._categorize_skills(resume_text),
             "projects": self._extract_projects(resume_text),
-            "job_intention": self._extract_job_intention(resume_text)
+            "job_intention": self._extract_job_intention(resume_text),
+            "preferred_locations": self._extract_locations(resume_text),
         }
         return info
     
@@ -123,6 +124,37 @@ class ResumeAnalyzer:
             if match:
                 return match.group(1).strip()
         return "未指定"
+
+    def _extract_locations(self, text: str) -> List[str]:
+        """提取期望工作地点/城市（尽量宽松）"""
+        patterns = [
+            r"工作地点[：:]\s*([^\n]+)",
+            r"期望地点[：:]\s*([^\n]+)",
+            r"期望城市[：:]\s*([^\n]+)",
+            r"意向城市[：:]\s*([^\n]+)",
+            r"地点[：:]\s*([^\n]+)",
+        ]
+        raw = ""
+        for pattern in patterns:
+            m = re.search(pattern, text)
+            if m:
+                raw = (m.group(1) or "").strip()
+                break
+        if not raw:
+            return []
+
+        # split by common separators
+        raw = raw.replace("，", ",").replace("、", ",").replace("；", ",").replace(";", ",")
+        parts = [p.strip() for p in re.split(r"[,\s/]+", raw) if p.strip()]
+        # de-dup preserving order
+        out = []
+        seen = set()
+        for p in parts:
+            if p in seen:
+                continue
+            seen.add(p)
+            out.append(p)
+        return out[:5]
     
     def generate_summary(self, info: Dict[str, Any]) -> str:
         """生成简历摘要"""

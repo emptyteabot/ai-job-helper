@@ -749,6 +749,31 @@
                     
                     document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
                     document.getElementById('startBtn').disabled = false;
+
+                    // Auto-fill and auto-run Boss search after AI results (local OpenClaw only).
+                    try {
+                        const mode = (data.job_provider_mode || '').toLowerCase();
+                        const seed = data.boss_seed || {};
+                        const kws = Array.isArray(seed.keywords) ? seed.keywords : [];
+                        const loc = (seed.location || '').trim();
+                        if (kws.length > 0) {
+                            document.getElementById('jobKeywordsInput').value = kws.join(' ');
+                        }
+                        if (loc) {
+                            document.getElementById('jobLocationInput').value = loc;
+                        }
+                        if (mode === 'openclaw') {
+                            // Trigger search (will drive your attached browser tab).
+                            setTimeout(() => searchBossJobs(), 600);
+                        } else {
+                            // Still show seed for user to click manually.
+                            if (kws.length > 0 || loc) {
+                                setJobSearchStatus('💡 已根据简历生成搜索词（如需自动抓 Boss 链接，请在本机启用 OpenClaw 模式）', 'success');
+                            }
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
                 }, 1000);
                 
             } catch (error) {

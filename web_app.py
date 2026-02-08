@@ -803,6 +803,20 @@ async def process_resume(request: Request):
         
         # 使用市场驱动引擎处理
         results = await market_engine.process_resume(resume_text, update_progress_callback)
+
+        # Seed job search (Boss/OpenClaw) from resume text, so frontend can auto-search links.
+        info = analyzer.extract_info(resume_text)
+        seed_keywords = []
+        if info.get("job_intention") and info["job_intention"] != "未指定":
+            seed_keywords.append(info["job_intention"])
+        seed_keywords.extend((info.get("skills") or [])[:6])
+        seed_keywords = [k for k in seed_keywords if k]
+
+        seed_location = None
+        locs = info.get("preferred_locations") or []
+        if locs:
+            seed_location = locs[0]
+        provider_mode = (real_job_service.get_statistics() or {}).get("provider_mode", "")
         
         # 完成
         await progress_tracker.complete()
@@ -814,6 +828,12 @@ async def process_resume(request: Request):
             "optimized_resume": results['optimized_resume'],
             "interview_prep": results['interview_prep'],
             "mock_interview": results.get('salary_analysis', '')
+            ,
+            "job_provider_mode": provider_mode,
+            "boss_seed": {
+                "keywords": seed_keywords,
+                "location": seed_location,
+            },
         })
         
     except Exception as e:

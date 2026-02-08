@@ -10,8 +10,10 @@ __pycache__/
 dist/
 build/
 output/
+data/
 .DS_Store
 .vscode/
 .idea/
 *.log
+.cursor/
 

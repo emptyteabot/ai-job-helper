@@ -3,18 +3,32 @@
 支持: Boss直聘、猎聘、智联招聘、前程无忧
 """
 
-import requests
+import os
 import json
 from typing import List, Dict, Any
 import random
 from datetime import datetime, timedelta
+from urllib.parse import quote
+
+from app.services.application_record_service import ApplicationRecordService
+from app.services.job_providers.base import JobSearchParams
+from app.services.job_providers.jooble_provider import JoobleProvider
 
 class RealJobService:
     """真实招聘数据服务"""
     
     def __init__(self):
-        # 真实岗位数据库（从公开渠道整理的真实数据）
+        # Provider selection:
+        # - If JOOBLE_API_KEY is set, use real-time Jooble API results.
+        # - Otherwise fall back to the bundled local dataset generator.
+        self.provider_name = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+        self.jooble = JoobleProvider()
+
+        # 本地岗位数据库（fallback；用于无API Key时的演示/离线运行）
         self.real_jobs_database = self._load_real_jobs()
+
+        # 投递记录
+        self.records = ApplicationRecordService()
         
         # 第三方API配置（可选）
         self.api_configs = {
@@ -29,7 +43,22 @@ class RealJobService:
         }
     
     def _load_real_jobs(self) -> List[Dict[str, Any]]:
-        """加载真实岗位数据库（1000+真实岗位）"""
+        """加载本地岗位数据库（fallback；用于无API Key时的演示/离线运行）"""
+
+        # Keep output stable across runs so job IDs don't reshuffle every restart.
+        rng = random.Random(42)
+
+        def build_link(platform: str, title: str, company: str) -> str:
+            q = quote(f"{title} {company}")
+            if platform == "Boss直聘":
+                return f"https://www.zhipin.com/web/geek/job?query={q}"
+            if platform == "猎聘":
+                return f"https://www.liepin.com/zhaopin/?key={q}"
+            if platform == "智联招聘":
+                return f"https://sou.zhaopin.com/?kw={q}"
+            if platform == "前程无忧":
+                return f"https://search.51job.com/list/000000,000000,0000,00,9,99,{q},2,1.html"
+            return f"https://www.baidu.com/s?wd={quote(platform + ' ' + title + ' ' + company + ' 投递')}"
         
         # 真实公司列表
         companies = {
@@ -164,36 +193,46 @@ class RealJobService:
             for company in company_list:
                 for template in job_templates:
                     # 每个公司每个岗位生成1-2个职位
-                    for _ in range(random.randint(1, 2)):
+                    for _ in range(rng.randint(1, 2)):
                         job = {
                             "id": f"JOB{job_id:06d}",
                             "title": template["title"],
                             "company": company,
                             "company_category": category,
-                            "salary": random.choice(template["salary_range"]),
-                            "location": random.choice(["北京", "上海", "深圳", "杭州", "广州", "成都"]),
-                            "experience": random.choice(template["experience"]),
-                            "education": random.choice(template["education"]),
+                            "salary": rng.choice(template["salary_range"]),
+                            "location": rng.choice(["北京", "上海", "深圳", "杭州", "广州", "成都"]),
+                            "experience": rng.choice(template["experience"]),
+                            "education": rng.choice(template["education"]),
                             "requirements": template["requirements"],
                             "description": template["description"],
                             "platform": template["platform"],
-                            "publish_date": (datetime.now() - timedelta(days=random.randint(0, 30))).strftime("%Y-%m-%d"),
-                            "company_size": random.choice(["50-150人", "150-500人", "500-2000人", "2000人以上"]),
-                            "company_type": random.choice(["互联网", "金融", "教育", "医疗", "电商"]),
-                            "welfare": random.sample([
+                            "link": build_link(template["platform"], template["title"], company),
+                            "publish_date": (datetime.now() - timedelta(days=rng.randint(0, 30))).strftime("%Y-%m-%d"),
+                            "company_size": rng.choice(["50-150人", "150-500人", "500-2000人", "2000人以上"]),
+                            "company_type": rng.choice(["互联网", "金融", "教育", "医疗", "电商"]),
+                            "welfare": rng.sample([
                                 "五险一金", "年终奖", "股票期权", "弹性工作",
                                 "带薪年假", "免费三餐", "健身房", "团建活动",
                                 "节日福利", "通讯补贴", "交通补贴", "住房补贴"
-                            ], k=random.randint(4, 8)),
-                            "hr_name": f"HR{random.randint(1000, 9999)}",
-                            "hr_response_rate": f"{random.randint(70, 99)}%",
-                            "view_count": random.randint(100, 5000),
-                            "apply_count": random.randint(10, 500)
+                            ], k=rng.randint(4, 8)),
+                            "hr_name": f"HR{rng.randint(1000, 9999)}",
+                            "hr_response_rate": f"{rng.randint(70, 99)}%",
+                            "view_count": rng.randint(100, 5000),
+                            "apply_count": rng.randint(10, 500),
+                            "provider": "local",
                         }
                         jobs.append(job)
                         job_id += 1
         
         return jobs
+
+    def _use_jooble(self) -> bool:
+        if self.provider_name in ("jooble",):
+            return True
+        if self.provider_name in ("local", "offline"):
+            return False
+        # auto
+        return bool(self.jooble.api_key)
     
     def search_jobs(self, 
                    keywords: List[str] = None,
@@ -202,7 +241,7 @@ class RealJobService:
                    experience: str = None,
                    limit: int = 50) -> List[Dict[str, Any]]:
         """
-        搜索真实岗位
+        搜索岗位（实时优先；无API Key时自动回退到本地数据）
         
         Args:
             keywords: 关键词列表（技能、职位等）
@@ -215,7 +254,20 @@ class RealJobService:
             匹配的岗位列表
         """
         
-        matched_jobs = []
+        keywords = keywords or []
+
+        # Real-time provider path.
+        if self._use_jooble():
+            params = JobSearchParams(
+                keywords=keywords,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=limit,
+            )
+            return self.jooble.search_jobs(params)
+
+        matched_jobs: List[Dict[str, Any]] = []
         
         for job in self.real_jobs_database:
             score = 0
@@ -261,6 +313,10 @@ class RealJobService:
     
     def get_job_detail(self, job_id: str) -> Dict[str, Any]:
         """获取岗位详情"""
+        if job_id and job_id.startswith("jooble_"):
+            job = self.jooble.get_job_detail(job_id)
+            if job:
+                return job
         for job in self.real_jobs_database:
             if job['id'] == job_id:
                 return job
@@ -286,22 +342,39 @@ class RealJobService:
                 "message": "岗位不存在"
             }
         
-        # 模拟投递（实际应该调用真实API或自动化工具）
+        # IMPORTANT:
+        # Most job boards (Boss/猎聘/智联/51job) do not provide a public "apply"
+        # API. Real automated applying generally requires logged-in browser
+        # automation and may violate platform ToS, and also runs into captchas.
+        # Here we implement "真实岗位 + 跳转投递" and record an application entry.
+        application_id = f"APP{random.randint(100000, 999999)}"
+        apply_link = job.get("link") or job.get("apply_url") or ""
+        status = "待投递" if apply_link else "待处理"
+
         application = {
-            "application_id": f"APP{random.randint(100000, 999999)}",
+            "application_id": application_id,
             "job_id": job_id,
-            "job_title": job['title'],
-            "company": job['company'],
-            "platform": job['platform'],
+            "job_title": job.get('title', ''),
+            "company": job.get('company', ''),
+            "platform": job.get('platform', job.get('provider', '')),
             "apply_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "status": "已投递",
-            "expected_response_time": "3个工作日内"
+            "status": status,
+            "apply_link": apply_link,
+            "user_info": user_info or {},
         }
-        
+        self.records.add_record(application)
+
+        if apply_link:
+            return {
+                "success": True,
+                "message": "已生成投递链接（请在打开的招聘网站完成真实投递）",
+                "data": application,
+            }
+
         return {
-            "success": True,
-            "message": "投递成功",
-            "data": application
+            "success": False,
+            "message": "该岗位未提供可跳转的投递链接，无法进行真实投递。",
+            "data": application,
         }
     
     def batch_apply(self, job_ids: List[str], resume_text: str, user_info: Dict) -> List[Dict]:
@@ -317,6 +390,7 @@ class RealJobService:
         return {
             "total_jobs": len(self.real_jobs_database),
             "total_companies": len(set(job['company'] for job in self.real_jobs_database)),
+            "provider_mode": ("jooble" if self._use_jooble() else "local"),
             "platforms": {
                 "Boss直聘": len([j for j in self.real_jobs_database if j['platform'] == 'Boss直聘']),
                 "猎聘": len([j for j in self.real_jobs_database if j['platform'] == '猎聘']),

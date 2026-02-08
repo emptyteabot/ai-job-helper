@@ -279,7 +279,8 @@ class RealJobService:
                    location: str = None,
                    salary_min: int = None,
                    experience: str = None,
-                   limit: int = 50) -> List[Dict[str, Any]]:
+                   limit: int = 50,
+                   progress_callback=None) -> List[Dict[str, Any]]:
         """
         搜索岗位（实时优先；无API Key时自动回退到本地数据）
         
@@ -315,7 +316,7 @@ class RealJobService:
                 experience=experience,
                 limit=limit,
             )
-            return self.openclaw.search_jobs(params)
+            return self.openclaw.search_jobs(params, progress_callback=progress_callback)
 
         if self._use_brave():
             params = JobSearchParams(

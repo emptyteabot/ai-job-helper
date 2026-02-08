@@ -517,6 +517,23 @@
                 <h3>🎯 推荐岗位列表</h3>
                 <div class="result-content" id="jobRecommendations"></div>
             </div>
+
+            <div class="result-card">
+                <h3>🔎 实时岗位搜索（Boss直聘，手动投递）</h3>
+                <div style="color: var(--text-secondary); font-size: 0.95rem; margin: 0.25rem 0 0.75rem;">
+                    本机模式：需要先在 Chrome 打开 Boss 并点击 OpenClaw 扩展 Attach，然后这里搜索会让浏览器自动跳转抓取岗位链接。
+                </div>
+                <div class="progress-bar" style="height: 10px; border-radius: 999px; margin-bottom: 0.75rem;">
+                    <div class="progress-fill" id="jobSearchProgressFill" style="width: 0%;"></div>
+                </div>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.75rem;">
+                    <input id="jobKeywordsInput" placeholder="关键词（如：Python 后端 FastAPI）" style="flex: 2; min-width: 220px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary);">
+                    <input id="jobLocationInput" placeholder="城市（如：北京）" style="flex: 1; min-width: 140px; padding: 0.75rem; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary);">
+                    <button class="btn btn-primary" onclick="searchBossJobs()">搜索Boss岗位</button>
+                </div>
+                <div class="upload-status" id="jobSearchStatus"></div>
+                <div id="jobSearchResults" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+            </div>
             
             <div class="result-card">
                 <h3>✍️ 优化后的简历</h3>
@@ -564,6 +581,8 @@
                 if (data.type === 'ai_message') {
                     // AI消息
                     addAIMessage(`${data.data.agent}: ${data.data.message}`);
+                } else if (data.type === 'job_search') {
+                    updateJobSearchProgress(data.data?.percent || 0, data.data?.message || '');
                 } else {
                     // 进度更新
                     updateProgress(data.step, data.message);
@@ -801,6 +820,143 @@
             a.click();
             URL.revokeObjectURL(url);
         }
+
+        function splitKeywords(raw) {
+            const s = (raw || '').trim();
+            if (!s) return '';
+            // allow spaces/commas/Chinese commas
+            const parts = s
+                .replace(/，/g, ',')
+                .split(/[\s,]+/)
+                .map(x => x.trim())
+                .filter(Boolean);
+            return parts.join(',');
+        }
+
+        function setJobSearchStatus(message, type) {
+            const el = document.getElementById('jobSearchStatus');
+            el.textContent = message || '';
+            el.className = 'upload-status ' + (type || '');
+        }
+
+        function updateJobSearchProgress(percent, message) {
+            const p = Math.max(0, Math.min(100, Number(percent) || 0));
+            const fill = document.getElementById('jobSearchProgressFill');
+            if (fill) fill.style.width = p + '%';
+            if (message) setJobSearchStatus(message, 'loading');
+        }
+
+        function renderJobResults(jobs) {
+            const root = document.getElementById('jobSearchResults');
+            root.innerHTML = '';
+            if (!jobs || jobs.length === 0) {
+                const empty = document.createElement('div');
+                empty.style.color = 'var(--text-secondary)';
+                empty.textContent = '未返回岗位（可能需要等待页面加载或重新Attach一次OpenClaw）。';
+                root.appendChild(empty);
+                return;
+            }
+
+            jobs.forEach((job) => {
+                const card = document.createElement('div');
+                card.style.border = '1px solid var(--border)';
+                card.style.borderRadius = '14px';
+                card.style.padding = '0.9rem';
+                card.style.background = 'var(--bg-secondary)';
+
+                const title = document.createElement('div');
+                title.style.fontWeight = '700';
+                title.style.marginBottom = '0.25rem';
+                title.textContent = (job.title || '未命名岗位').trim();
+
+                const meta = document.createElement('div');
+                meta.style.color = 'var(--text-secondary)';
+                meta.style.fontSize = '0.9rem';
+                meta.style.marginBottom = '0.6rem';
+                meta.textContent = `${job.platform || ''}  ${job.location || ''}`.trim();
+
+                const actions = document.createElement('div');
+                actions.style.display = 'flex';
+                actions.style.gap = '0.6rem';
+                actions.style.flexWrap = 'wrap';
+
+                const openBtn = document.createElement('button');
+                openBtn.className = 'btn btn-secondary';
+                openBtn.textContent = '打开链接';
+                openBtn.onclick = () => {
+                    if (job.link) window.open(job.link, '_blank');
+                };
+
+                const applyBtn = document.createElement('button');
+                applyBtn.className = 'btn btn-primary';
+                applyBtn.textContent = '投递（跳转）';
+                applyBtn.onclick = () => applyAndOpen(job);
+
+                const link = document.createElement('div');
+                link.style.color = 'var(--text-secondary)';
+                link.style.fontSize = '0.85rem';
+                link.style.wordBreak = 'break-all';
+                link.textContent = job.link || '';
+
+                actions.appendChild(openBtn);
+                actions.appendChild(applyBtn);
+
+                card.appendChild(title);
+                card.appendChild(meta);
+                card.appendChild(actions);
+                card.appendChild(link);
+                root.appendChild(card);
+            });
+        }
+
+        async function searchBossJobs() {
+            const kwRaw = document.getElementById('jobKeywordsInput').value;
+            const locRaw = document.getElementById('jobLocationInput').value;
+            const keywords = splitKeywords(kwRaw);
+            const location = (locRaw || '').trim();
+
+            updateJobSearchProgress(2, '🔎 正在搜索（会驱动浏览器跳转抓取链接）...');
+            try {
+                const qs = new URLSearchParams();
+                if (keywords) qs.set('keywords', keywords);
+                if (location) qs.set('location', location);
+                qs.set('limit', '20');
+
+                const res = await fetch('/api/jobs/search?' + qs.toString());
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '搜索失败');
+
+                updateJobSearchProgress(100, `✅ 返回 ${data.total || 0} 条岗位（点“投递（跳转）”去手动提交）`);
+                setJobSearchStatus(`✅ 返回 ${data.total || 0} 条岗位（点“投递（跳转）”去手动提交）`, 'success');
+                renderJobResults(data.jobs || []);
+            } catch (e) {
+                setJobSearchStatus('❌ ' + (e.message || String(e)), 'error');
+                updateJobSearchProgress(0, '');
+                renderJobResults([]);
+            }
+        }
+
+        async function applyAndOpen(job) {
+            try {
+                const resumeText = (document.getElementById('resumeInput').value || '').trim();
+                const res = await fetch('/api/jobs/apply', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        job_id: job.id,
+                        resume_text: resumeText,
+                        user_info: {}
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '投递失败');
+
+                const link = data?.data?.apply_link || job.link;
+                if (link) window.open(link, '_blank');
+            } catch (e) {
+                alert('投递跳转失败：' + (e.message || String(e)));
+            }
+        }
         
         // 页面加载完成提示
         console.log('✅ AI求职助手已加载');
@@ -808,4 +964,3 @@
     </script>
 </body>
 </html>
-

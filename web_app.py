@@ -840,13 +840,25 @@ async def search_jobs(
 ):
     """搜索真实岗位"""
     try:
+        # Stream progress to the same WebSocket channel as the AI pipeline.
+        # Frontend listens for `type=job_search`.
+        import asyncio
+
+        def progress_cb(message: str, percent: int):
+            asyncio.create_task(
+                progress_tracker.broadcast(
+                    {"type": "job_search", "data": {"message": message, "percent": int(percent)}}
+                )
+            )
+
         keyword_list = keywords.split(',') if keywords else []
         jobs = real_job_service.search_jobs(
             keywords=keyword_list,
             location=location,
             salary_min=salary_min,
             experience=experience,
-            limit=limit
+            limit=limit,
+            progress_callback=progress_cb,
         )
         return JSONResponse({
             "success": True,
@@ -933,4 +945,3 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
     
     uvicorn.run(app, host="0.0.0.0", port=port)
-

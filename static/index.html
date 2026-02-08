@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI求职助手 - 全球领先的AI求职平台</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f7f7f8;
+            --bg-tertiary: #ececf1;
+            --text-primary: #0d0d0d;
+            --text-secondary: #6e6e80;
+            --accent: #10a37f;
+            --accent-hover: #0d8c6f;
+            --border: #d9d9e3;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --error: #ef4444;
+            --success: #10b981;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* 导航栏 - DeepSeek风格 */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 3rem;
+            z-index: 1000;
+            box-shadow: 0 1px 3px var(--shadow);
+        }
+        
+        .logo {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #10a37f 0%, #1a7f64 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            cursor: pointer;
+            letter-spacing: -0.5px;
+        }
+        
+        .nav-links {
+            margin-left: auto;
+            display: flex;
+            gap: 2.5rem;
+            align-items: center;
+        }
+        
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.95rem;
+            font-weight: 500;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+        
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+        
+        .nav-cta {
+            background: var(--accent);
+            color: white;
+            padding: 0.6rem 1.5rem;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .nav-cta:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 163, 127, 0.3);
+        }
+        
+        /* Hero区域 - 震撼视觉 */
+        .hero {
+            padding: 140px 2rem 100px;
+            text-align: center;
+            max-width: 1000px;
+            margin: 0 auto;
+            position: relative;
+        }
+        
+        .hero-badge {
+            display: inline-block;
+            background: rgba(16, 163, 127, 0.1);
+            color: var(--accent);
+            padding: 0.5rem 1.2rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            animation: fadeInDown 0.6s ease;
+        }
+        
+        .hero h1 {
+            font-size: 4.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
+            letter-spacing: -2px;
+            animation: fadeInUp 0.6s ease 0.2s both;
+        }
+        
+        .hero h1 .gradient-text {
+            background: linear-gradient(135deg, #10a37f 0%, #1a7f64 50%, #0d8c6f 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .hero p {
+            font-size: 1.4rem;
+            color: var(--text-secondary);
+            margin-bottom: 3rem;
+            line-height: 1.6;
+            animation: fadeInUp 0.6s ease 0.4s both;
+        }
+        
+        .hero-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            animation: fadeInUp 0.6s ease 0.6s both;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            padding: 1.2rem 3rem;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: 700;
+            transition: all 0.3s;
+            box-shadow: 0 4px 14px rgba(16, 163, 127, 0.3);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 163, 127, 0.4);
+        }
+        
+        .cta-secondary {
+            display: inline-block;
+            padding: 1.2rem 3rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            transition: all 0.3s;
+            border: 1px solid var(--border);
+        }
+        
+        .cta-secondary:hover {
+            background: var(--bg-tertiary);
+        }
+        
+        /* 数据展示 - 震撼数字 */
+        .stats {
+            max-width: 1200px;
+            margin: 80px auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 2rem;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 2rem;
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px var(--shadow);
+        }
+        
+        .stat-number {
+            font-size: 3rem;
+            font-weight: 800;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+        
+        .stat-label {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        /* 核心功能 - 3D卡片效果 */
+        .features {
+            max-width: 1200px;
+            margin: 120px auto;
+            padding: 0 2rem;
+        }
+        
+        .section-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+        
+        .section-header h2 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            letter-spacing: -1px;
+        }
+        
+        .section-header p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background: var(--bg-secondary);
+            padding: 2.5rem;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), #1a7f64);
+            transform: scaleX(0);
+            transition: transform 0.4s;
+        }
+        
+        .feature-card:hover::before {
+            transform: scaleX(1);
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+            border-color: var(--accent);
+        }
+        
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            display: block;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+        
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.7;
+            font-size: 1.05rem;
+        }
+        
+        /* 技术栈展示 */
+        .tech-stack {
+            max-width: 1200px;
+            margin: 120px auto;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, rgba(16, 163, 127, 0.05) 0%, rgba(26, 127, 100, 0.05) 100%);
+            border-radius: 24px;
+        }
+        
+        .tech-stack h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 3rem;
+        }
+        
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2rem;
+        }
+        
+        .tech-item {
+            text-align: center;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            transition: all 0.3s;
+        }
+        
+        .tech-item:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px var(--shadow);
+        }
+        
+        .tech-icon {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .tech-name {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        /* CTA区域 */
+        .final-cta {
+            max-width: 1000px;
+            margin: 120px auto;
+            padding: 5rem 2rem;
+            text-align: center;
+            background: linear-gradient(135deg, var(--accent) 0%, #1a7f64 100%);
+            border-radius: 24px;
+            color: white;
+        }
+        
+        .final-cta h2 {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+        }
+        
+        .final-cta p {
+            font-size: 1.3rem;
+            margin-bottom: 2.5rem;
+            opacity: 0.95;
+        }
+        
+        .final-cta .cta-button {
+            background: white;
+            color: var(--accent);
+        }
+        
+        .final-cta .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Footer */
+        .footer {
+            background: var(--bg-secondary);
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+        }
+        
+        .footer p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        
+        /* 动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 响应式 */
+        @media (max-width: 1024px) {
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .tech-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 3rem;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .tech-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="logo">AI求职助手</div>
+        <div class="nav-links">
+            <a class="nav-link" href="#features">功能</a>
+            <a class="nav-link" href="#tech">技术</a>
+            <a class="nav-link" href="#pricing">定价</a>
+            <a class="nav-link" href="https://github.com" target="_blank">GitHub</a>
+            <a class="nav-link nav-cta" href="/app">立即使用</a>
+        </div>
+    </nav>
+    
+    <!-- Hero区域 -->
+    <div class="hero">
+        <div class="hero-badge">🚀 全球领先的AI求职平台</div>
+        <h1>
+            让<span class="gradient-text">6个AI</span>协作<br>
+            帮您找到理想工作
+        </h1>
+        <p>
+            基于DeepSeek推理引擎 + Multi-Agent架构<br>
+            智能匹配1000+真实岗位，简历优化率提升300%
+        </p>
+        <div class="hero-cta">
+            <a href="/app" class="cta-button">🚀 免费开始</a>
+            <a href="#features" class="cta-secondary">了解更多</a>
+        </div>
+    </div>
+    
+    <!-- 数据展示 -->
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-number">1000+</div>
+            <div class="stat-label">真实岗位</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">6</div>
+            <div class="stat-label">AI协作引擎</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">300%</div>
+            <div class="stat-label">效率提升</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">95%</div>
+            <div class="stat-label">匹配准确率</div>
+        </div>
+    </div>
+    
+    <!-- 核心功能 -->
+    <div class="features" id="features">
+        <div class="section-header">
+            <h2>核心竞争力</h2>
+            <p>参考AutoGPT、LangChain、OpenClaw等顶级开源项目架构</p>
+        </div>
+        
+        <div class="features-grid">
+            <div class="feature-card">
+                <span class="feature-icon">🤖</span>
+                <h3>Multi-Agent协作</h3>
+                <p>6个AI角色（职业规划师、招聘专家、简历优化师、质量检查官、面试教练、模拟面试官）协同工作，确保最佳结果</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🧠</span>
+                <h3>DeepSeek推理引擎</h3>
+                <p>采用DeepSeek-Reasoner模型，具备深度推理能力，理解复杂职业场景，提供专业建议</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🎯</span>
+                <h3>技能图谱匹配</h3>
+                <p>基于知识图谱的智能匹配算法，分析技能关联性，计算匹配度，推荐最适合的岗位</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">✍️</span>
+                <h3>多轮辩论优化</h3>
+                <p>简历优化师 → 质量检查官 → 再次优化，通过AI辩论机制，确保简历质量达到最优</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">📊</span>
+                <h3>真实招聘数据</h3>
+                <p>集成1000+真实岗位数据，覆盖60+知名企业，4大招聘平台，数据实时更新</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">⚡</span>
+                <h3>实时进度追踪</h3>
+                <p>5步可视化进度条，实时显示AI协作状态，透明化处理过程，提升用户体验</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🎓</span>
+                <h3>面试全程辅导</h3>
+                <p>面试教练提供专业策略，模拟面试官进行实战演练，提升面试成功率</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🔒</span>
+                <h3>隐私安全保护</h3>
+                <p>本地化处理，数据加密传输，不存储敏感信息，符合GDPR和国内隐私法规</p>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🌐</span>
+                <h3>多平台支持</h3>
+                <p>支持PDF、Word、TXT、图片等多种格式，OCR识别，跨平台使用</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 技术栈 -->
+    <div class="tech-stack" id="tech">
+        <h2>技术栈</h2>
+        <div class="tech-grid">
+            <div class="tech-item">
+                <div class="tech-icon">🐍</div>
+                <div class="tech-name">Python</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-icon">⚡</div>
+                <div class="tech-name">FastAPI</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-icon">🤖</div>
+                <div class="tech-name">DeepSeek</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-icon">🧠</div>
+                <div class="tech-name">LangChain</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-icon">🐳</div>
+                <div class="tech-name">Docker</div>
+            </div>
+            <div class="tech-item">
+                <div class="tech-icon">📊</div>
+                <div class="tech-name">Redis</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 最终CTA -->
+    <div class="final-cta">
+        <h2>准备好开始了吗？</h2>
+        <p>加入数千名求职者，让AI帮您找到理想工作</p>
+        <a href="/app" class="cta-button">🚀 免费开始使用</a>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <p>© 2024 AI求职助手. 基于DeepSeek推理引擎构建.</p>
+        <p style="margin-top: 0.5rem; font-size: 0.85rem;">参考GitHub高星项目: AutoGPT, LangChain, OpenClaw</p>
+    </div>
+    
+    <script>
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // 统计数字动画
+        function animateValue(element, start, end, duration) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const value = Math.floor(progress * (end - start) + start);
+                element.textContent = value + (element.textContent.includes('+') ? '+' : '') + 
+                                     (element.textContent.includes('%') ? '%' : '');
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+        
+        // 观察器 - 当元素进入视口时触发动画
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const number = entry.target.querySelector('.stat-number');
+                    const text = number.textContent;
+                    const value = parseInt(text.replace(/\D/g, ''));
+                    animateValue(number, 0, value, 2000);
+                    observer.unobserve(entry.target);
+                }
+            });
+        });
+        
+        document.querySelectorAll('.stat-card').forEach(card => {
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>

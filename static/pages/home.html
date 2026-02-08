@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI求职助手 - 首页</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f7f7f8;
+            --text-primary: #0d0d0d;
+            --text-secondary: #6e6e80;
+            --accent: #10a37f;
+            --border: #d9d9e3;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+        
+        /* 导航栏 */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 2rem;
+            z-index: 1000;
+        }
+        
+        .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #10a37f 0%, #1a7f64 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            cursor: pointer;
+        }
+        
+        .nav-links {
+            margin-left: auto;
+            display: flex;
+            gap: 2rem;
+        }
+        
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+        
+        .nav-link:hover {
+            color: var(--text-primary);
+        }
+        
+        /* Hero区域 */
+        .hero {
+            padding: 120px 2rem 80px;
+            text-align: center;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+        
+        .hero p {
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            padding: 1rem 2.5rem;
+            background: var(--accent);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 163, 127, 0.3);
+        }
+        
+        /* 特性展示 */
+        .features {
+            max-width: 1200px;
+            margin: 80px auto;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+        
+        .feature-card {
+            background: var(--bg-secondary);
+            padding: 2rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+        
+        .feature-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .feature-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 0.8rem;
+        }
+        
+        .feature-card p {
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo" onclick="location.href='/'">AI求职助手</div>
+        <div class="nav-links">
+            <a class="nav-link" onclick="location.href='/app'">开始使用</a>
+            <a class="nav-link" onclick="showPage('features')">功能</a>
+            <a class="nav-link" onclick="showPage('pricing')">定价</a>
+            <a class="nav-link" onclick="showPage('docs')">文档</a>
+        </div>
+    </nav>
+    
+    <div class="hero">
+        <h1>AI驱动的智能求职平台</h1>
+        <p>6个AI协作优化简历，自动匹配岗位，提升求职效率10倍</p>
+        <a href="/app" class="cta-button">🚀 立即开始</a>
+    </div>
+    
+    <div class="features">
+        <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <h3>6-AI协作引擎</h3>
+            <p>职业规划师、招聘专家、简历优化师等6个AI角色协同工作，确保最佳结果</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">🎯</div>
+            <h3>智能岗位匹配</h3>
+            <p>基于技能图谱的智能匹配算法，从1000+真实岗位中找到最适合您的机会</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">✍️</div>
+            <h3>简历深度优化</h3>
+            <p>多轮AI辩论优化，质量检查官审核，确保简历完美匹配目标岗位</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">🎓</div>
+            <h3>面试全程辅导</h3>
+            <p>面试教练提供专业建议，模拟面试官进行实战演练</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <h3>实时进度追踪</h3>
+            <p>5步可视化进度条，实时显示AI协作状态和处理进度</p>
+        </div>
+        
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>数据驱动决策</h3>
+            <p>基于真实招聘数据，提供职业分析和薪资建议</p>
+        </div>
+    </div>
+    
+    <script>
+        function showPage(page) {
+            alert(`${page}页面开发中...`);
+        }
+    </script>
+</body>
+</html>
+

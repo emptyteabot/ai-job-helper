@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>测试上传功能</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-btn {
+            width: 100%;
+            padding: 30px;
+            background: #f0f0f0;
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 1.2em;
+            transition: all 0.3s;
+        }
+        .upload-btn:hover {
+            background: #e8e8ff;
+            border-color: #764ba2;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+        }
+        #content {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>📎 测试文件上传功能</h1>
+        
+        <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt" style="display: none;">
+        
+        <div class="upload-btn" onclick="document.getElementById('fileInput').click()">
+            📎 点击这里上传简历文件<br>
+            <small style="color: #999;">支持 PDF、Word、TXT</small>
+        </div>
+        
+        <div id="status">等待上传...</div>
+        <div id="content" style="display: none;"></div>
+    </div>
+    
+    <script>
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const statusDiv = document.getElementById('status');
+            const contentDiv = document.getElementById('content');
+            
+            statusDiv.textContent = '📤 正在上传: ' + file.name;
+            statusDiv.style.color = '#667eea';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('http://localhost:8000/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '上传失败');
+                }
+                
+                const data = await response.json();
+                
+                statusDiv.textContent = '✅ 上传成功！文件: ' + data.filename;
+                statusDiv.style.color = '#27ae60';
+                
+                contentDiv.style.display = 'block';
+                contentDiv.textContent = '解析内容:\n\n' + data.resume_text;
+                
+            } catch (error) {
+                statusDiv.textContent = '❌ 错误: ' + error.message;
+                statusDiv.style.color = '#e74c3c';
+            }
+        });
+    </script>
+</body>
+</html>
+

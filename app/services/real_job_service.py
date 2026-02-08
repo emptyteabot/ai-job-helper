@@ -16,6 +16,7 @@ from app.services.job_providers.jooble_provider import JoobleProvider
 from app.services.job_providers.bing_provider import BingWebSearchProvider
 from app.services.job_providers.baidu_provider import BaiduSearchProvider
 from app.services.job_providers.brave_provider import BraveSearchProvider
+from app.services.job_providers.openclaw_browser_provider import OpenClawBrowserProvider
 
 class RealJobService:
     """真实招聘数据服务"""
@@ -29,6 +30,7 @@ class RealJobService:
         self.bing = BingWebSearchProvider()
         self.baidu = BaiduSearchProvider()
         self.brave = BraveSearchProvider()
+        self.openclaw = OpenClawBrowserProvider()
 
         # 本地岗位数据库（fallback；用于无API Key时的演示/离线运行）
         self.real_jobs_database = self._load_real_jobs()
@@ -256,6 +258,14 @@ class RealJobService:
         # auto (only if jooble is not enabled)
         return (not self._use_jooble()) and bool(self.brave.api_key)
 
+    def _use_openclaw(self) -> bool:
+        if self.provider_name in ("openclaw", "openclaw_browser"):
+            return True
+        if self.provider_name in ("local", "offline"):
+            return False
+        # auto: prefer API providers; OpenClaw is a local interactive option.
+        return False
+
     def _use_baidu(self) -> bool:
         if self.provider_name in ("baidu", "baidu_search", "deepseek_search"):
             return True
@@ -296,6 +306,16 @@ class RealJobService:
                 limit=limit,
             )
             return self.jooble.search_jobs(params)
+
+        if self._use_openclaw():
+            params = JobSearchParams(
+                keywords=keywords,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=limit,
+            )
+            return self.openclaw.search_jobs(params)
 
         if self._use_brave():
             params = JobSearchParams(
@@ -391,6 +411,10 @@ class RealJobService:
             job = self.brave.get_job_detail(job_id)
             if job:
                 return job
+        if job_id and job_id.startswith("openclaw_"):
+            job = self.openclaw.get_job_detail(job_id)
+            if job:
+                return job
         for job in self.real_jobs_database:
             if job['id'] == job_id:
                 return job
@@ -468,9 +492,13 @@ class RealJobService:
                 "jooble"
                 if self._use_jooble()
                 else (
+                    "openclaw"
+                    if self._use_openclaw()
+                    else (
                     "brave"
                     if self._use_brave()
                     else ("bing" if self._use_bing() else ("baidu" if self._use_baidu() else "local"))
+                    )
                 )
             ),
             "platforms": {

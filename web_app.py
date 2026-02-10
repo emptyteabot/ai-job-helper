@@ -1046,3 +1046,84 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
     
     uvicorn.run(app, host="0.0.0.0", port=port)
+
+        # 验证API密钥
+        if not authorization or not authorization.startswith("Bearer "):
+            return JSONResponse({"error": "未授权：缺少API密钥"}, status_code=401)
+        
+        api_key = authorization.replace("Bearer ", "")
+        if api_key != CRAWLER_API_KEY:
+            return JSONResponse({"error": "未授权：API密钥无效"}, status_code=401)
+        
+        # 解析数据
+        data = await request.json()
+        jobs = data.get("jobs", [])
+        
+        if not jobs:
+            return JSONResponse({"error": "岗位数据为空"}, status_code=400)
+        
+        # 添加接收时间戳
+        from datetime import datetime
+        for job in jobs:
+            job["received_at"] = datetime.now().isoformat()
+        
+        # 存储到缓存（去重）
+        existing_ids = {job.get("id") for job in cloud_jobs_cache}
+        new_jobs = [job for job in jobs if job.get("id") not in existing_ids]
+        
+        cloud_jobs_cache.extend(new_jobs)
+        
+        # 限制缓存大小（保留最新的5000个）
+        if len(cloud_jobs_cache) > 5000:
+            cloud_jobs_cache[:] = cloud_jobs_cache[-5000:]
+        
+        print(f"✅ 接收爬虫数据：{len(new_jobs)} 个新岗位（总计：{len(cloud_jobs_cache)}）")
+        
+        return JSONResponse({
+            "success": True,
+            "received": len(jobs),
+            "new": len(new_jobs),
+            "total": len(cloud_jobs_cache)
+        })
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/crawler/status")
+async def get_crawler_status():
+    """获取爬虫数据状态"""
+    if not cloud_jobs_cache:
+        return JSONResponse({
+            "status": "empty",
+            "total": 0
+        })
+    
+    return JSONResponse({
+        "status": "ok",
+        "total": len(cloud_jobs_cache)
+    })
+
+if __name__ == "__main__":
+    import webbrowser
+    import threading
+    
+    port = int(os.getenv("PORT", 8000))
+    
+    print("\n" + "🚀"*30)
+    print("AI求职助手 - Web服务启动中...")
+    print("🚀"*30 + "\n")
+    print(f"📍 访问地址: http://localhost:{port}")
+    print(f"📍 API文档: http://localhost:{port}/docs")
+    print(f"📍 WebSocket: ws://localhost:{port}/ws/progress")
+    print("\n✨ 新功能: WebSocket实时进度推送")
+    print("按 Ctrl+C 停止服务\n")
+    
+    # 延迟2秒后自动打开浏览器
+    def open_browser():
+        import time
+        time.sleep(2)
+        webbrowser.open(f'http://localhost:{port}/app')
+    
+    threading.Thread(target=open_browser, daemon=True).start()
+    
+    uvicorn.run(app, host="0.0.0.0", port=port)

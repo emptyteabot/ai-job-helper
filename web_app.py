@@ -818,6 +818,89 @@ async def process_resume(request: Request):
             seed_location = locs[0]
         provider_mode = (real_job_service.get_statistics() or {}).get("provider_mode", "")
         
+        # Replace the old hardcoded job list with real, actionable job links.
+        # Priority: cloud(crawler cache) -> openclaw(local) -> search providers -> local dataset.
+        def _format_real_jobs(jobs, mode: str) -> str:
+            if not jobs:
+                return (
+                    '??????????????????\n\n'
+                    '??????\n'
+                    '1. ?????????????/api/crawler/status ? empty?\n'
+                    '2. ??? Attach OpenClaw?openclaw ???\n'
+                    '3. ?????????/???baidu/bing/brave ???\n\n'
+                    '???????? Railway ???? Boss ??????????? openclaw ?????????cloud ????\n'
+                )
+
+            heading = '??????????????'
+            if mode == 'openclaw':
+                heading = '?????????Boss???????OpenClaw????'
+            elif mode == 'cloud':
+                heading = '?????????Boss???????cloud????'
+            elif mode in ('baidu', 'bing', 'brave'):
+                heading = f'????????????????{mode}?'
+            elif mode == 'jooble':
+                heading = '?????????Jooble API?????'
+
+            lines = [heading, '']
+            for i, job in enumerate(jobs, 1):
+                title = job.get('title') or job.get('job_title') or '?????'
+                company = job.get('company') or ''
+                loc = job.get('location') or ''
+                salary = job.get('salary') or job.get('salary_range') or ''
+                link = job.get('link') or job.get('apply_url') or ''
+
+                mp = job.get('match_percentage')
+                if mp is None:
+                    mp = job.get('match_rate')
+                if mp is None:
+                    mp = job.get('match_score')
+                mp_str = f"{mp}%" if isinstance(mp, (int, float)) else ''
+
+                lines.append(f"{i}. {title}" + (f" - {company}" if company else ''))
+                if salary:
+                    lines.append(f"   ?? ???{salary}")
+                if loc:
+                    lines.append(f"   ?? ???{loc}")
+                if mp_str:
+                    lines.append(f"   ?? ????{mp_str}")
+                if link:
+                    lines.append(f"   ?? ???{link}")
+                lines.append('')
+
+            return "\n".join(lines).strip() + "\n"
+
+        async def _get_real_jobs_for_recommendation():
+            cfg_mode = os.getenv('JOB_DATA_PROVIDER', 'auto').strip().lower()
+            kw = seed_keywords[:10]
+            loc = seed_location
+
+            if cfg_mode == 'cloud':
+                if cloud_jobs_cache:
+                    def hit(job):
+                        text = f"{job.get('title','')} {job.get('company','')}".lower()
+                        if kw and not any(k.lower() in text for k in kw if k):
+                            return False
+                        if loc and job.get('location') and loc not in str(job.get('location')):
+                            return False
+                        return True
+
+                    matched = [j for j in cloud_jobs_cache if hit(j)]
+                    if not matched:
+                        matched = list(cloud_jobs_cache)
+                    return matched[:10], 'cloud'
+                return [], 'cloud'
+
+            try:
+                jobs = real_job_service.search_jobs(keywords=kw, location=loc, limit=10)
+                mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
+                return jobs[:10], mode
+            except Exception:
+                return [], cfg_mode
+
+        real_jobs, real_mode = await _get_real_jobs_for_recommendation()
+        results['job_recommendations'] = _format_real_jobs(real_jobs, real_mode)
+        provider_mode = real_mode
+
         # 完成
         await progress_tracker.complete()
         await progress_tracker.add_ai_message("系统", "🎉 市场分析完成！")
@@ -966,87 +1049,6 @@ cloud_jobs_cache = []
 async def receive_crawler_data(request: Request, authorization: str = Header(None)):
     """接收本地爬虫推送的岗位数据"""
     try:
-        # 验证API密钥
-        if not authorization or not authorization.startswith("Bearer "):
-            return JSONResponse({"error": "未授权：缺少API密钥"}, status_code=401)
-        
-        api_key = authorization.replace("Bearer ", "")
-        if api_key != CRAWLER_API_KEY:
-            return JSONResponse({"error": "未授权：API密钥无效"}, status_code=401)
-        
-        # 解析数据
-        data = await request.json()
-        jobs = data.get("jobs", [])
-        
-        if not jobs:
-            return JSONResponse({"error": "岗位数据为空"}, status_code=400)
-        
-        # 添加接收时间戳
-        from datetime import datetime
-        for job in jobs:
-            job["received_at"] = datetime.now().isoformat()
-        
-        # 存储到缓存（去重）
-        existing_ids = {job.get("id") for job in cloud_jobs_cache}
-        new_jobs = [job for job in jobs if job.get("id") not in existing_ids]
-        
-        cloud_jobs_cache.extend(new_jobs)
-        
-        # 限制缓存大小（保留最新的5000个）
-        if len(cloud_jobs_cache) > 5000:
-            cloud_jobs_cache[:] = cloud_jobs_cache[-5000:]
-        
-        print(f"✅ 接收爬虫数据：{len(new_jobs)} 个新岗位（总计：{len(cloud_jobs_cache)}）")
-        
-        return JSONResponse({
-            "success": True,
-            "received": len(jobs),
-            "new": len(new_jobs),
-            "total": len(cloud_jobs_cache)
-        })
-        
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
-
-@app.get("/api/crawler/status")
-async def get_crawler_status():
-    """获取爬虫数据状态"""
-    if not cloud_jobs_cache:
-        return JSONResponse({
-            "status": "empty",
-            "total": 0
-        })
-    
-    return JSONResponse({
-        "status": "ok",
-        "total": len(cloud_jobs_cache)
-    })
-
-if __name__ == "__main__":
-    import webbrowser
-    import threading
-    
-    port = int(os.getenv("PORT", 8000))
-    
-    print("\n" + "🚀"*30)
-    print("AI求职助手 - Web服务启动中...")
-    print("🚀"*30 + "\n")
-    print(f"📍 访问地址: http://localhost:{port}")
-    print(f"📍 API文档: http://localhost:{port}/docs")
-    print(f"📍 WebSocket: ws://localhost:{port}/ws/progress")
-    print("\n✨ 新功能: WebSocket实时进度推送")
-    print("按 Ctrl+C 停止服务\n")
-    
-    # 延迟2秒后自动打开浏览器
-    def open_browser():
-        import time
-        time.sleep(2)
-        webbrowser.open(f'http://localhost:{port}/app')
-    
-    threading.Thread(target=open_browser, daemon=True).start()
-    
-    uvicorn.run(app, host="0.0.0.0", port=port)
-
         # 验证API密钥
         if not authorization or not authorization.startswith("Bearer "):
             return JSONResponse({"error": "未授权：缺少API密钥"}, status_code=401)

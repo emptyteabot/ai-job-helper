@@ -844,10 +844,19 @@ async def process_resume(request: Request):
 async def health_check():
     """健康检查"""
     stats = real_job_service.get_statistics()
+    
+    # 检查OpenClaw状态
+    openclaw_status = None
+    if stats.get("provider_mode") == "openclaw":
+        from app.services.job_providers.openclaw_browser_provider import OpenClawBrowserProvider
+        openclaw = OpenClawBrowserProvider()
+        openclaw_status = openclaw.health_check()
+    
     return {
         "status": "ok", 
         "message": "AI求职助手运行正常",
-        "job_database": stats
+        "job_database": stats,
+        "openclaw": openclaw_status
     }
 
 @app.get("/api/jobs/search")
@@ -940,6 +949,78 @@ async def get_statistics():
         return JSONResponse({"success": True, "data": stats})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+# ========================================
+# 爬虫数据接收接口（云端部署时使用）
+# ========================================
+
+from fastapi import Header
+
+# 简单的API密钥验证
+CRAWLER_API_KEY = os.getenv("CRAWLER_API_KEY", "your-secret-key-change-this")
+
+# 云端岗位数据库（内存存储）
+cloud_jobs_cache = []
+
+@app.post("/api/crawler/upload")
+async def receive_crawler_data(request: Request, authorization: str = Header(None)):
+    """接收本地爬虫推送的岗位数据"""
+    try:
+        # 验证API密钥
+        if not authorization or not authorization.startswith("Bearer "):
+            return JSONResponse({"error": "未授权：缺少API密钥"}, status_code=401)
+        
+        api_key = authorization.replace("Bearer ", "")
+        if api_key != CRAWLER_API_KEY:
+            return JSONResponse({"error": "未授权：API密钥无效"}, status_code=401)
+        
+        # 解析数据
+        data = await request.json()
+        jobs = data.get("jobs", [])
+        
+        if not jobs:
+            return JSONResponse({"error": "岗位数据为空"}, status_code=400)
+        
+        # 添加接收时间戳
+        from datetime import datetime
+        for job in jobs:
+            job["received_at"] = datetime.now().isoformat()
+        
+        # 存储到缓存（去重）
+        existing_ids = {job.get("id") for job in cloud_jobs_cache}
+        new_jobs = [job for job in jobs if job.get("id") not in existing_ids]
+        
+        cloud_jobs_cache.extend(new_jobs)
+        
+        # 限制缓存大小（保留最新的5000个）
+        if len(cloud_jobs_cache) > 5000:
+            cloud_jobs_cache[:] = cloud_jobs_cache[-5000:]
+        
+        print(f"✅ 接收爬虫数据：{len(new_jobs)} 个新岗位（总计：{len(cloud_jobs_cache)}）")
+        
+        return JSONResponse({
+            "success": True,
+            "received": len(jobs),
+            "new": len(new_jobs),
+            "total": len(cloud_jobs_cache)
+        })
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/crawler/status")
+async def get_crawler_status():
+    """获取爬虫数据状态"""
+    if not cloud_jobs_cache:
+        return JSONResponse({
+            "status": "empty",
+            "total": 0
+        })
+    
+    return JSONResponse({
+        "status": "ok",
+        "total": len(cloud_jobs_cache)
+    })
 
 if __name__ == "__main__":
     import webbrowser

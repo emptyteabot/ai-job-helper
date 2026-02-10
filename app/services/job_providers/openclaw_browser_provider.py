@@ -91,14 +91,26 @@ class OpenClawBrowserProvider(JobProvider):
         msg = (r.stdout + "\n" + r.stderr).strip()
         if "no tab is connected" in msg.lower():
             raise _OpenClawError(
-                "OpenClaw 浏览器已启动，但未连接任何标签页。\n"
-                "请按这个顺序做：\n"
-                "1) 运行 `openclaw browser start`\n"
-                "2) 在弹出的 Chrome 里打开任意网页\n"
-                "3) 点击工具栏里的 OpenClaw 扩展图标让它 Attach 到当前标签页\n"
-                "然后再重试搜索。"
+                "❌ OpenClaw 浏览器未连接标签页\n\n"
+                "📋 解决步骤（只需做一次）：\n"
+                "1️⃣ 打开命令行，运行: openclaw browser start\n"
+                "2️⃣ 在弹出的Chrome中访问Boss直聘: https://www.zhipin.com\n"
+                "3️⃣ 点击浏览器右上角的OpenClaw扩展图标（🔧）\n"
+                "4️⃣ 点击 'Attach' 按钮连接当前标签页\n"
+                "5️⃣ 返回本页面，重新点击搜索\n\n"
+                "💡 提示：连接一次后，只要不关闭浏览器就一直有效"
             )
-        raise _OpenClawError(f"OpenClaw 浏览器不可用: {msg[:500]}")
+        if "command not found" in msg.lower() or "not recognized" in msg.lower():
+            raise _OpenClawError(
+                "❌ OpenClaw 未安装\n\n"
+                "📦 安装步骤：\n"
+                "1️⃣ 安装Python包: pip install openclaw\n"
+                "2️⃣ 安装Chrome扩展: openclaw browser install-extension\n"
+                "3️⃣ 重启浏览器\n"
+                "4️⃣ 返回本页面重试\n\n"
+                "📖 详细文档: docs/howto/OPENCLAW_BOSS_MVP.md"
+            )
+        raise _OpenClawError(f"❌ OpenClaw 错误: {msg[:500]}\n\n请检查OpenClaw是否正确安装和配置")
 
     def _navigate_and_collect(self, url: str, want_hosts: List[str], limit: int) -> List[Tuple[str, str]]:
         self._ensure_attached()
@@ -240,3 +252,55 @@ class OpenClawBrowserProvider(JobProvider):
 
     def get_job_detail(self, job_id: str) -> Optional[Dict[str, Any]]:
         return self._cache.get(job_id)
+
+    def health_check(self) -> Dict[str, Any]:
+        """
+        健康检查：检测OpenClaw是否可用
+        
+        Returns:
+            {
+                "available": bool,
+                "status": str,
+                "message": str,
+                "browser_connected": bool,
+                "tab_attached": bool
+            }
+        """
+        result = {
+            "available": False,
+            "status": "error",
+            "message": "",
+            "browser_connected": False,
+            "tab_attached": False
+        }
+        
+        # 1. 检查OpenClaw命令是否存在
+        if not shutil.which("openclaw"):
+            result["message"] = "OpenClaw未安装。请运行: pip install openclaw"
+            return result
+        
+        result["browser_connected"] = True
+        
+        # 2. 检查是否有标签页连接
+        try:
+            r = self._oc("evaluate", "--fn", "(() => 1)", json_out=True, timeout_s=10)
+            if r.code == 0:
+                result["available"] = True
+                result["status"] = "ok"
+                result["tab_attached"] = True
+                result["message"] = "✅ OpenClaw已就绪，可以抓取Boss直聘岗位"
+                return result
+            
+            msg = (r.stdout + "\n" + r.stderr).strip().lower()
+            if "no tab is connected" in msg:
+                result["message"] = (
+                    "⚠️ OpenClaw已安装，但未连接标签页。\n"
+                    "请在Chrome中打开Boss直聘，点击OpenClaw扩展图标并Attach"
+                )
+            else:
+                result["message"] = f"⚠️ OpenClaw异常: {msg[:200]}"
+                
+        except Exception as e:
+            result["message"] = f"⚠️ OpenClaw检查失败: {str(e)}"
+        
+        return result

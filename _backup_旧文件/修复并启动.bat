@@ -12,7 +12,7 @@ pip install PyPDF2 python-docx python-multipart -q
 
 echo.
 echo [2/3] 设置API密钥...
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 echo.
 echo [3/3] 启动服务...

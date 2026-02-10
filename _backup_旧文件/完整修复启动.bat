@@ -30,7 +30,7 @@ pip install openai python-dotenv fastapi uvicorn -q
 
 echo.
 echo [4/4] 设置API密钥...
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 echo.
 echo ╔════════════════════════════════════════╗

@@ -80,8 +80,8 @@ https://github.com/emptyteabot/ai-job-helper
 
 已配置的环境变量：
 ```
-DEEPSEEK_API_KEY=sk-d86589fb80f248cea3f4a843eaebce5a
-CRAWLER_API_KEY=SGSAc_Oxm4A7vyoF6VdjW70_Q27hLvrC9opFGynGB_8
+DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+CRAWLER_API_KEY=your-secret-key-change-this
 JOB_DATA_PROVIDER=cloud
 PORT=8000
 ```

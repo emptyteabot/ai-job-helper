@@ -9,7 +9,7 @@ echo.
 echo 步骤1: 启动服务
 echo.
 
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 start "AI求职助手" cmd /k "python web_app.py"
 

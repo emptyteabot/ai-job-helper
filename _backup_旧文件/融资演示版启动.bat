@@ -37,7 +37,7 @@ python -c "from app.services.real_job_service import RealJobService; s = RealJob
 
 echo.
 echo [4/5] 配置API密钥...
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 echo ✓ API密钥已配置
 
 echo.

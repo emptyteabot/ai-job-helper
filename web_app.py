@@ -1,4 +1,4 @@
-"""
+﻿"""
 AI求职助手 - Web界面
 一个漂亮的网页界面，让您直接在浏览器中使用
 """
@@ -58,14 +58,13 @@ async def home():
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page():
-    """应用页面"""
+    """????"""
     app_html = "static/app.html"
-    if os.path.exists(app_html):
+    # If `static/app.html` is missing or accidentally empty, fall back to the embedded page below.
+    if os.path.exists(app_html) and os.path.getsize(app_html) > 64:
         with open(app_html, 'r', encoding='utf-8') as f:
             return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>应用页面</h1>")
-    
-    # 否则返回内嵌页面
+
     return """
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -874,7 +873,7 @@ async def process_resume(request: Request):
             kw = seed_keywords[:10]
             loc = seed_location
 
-            if cfg_mode == 'cloud':
+            if cfg_mode == 'cloud' or cloud_jobs_cache:
                 if cloud_jobs_cache:
                     def hit(job):
                         text = f"{job.get('title','')} {job.get('company','')}".lower()
@@ -936,10 +935,25 @@ async def health_check():
         openclaw_status = openclaw.health_check()
     
     return {
-        "status": "ok", 
-        "message": "AI求职助手运行正常",
+        "status": "ok",
+        "message": "AI????????",
         "job_database": stats,
-        "openclaw": openclaw_status
+        "openclaw": openclaw_status,
+        "config": {
+            "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
+            "cloud_cache_total": len(cloud_jobs_cache),
+        },
+    }
+
+
+
+@app.get("/api/version")
+async def version():
+    """Expose basic build metadata for debugging deployments."""
+    return {
+        "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
+        "railway_git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+        "github_sha": os.getenv("GITHUB_SHA"),
     }
 
 @app.get("/api/jobs/search")
@@ -952,6 +966,38 @@ async def search_jobs(
 ):
     """搜索真实岗位"""
     try:
+        cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+
+        # Cloud mode: prefer crawler-pushed Boss links (no OpenClaw, no Baidu captcha).
+        if cfg_mode == "cloud" or cloud_jobs_cache:
+            keyword_list = keywords.split(",") if keywords else []
+            kw = [k.strip() for k in keyword_list if k and k.strip()]
+
+            def hit(job):
+                text = f"{job.get("title","")} {job.get("company","")}".lower()
+                if kw and not any(k.lower() in text for k in kw):
+                    return False
+                if location and job.get("location") and location not in str(job.get("location")):
+                    return False
+                return True
+
+            matched = [j for j in cloud_jobs_cache if hit(j)]
+            if not matched:
+                matched = list(cloud_jobs_cache)
+
+            n = int(limit) if limit is not None else 50
+            jobs = matched[:n] if n > 0 else []
+            return JSONResponse({
+                "success": True,
+                "total": len(jobs),
+                "jobs": jobs,
+                "provider_mode": "cloud",
+                "warning": (
+                    "cloud cache is empty; run the local OpenClaw crawler to push Boss jobs"
+                    if not cloud_jobs_cache else None
+                ),
+            })
+
         # Stream progress to the same WebSocket channel as the AI pipeline.
         # Frontend listens for `type=job_search`.
         import asyncio
@@ -1129,3 +1175,4 @@ if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
     
     uvicorn.run(app, host="0.0.0.0", port=port)
+

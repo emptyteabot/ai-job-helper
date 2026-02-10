@@ -48,10 +48,10 @@ if not exist .env (
         echo # AI求职助手 - 环境变量配置
         echo.
         echo # DeepSeek API密钥（必填）
-        echo DEEPSEEK_API_KEY=sk-d86589fb80f248cea3f4a843eaebce5a
+        echo DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
         echo.
         echo # 爬虫API密钥（可选）
-        echo CRAWLER_API_KEY=SGSAc_Oxm4A7vyoF6VdjW70_Q27hLvrC9opFGynGB_8
+        echo CRAWLER_API_KEY=your-secret-key-change-this
         echo.
         echo # 岗位数据提供方式（local=本地模拟, cloud=云端, openclaw=本地OpenClaw）
         echo JOB_DATA_PROVIDER=local

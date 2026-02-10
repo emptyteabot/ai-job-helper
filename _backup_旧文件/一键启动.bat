@@ -7,7 +7,7 @@ echo ║     AI求职助手 - 一键启动网站          ║
 echo ╚════════════════════════════════════════╝
 echo.
 echo [1/3] 设置API密钥...
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 echo       ✓ API密钥已配置
 echo.
 echo [2/3] 安装依赖包...

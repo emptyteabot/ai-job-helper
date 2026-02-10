@@ -31,7 +31,7 @@ REM 创建.env文件
 if not exist .env (
     echo 创建配置文件...
     (
-        echo DEEPSEEK_API_KEY=sk-d86589fb80f248cea3f4a843eaebce5a
+        echo DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
         echo JOB_DATA_PROVIDER=local
         echo PORT=8000
     ) > .env

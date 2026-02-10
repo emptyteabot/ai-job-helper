@@ -7,7 +7,7 @@ echo ║     测试文件上传功能                   ║
 echo ╚════════════════════════════════════════╝
 echo.
 echo [1/2] 设置环境变量...
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 echo       ✓ 完成
 echo.
 echo [2/2] 启动服务...

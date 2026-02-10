@@ -33,7 +33,7 @@ echo ✓ 依赖安装完成
 
 echo.
 echo [3/4] 配置API密钥...
-set DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+set DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 echo ✓ API密钥已配置
 
 echo.

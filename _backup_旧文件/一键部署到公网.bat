@@ -52,7 +52,7 @@ echo 1. 访问 https://railway.app/ 注册账号
 echo 2. 点击 "New Project" → "Deploy from GitHub repo"
 echo 3. 连接GitHub并选择仓库
 echo 4. 添加环境变量：
-echo    DEEPSEEK_API_KEY=sk-da34a79604824fc28f73fca8381ed92f
+echo    DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 echo 5. 等待自动部署完成
 echo 6. 获得公网域名：https://你的项目.up.railway.app
 echo.

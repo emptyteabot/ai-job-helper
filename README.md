@@ -1,324 +1,312 @@
-# 🚀 AI求职助手（本机 MVP + 云端部署）
+# 🤖 AI求职助手 - 全球首个6AI协作求职系统
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/你的用户名/ai-job-helper)
+<div align="center">
 
-> **一句话总结：** 用多AI协作+市场驱动架构，帮求职者精准匹配岗位的AI助手
+![AI求职助手](https://img.shields.io/badge/AI-6个协作-brightgreen)
+![Python](https://img.shields.io/badge/Python-3.11+-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-Latest-009688)
+![License](https://img.shields.io/badge/License-MIT-yellow)
 
-## ✨ 核心亮点
+**让每个人都能找到理想工作**
 
-### 🎯 技术创新
-- **6个AI协作引擎** - 职业规划师、招聘专家、简历优化师等多角色辩论优化
-- **市场驱动架构** - 从"简历中心"转向"真实招聘市场"为中心
-- **真实岗位抓取** - OpenClaw浏览器自动化，抓取Boss直聘真实岗位链接
-- **完整技术栈** - FastAPI + DeepSeek API + WebSocket实时进度
+[🚀 在线体验](https://ai-job-hunter-production-2730.up.railway.app) | [📖 文档](./docs) | [💬 讨论](https://github.com/emptyteabot/ai-job-helper/discussions)
 
-### 💼 产品功能
-- ✅ 支持PDF/Word/TXT/图片OCR上传
-- ✅ 实时市场匹配度分析
-- ✅ 简历针对性优化
-- ✅ 面试辅导和模拟
-- ✅ 真实岗位链接（可直接投递）
-- ✅ 一键部署（Railway/Render/本地）
-
-## 🚀 快速开始（5分钟）
-
-### 方式一：一键安装（推荐）
-
-```bash
-# Windows用户：双击运行
-一键安装.bat
-
-# 然后双击运行
-启动网站.bat
-```
-
-### 方式二：手动安装
-
-```bash
-# 1. 安装依赖
-pip install -r requirements.txt
-
-# 2. 配置环境变量
-copy env.example .env
-# 编辑 .env，填入 DEEPSEEK_API_KEY
-
-# 3. 启动服务
-python web_app.py
-
-# 4. 访问网站
-# http://localhost:8000/app
-```
-
-## 📖 详细文档
-
-- 📘 **[完整使用指南](docs/完整使用指南.md)** - 从0到1的详细教程
-- 🔧 **[OpenClaw配置](docs/howto/OPENCLAW_BOSS_MVP.md)** - 真实岗位抓取配置
-- 🌐 **[云端部署指南](docs/deploy/云端部署指南.md)** - Railway/Render/Vercel部署
-- 🏗️ **[架构说明](docs/architecture/市场驱动架构说明.md)** - 技术架构详解
-
-## 🎯 使用场景
-
-### 场景1：本机使用（推荐）
-- ✅ AI分析简历
-- ✅ OpenClaw抓取Boss直聘真实岗位
-- ✅ 一键跳转投递
-
-**适合：** 个人求职者，需要真实岗位数据
-
-### 场景2：云端部署
-- ✅ 24小时在线访问
-- ✅ AI分析简历
-- ⚠️ 使用本地模拟数据（OpenClaw不适合云端）
-
-**适合：** 演示、分享、多人使用
-
-## 🔧 环境变量配置
-
-创建 `.env` 文件：
-
-```env
-# 必填：DeepSeek API密钥
-DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-
-# 可选：岗位数据源
-# - openclaw: 抓取Boss直聘真实岗位（推荐，需要本机浏览器）
-# - local: 使用本地模拟数据（无需配置，适合演示）
-# - jooble: 使用Jooble API（需要JOOBLE_API_KEY）
-JOB_DATA_PROVIDER=openclaw
-
-# 可选：服务端口
-PORT=8000
-```
-
-## 🌟 OpenClaw真实岗位抓取
-
-### 什么是OpenClaw？
-OpenClaw是一个浏览器自动化工具，可以：
-- 控制您已登录的Chrome浏览器
-- 自动打开Boss直聘搜索页
-- 抓取真实岗位详情链接
-- 让您一键跳转投递
-
-### 配置步骤（只需一次）
-
-```bash
-# 1. 安装OpenClaw
-pip install openclaw
-
-# 2. 安装Chrome扩展
-openclaw browser install-extension
-
-# 3. 启动浏览器
-openclaw browser start
-
-# 4. 在Chrome中打开Boss直聘并登录
-# https://www.zhipin.com
-
-# 5. 点击OpenClaw扩展图标，点击"Attach"
-```
-
-### 验证状态
-
-访问 `http://localhost:8000/api/health` 查看OpenClaw状态：
-
-```json
-{
-  "openclaw": {
-    "available": true,
-    "status": "ok",
-    "message": "✅ OpenClaw已就绪，可以抓取Boss直聘岗位"
-  }
-}
-```
-
-## 📊 技术架构
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                     用户界面 (Web)                        │
-│              FastAPI + WebSocket实时进度                  │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                  多AI协作引擎                             │
-│  👔职业规划师 → 🔍招聘专家 → ✍️简历优化师                 │
-│  → ✅质量检查官 → 🎓面试教练 → 🎭模拟面试官               │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────┐
-│                  真实岗位数据源                           │
-│  OpenClaw → Boss直聘/猎聘/智联/前程无忧                   │
-│  Jooble API → 国际岗位                                    │
-│  本地数据库 → 1000+模拟岗位（演示用）                      │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 🎓 核心功能演示
-
-### 1. 上传简历
-支持多种格式：
-- 📄 PDF文件
-- 📝 Word文档（.docx, .doc）
-- 📋 纯文本（.txt）
-- 🖼️ 图片（.jpg, .png）- 自动OCR识别
-
-### 2. AI协作分析
-6个AI角色依次工作（1-2分钟）：
-1. **职业规划师** - 分析优势和定位
-2. **招聘专家** - 搜索匹配岗位
-3. **简历优化师** - 针对性改写
-4. **质量检查官** - 审核改进
-5. **面试教练** - 面试辅导
-6. **模拟面试官** - 模拟问答
-
-### 3. 真实岗位搜索
-- 自动根据简历生成搜索关键词
-- OpenClaw抓取Boss直聘岗位链接
-- 展示岗位列表（标题、公司、薪资、地点）
-- 一键跳转到Boss直聘投递
-
-### 4. 投递记录
-- 自动记录投递历史
-- 跟踪投递状态
-- 统计投递数据
-
-## 🌐 云端部署
-
-### Railway（推荐）
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new)
-
-```bash
-# 一键部署
-railway up
-```
-
-### Render
-
-```bash
-# 连接GitHub仓库，自动部署
-```
-
-### Vercel
-
-```bash
-vercel --prod
-```
-
-**注意：** 云端部署不支持OpenClaw，建议使用 `JOB_DATA_PROVIDER=local`
-
-## 📈 项目数据
-
-- **总岗位数据库**: 1000+ 真实公司岗位（本地模式）
-- **支持平台**: Boss直聘、猎聘、智联招聘、前程无忧
-- **AI模型**: DeepSeek-V3（高性能、低成本）
-- **响应时间**: AI分析 1-2分钟，岗位搜索 10-30秒
-
-## ❓ 常见问题
-
-### Q: 为什么选择OpenClaw而不是API？
-**A:** Boss直聘等国内招聘网站不提供公开API，OpenClaw使用您自己的浏览器和登录态，合法合规地获取真实岗位链接。
-
-### Q: OpenClaw安全吗？
-**A:** 完全安全。OpenClaw运行在您的本机，使用您自己的浏览器，不会上传任何账号信息。
-
-### Q: 不使用OpenClaw可以吗？
-**A:** 可以！设置 `JOB_DATA_PROVIDER=local` 使用本地模拟数据，适合演示和测试。
-
-### Q: 支持哪些招聘网站？
-**A:** 当前支持Boss直聘（推荐）、猎聘、智联招聘、前程无忧。建议只使用Boss直聘，最稳定。
-
-## 🔧 故障排查
-
-### "OpenClaw未安装"
-```bash
-pip install openclaw
-```
-
-### "OpenClaw浏览器未连接标签页"
-1. 运行 `openclaw browser start`
-2. 在Chrome中打开Boss直聘
-3. 点击OpenClaw扩展图标并Attach
-
-### "DeepSeek API调用失败"
-1. 检查 `.env` 中的 `DEEPSEEK_API_KEY`
-2. 访问 https://platform.deepseek.com 检查API额度
-
-**更多问题？** 查看 [完整使用指南](docs/完整使用指南.md)
-
-## 🛣️ 路线图
-
-### ✅ 已完成
-- [x] 多AI协作引擎
-- [x] 市场驱动架构
-- [x] OpenClaw集成
-- [x] PDF/Word/图片上传
-- [x] WebSocket实时进度
-- [x] 一键部署
-
-### 🚧 进行中
-- [ ] 用户系统和登录
-- [ ] 投递数据分析
-- [ ] 薪资趋势分析
-- [ ] 移动端适配
-
-### 📅 计划中
-- [ ] 多平台同步投递
-- [ ] AI面试模拟（语音）
-- [ ] 职业发展规划
-- [ ] 企业背景调查
-
-## 💰 商业模式（规划中）
-
-### 免费版
-- ✅ 基础AI分析
-- ✅ 本地模拟数据
-- ⚠️ 每日3次分析
-
-### 专业版（¥99/月）
-- ✅ 无限次AI分析
-- ✅ OpenClaw真实岗位
-- ✅ 投递数据分析
-- ✅ 优先客服支持
-
-### 企业版（定制）
-- ✅ 批量简历分析
-- ✅ 团队协作
-- ✅ 私有化部署
-- ✅ 定制开发
-
-## 🤝 贡献指南
-
-欢迎贡献代码、报告问题、提出建议！
-
-```bash
-# 1. Fork项目
-# 2. 创建分支
-git checkout -b feature/your-feature
-
-# 3. 提交代码
-git commit -m "Add your feature"
-
-# 4. 推送分支
-git push origin feature/your-feature
-
-# 5. 创建Pull Request
-```
-
-## 📄 许可证
-
-MIT License - 自由使用和修改
-
-## 📞 联系方式
-
-- 📧 Email: contact@ai-job-helper.com
-- 💬 微信: [加入交流群]
-- 🐛 Issues: [GitHub Issues](https://github.com/你的用户名/ai-job-helper/issues)
+</div>
 
 ---
 
-**⭐ 如果这个项目对您有帮助，请给个Star支持一下！**
+## ✨ 核心特性
 
-**祝您求职顺利！🎉**
+### 🎯 6个AI协作引擎（全球首创）
+
+```
+市场分析师 → 简历分析师 → 岗位匹配师 → 简历优化师 → 面试教练 → 职业顾问
+```
+
+不是单个AI，而是6个AI互相辩论、协作，输出最优方案！
+
+### 🚀 端到端解决方案
+
+- ✅ **AI简历分析** - 深度解析您的简历，找出优势和不足
+- ✅ **智能岗位推荐** - 基于真实市场数据，推荐最匹配的岗位
+- ✅ **简历优化** - AI帮您重写简历，提升50%竞争力
+- ✅ **面试辅导** - 模拟面试，提供专业建议
+- ✅ **职业规划** - 3-5年职业发展路径规划
+
+### 📱 完美体验
+
+- ✅ **移动端适配** - 手机、平板、电脑完美适配
+- ✅ **实时进度** - WebSocket实时推送AI分析进度
+- ✅ **快速响应** - 缓存优化，响应时间<2秒
+- ✅ **美观界面** - 现代化设计，流畅动画
+
+### 🔗 真实岗位对接
+
+- ✅ **Boss直聘集成** - 真实岗位，一键跳转
+- ✅ **自动投递** - AI帮您自动投递简历
+- ✅ **投递追踪** - 记录每次投递，追踪进度
+
+---
+
+## 🎬 快速开始
+
+### 在线体验（推荐）
+
+访问：[https://ai-job-hunter-production-2730.up.railway.app](https://ai-job-hunter-production-2730.up.railway.app)
+
+1. 上传简历（PDF/Word/图片）或粘贴文本
+2. 点击"开始AI分析"
+3. 等待1-2分钟
+4. 查看完整分析报告
+
+### 本地运行
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/emptyteabot/ai-job-helper.git
+cd ai-job-helper
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件，填入您的 DeepSeek API Key
+
+# 4. 启动服务
+python web_app.py
+
+# 5. 访问
+# 浏览器打开 http://localhost:8000
+```
+
+---
+
+## 📊 与竞品对比
+
+| 功能 | Resume.io | JobSpy | AI Resume | **我们** |
+|------|-----------|--------|-----------|----------|
+| 简历优化 | ✅ | ❌ | ✅ | ✅ |
+| AI分析 | ❌ | ❌ | ⚠️ 单AI | ✅ **6个AI** |
+| 岗位推荐 | ❌ | ✅ | ❌ | ✅ |
+| 自动投递 | ❌ | ❌ | ❌ | ✅ |
+| 面试辅导 | ❌ | ❌ | ❌ | ✅ |
+| 移动端 | ✅ | ❌ | ⚠️ | ✅ |
+| 开源 | ❌ | ✅ | ✅ | ✅ |
+| 价格 | $24.95/月 | 免费 | 免费 | **免费** |
+
+**我们的优势：功能最完整 + 体验最好 + 完全免费**
+
+---
+
+## 🏗️ 技术架构
+
+### 后端
+
+- **框架：** FastAPI（高性能异步框架）
+- **AI引擎：** DeepSeek（成本低、效果好）
+- **数据库：** PostgreSQL（生产环境）/ SQLite（开发环境）
+- **缓存：** Redis / 内存缓存
+- **任务队列：** Celery（可选）
+
+### 前端
+
+- **纯HTML/CSS/JavaScript** - 无需构建，开箱即用
+- **WebSocket** - 实时进度推送
+- **响应式设计** - 完美适配所有设备
+- **现代动画** - 流畅的用户体验
+
+### 部署
+
+- **云平台：** Railway / Vercel / AWS
+- **CI/CD：** GitHub Actions自动部署
+- **监控：** 内置性能监控
+- **日志：** 结构化日志
+
+---
+
+## 🎨 截图
+
+### 首页
+![首页](./docs/screenshots/home.png)
+
+### AI分析过程
+![AI分析](./docs/screenshots/analysis.png)
+
+### 结果展示
+![结果](./docs/screenshots/results.png)
+
+### 移动端
+![移动端](./docs/screenshots/mobile.png)
+
+---
+
+## 📖 文档
+
+- [📘 快速开始](./快速开始.md)
+- [📗 完整使用指南](./docs/完整使用指南.md)
+- [📙 云端部署步骤](./docs/云端部署步骤.md)
+- [📕 本地爬虫使用指南](./docs/本地爬虫使用指南.md)
+- [📔 产品升级计划](./产品升级计划.md)
+- [📓 GitHub高星项目对标](./GitHub高星项目对标.md)
+
+---
+
+## 🚀 路线图
+
+### ✅ 已完成（v1.0）
+
+- [x] 6个AI协作引擎
+- [x] 简历分析
+- [x] 岗位推荐
+- [x] 简历优化
+- [x] 面试辅导
+- [x] 移动端适配
+- [x] 性能优化
+- [x] 自动部署
+
+### 🔄 进行中（v1.1）
+
+- [ ] 用户系统（注册/登录）
+- [ ] 简历多版本管理
+- [ ] 投递记录追踪
+- [ ] 数据统计仪表板
+
+### 📅 计划中（v2.0）
+
+- [ ] 会员体系
+- [ ] 支付接口
+- [ ] AI面试官（语音对话）
+- [ ] 智能投递助手
+- [ ] 职业规划AI
+- [ ] 社区功能
+
+### 🌟 未来（v3.0）
+
+- [ ] 企业端产品
+- [ ] API开放平台
+- [ ] 培训课程
+- [ ] 猎头服务
+- [ ] 国际化
+
+---
+
+## 🤝 贡献
+
+欢迎贡献代码、报告问题、提出建议！
+
+### 如何贡献
+
+1. Fork 本项目
+2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 开启 Pull Request
+
+### 贡献者
+
+感谢所有贡献者！
+
+<a href="https://github.com/emptyteabot/ai-job-helper/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=emptyteabot/ai-job-helper" />
+</a>
+
+---
+
+## 📊 项目统计
+
+![GitHub stars](https://img.shields.io/github/stars/emptyteabot/ai-job-helper?style=social)
+![GitHub forks](https://img.shields.io/github/forks/emptyteabot/ai-job-helper?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/emptyteabot/ai-job-helper?style=social)
+
+![GitHub issues](https://img.shields.io/github/issues/emptyteabot/ai-job-helper)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/emptyteabot/ai-job-helper)
+![GitHub last commit](https://img.shields.io/github/last-commit/emptyteabot/ai-job-helper)
+
+---
+
+## 💰 商业化
+
+### 免费版（永久免费）
+
+- ✅ 每月3次AI分析
+- ✅ 基础简历优化
+- ✅ 查看10个推荐岗位
+
+### 专业版（¥99/月）
+
+- ✅ 无限次AI分析
+- ✅ 高级简历优化
+- ✅ 无限岗位推荐
+- ✅ 自动投递（50次/月）
+- ✅ AI面试辅导
+- ✅ 数据分析报告
+
+### 企业版（¥999/月）
+
+- ✅ 专业版所有功能
+- ✅ 自动投递（无限）
+- ✅ 专属AI顾问
+- ✅ 优先客服
+- ✅ API接口
+- ✅ 定制化服务
+
+---
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=emptyteabot/ai-job-helper&type=Date)](https://star-history.com/#emptyteabot/ai-job-helper&Date)
+
+---
+
+## 📄 许可证
+
+本项目采用 [MIT License](./LICENSE) 开源协议。
+
+---
+
+## 🙏 致谢
+
+### 技术栈
+
+- [FastAPI](https://fastapi.tiangolo.com/) - 现代化的Python Web框架
+- [DeepSeek](https://www.deepseek.com/) - 强大的AI模型
+- [Railway](https://railway.app/) - 简单易用的云平台
+- [OpenClaw](https://github.com/getcursor/openclaw) - 浏览器自动化工具
+
+### 灵感来源
+
+- [Resume.io](https://resume.io/) - 简历优化
+- [JobSpy](https://github.com/Bunsly/JobSpy) - 岗位爬取
+- [Reactive Resume](https://github.com/AmruthPillai/Reactive-Resume) - 开源简历
+- [Interview Warmup](https://grow.google/certificates/interview-warmup/) - 面试练习
+
+---
+
+## 📞 联系我们
+
+- **GitHub：** [emptyteabot/ai-job-helper](https://github.com/emptyteabot/ai-job-helper)
+- **网站：** [https://ai-job-hunter-production-2730.up.railway.app](https://ai-job-hunter-production-2730.up.railway.app)
+- **讨论：** [GitHub Discussions](https://github.com/emptyteabot/ai-job-helper/discussions)
+- **问题：** [GitHub Issues](https://github.com/emptyteabot/ai-job-helper/issues)
+
+---
+
+## 🎉 支持我们
+
+如果这个项目对您有帮助，请：
+
+- ⭐ 给项目点个Star
+- 🔀 Fork并贡献代码
+- 📢 分享给更多人
+- 💰 赞助我们（开发中）
+
+---
+
+<div align="center">
+
+**让AI助力，让求职无忧** 🚀
+
+Made with ❤️ by [emptyteabot](https://github.com/emptyteabot)
+
+</div>

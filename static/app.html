@@ -3,329 +3,283 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Job Helper - Analyze Workspace</title>
+  <title>AI Job Assistant | Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f3f5ef;
-      --bg-deep: #e8ecdf;
+      --bg: #f4f6f2;
+      --bg-soft: #eef2ea;
       --card: #ffffff;
-      --ink: #11120f;
-      --ink-soft: #5c6156;
-      --line: #d7dccd;
-      --line-strong: #bfc7b2;
-      --accent: #0f766e;
-      --accent-soft: #e6f6f2;
-      --ok: #1d7a46;
-      --err: #b03232;
-      --radius: 14px;
-      --radius-lg: 20px;
-      --shadow: 0 10px 30px rgba(19, 23, 15, 0.08);
+      --text: #11130f;
+      --muted: #667061;
+      --line: #d8ded1;
+      --line-strong: #c4cdbd;
+      --accent: #1a7f64;
+      --accent-soft: #e8f6f0;
+      --ok: #1f7d4a;
+      --err: #bb3f3f;
+      --radius: 16px;
+      --radius-sm: 12px;
+      --shadow: 0 12px 36px rgba(17, 20, 15, 0.08);
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
-      font-family: "Noto Sans SC", "Space Grotesk", sans-serif;
-      color: var(--ink);
+      font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
+      color: var(--text);
       background:
-        linear-gradient(135deg, rgba(20, 117, 108, 0.08), transparent 35%),
-        radial-gradient(circle at 100% 0%, rgba(58, 99, 68, 0.12), transparent 40%),
-        linear-gradient(180deg, var(--bg), var(--bg-deep));
+        radial-gradient(900px 320px at 10% -5%, rgba(26, 127, 100, 0.10), transparent 55%),
+        radial-gradient(700px 260px at 105% 0%, rgba(76, 122, 76, 0.10), transparent 48%),
+        linear-gradient(180deg, var(--bg), var(--bg-soft));
       min-height: 100vh;
+      overflow-x: hidden;
     }
-
-    .grid-pattern {
+    .noise {
       position: fixed;
       inset: 0;
-      background-image:
-        linear-gradient(to right, rgba(70, 90, 64, 0.05) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(70, 90, 64, 0.05) 1px, transparent 1px);
-      background-size: 28px 28px;
+      background-image: radial-gradient(rgba(50, 70, 50, 0.035) 0.8px, transparent 0.8px);
+      background-size: 16px 16px;
       pointer-events: none;
-      mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.7), transparent 90%);
       z-index: 0;
     }
-
-    .app {
+    .container {
       position: relative;
       z-index: 1;
-      max-width: 1260px;
-      margin: 0 auto;
-      padding: 18px;
+      width: min(1280px, 100% - 28px);
+      margin: 16px auto 22px;
     }
-
     .topbar {
-      height: 58px;
       border: 1px solid var(--line);
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(8px);
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(10px);
       border-radius: 999px;
+      height: 58px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px 0 18px;
-      margin-bottom: 14px;
+      padding: 0 18px;
       box-shadow: var(--shadow);
+      margin-bottom: 12px;
     }
-
     .brand {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 15px;
-      font-weight: 700;
+      font: 700 15px/1 "IBM Plex Sans", sans-serif;
       letter-spacing: 0.2px;
     }
-
-    .brand-dot {
+    .brand .dot {
       width: 9px;
       height: 9px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #0f766e, #34d399);
-      box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.14);
+      background: linear-gradient(135deg, #1a7f64, #3ac28f);
+      box-shadow: 0 0 0 5px rgba(26, 127, 100, 0.14);
     }
-
-    .links a {
-      color: var(--ink-soft);
+    .top-links {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .top-links a {
       text-decoration: none;
-      font-size: 13px;
-      margin-left: 12px;
+      color: var(--muted);
+      font: 500 13px/1 "IBM Plex Sans", sans-serif;
       border: 1px solid transparent;
+      padding: 7px 11px;
       border-radius: 999px;
-      padding: 6px 10px;
       transition: all 0.2s ease;
     }
-
-    .links a:hover {
+    .top-links a:hover {
       border-color: var(--line);
       background: #fff;
-      color: var(--ink);
+      color: var(--text);
     }
-
     .layout {
       display: grid;
-      grid-template-columns: 390px 1fr;
+      grid-template-columns: 400px 1fr;
       gap: 12px;
     }
-
     .panel {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-lg);
       background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
       box-shadow: var(--shadow);
-      overflow: hidden;
     }
-
     .left {
       padding: 16px;
     }
-
-    .kicker {
+    .eyebrow {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
+      padding: 5px 10px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 5px 10px;
-      font-size: 11px;
-      color: var(--ink-soft);
+      background: #fbfdf9;
+      color: var(--muted);
+      font: 500 11px/1 "IBM Plex Sans", sans-serif;
       margin-bottom: 10px;
-      background: #fbfcf9;
     }
-
-    .kicker::before {
+    .eyebrow::before {
       content: "";
       width: 5px;
       height: 5px;
       border-radius: 50%;
       background: var(--accent);
     }
-
     h1 {
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 30px;
-      letter-spacing: -0.3px;
-      line-height: 1.1;
+      font: 700 31px/1.06 "IBM Plex Sans", sans-serif;
+      letter-spacing: -0.5px;
       margin-bottom: 8px;
     }
-
-    .sub {
+    .desc {
+      color: var(--muted);
       font-size: 13px;
-      line-height: 1.55;
-      color: var(--ink-soft);
+      line-height: 1.58;
       margin-bottom: 12px;
+      max-width: 96%;
     }
-
     .upload {
+      display: block;
       border: 1px dashed var(--line-strong);
-      border-radius: 12px;
-      background: linear-gradient(180deg, #fcfdf9, #f6f9f2);
-      padding: 14px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, #fcfdfa, #f7faf3);
+      padding: 14px 12px;
       text-align: center;
       margin-bottom: 10px;
       cursor: pointer;
-      transition: border-color 0.2s ease, transform 0.2s ease;
+      transition: all 0.18s ease;
     }
-
     .upload.drag {
       border-color: var(--accent);
+      background: var(--accent-soft);
       transform: translateY(-1px);
     }
-
     .upload input { display: none; }
-
-    .upload strong {
-      display: block;
+    .upload b {
       font-size: 14px;
+      display: block;
       margin-bottom: 4px;
     }
-
-    .upload span {
+    .upload small {
+      color: var(--muted);
       font-size: 12px;
-      color: var(--ink-soft);
     }
-
     textarea {
       width: 100%;
-      min-height: 280px;
+      min-height: 294px;
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: var(--radius-sm);
+      background: #fff;
       padding: 12px;
       resize: vertical;
-      font: 13px/1.6 "Noto Sans SC", sans-serif;
-      background: #fff;
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      font-size: 13px;
+      line-height: 1.62;
+      transition: all 0.2s ease;
+      font-family: "Noto Sans SC", sans-serif;
     }
-
     textarea:focus {
       outline: none;
-      border-color: #99b8ad;
-      box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+      border-color: #9fbaa9;
+      box-shadow: 0 0 0 4px rgba(26, 127, 100, 0.12);
     }
-
     .actions {
       margin-top: 10px;
       display: flex;
-      gap: 8px;
       flex-wrap: wrap;
+      gap: 8px;
     }
-
     button {
       border: 1px solid var(--line);
-      border-radius: 10px;
       background: #fff;
-      color: var(--ink);
-      font: 700 13px/1 "Space Grotesk", sans-serif;
+      color: var(--text);
+      border-radius: 10px;
+      font: 600 13px/1 "IBM Plex Sans", sans-serif;
       padding: 10px 12px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
     }
-
     button:hover { transform: translateY(-1px); }
     button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
-
     .btn-main {
-      border-color: #0f766e;
-      background: linear-gradient(135deg, #0f766e, #15803d);
       color: #fff;
+      border-color: #17684f;
+      background: linear-gradient(135deg, #17684f, #1a7f64);
     }
-
-    .btn-muted {
-      background: #f8faf5;
-    }
-
-    .btn-danger {
-      border-color: #efcfcf;
-      color: #8f2d2d;
-      background: #fff6f6;
-    }
-
+    .btn-soft { background: #f8fbf5; }
+    .btn-danger { color: #8d3333; border-color: #f0d3d3; background: #fff7f7; }
     .meta {
       margin-top: 10px;
-      font-size: 12px;
-      color: var(--ink-soft);
       display: grid;
       gap: 4px;
+      color: var(--muted);
+      font-size: 12px;
     }
-
     .right {
-      min-height: 860px;
+      min-height: 880px;
       display: grid;
       grid-template-rows: auto auto 1fr;
     }
-
-    .flow {
-      padding: 12px;
+    .pipeline {
       border-bottom: 1px solid var(--line);
-      background: linear-gradient(180deg, #fcfdf9, #f7faf3);
+      background: linear-gradient(180deg, #fcfdfa, #f7faf3);
+      padding: 12px;
     }
-
-    .flow-head {
+    .pipeline-head {
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
       margin-bottom: 8px;
     }
-
-    .flow-head strong {
-      font-family: "Space Grotesk", sans-serif;
-      font-size: 13px;
+    .pipeline-head strong {
+      font: 600 13px/1 "IBM Plex Sans", sans-serif;
     }
-
-    .flow-head span {
-      color: var(--ink-soft);
+    .pipeline-head span {
+      color: var(--muted);
       font-size: 12px;
     }
-
     .steps {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 8px;
     }
-
     .step {
       border: 1px solid var(--line);
       border-radius: 10px;
       background: #fff;
-      padding: 8px;
-      min-height: 46px;
-      color: var(--ink-soft);
+      color: var(--muted);
       font-size: 12px;
-      transition: all 0.2s ease;
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      padding: 8px 9px;
+      transition: all 0.18s ease;
     }
-
     .step.active {
-      border-color: #89b5a7;
-      background: #eef8f5;
-      color: #124a44;
+      border-color: #94b8aa;
+      background: #edf8f4;
+      color: #124d46;
       transform: translateY(-1px);
     }
-
     .step.done {
-      border-color: #b7d9c5;
-      background: #eff9f3;
-      color: #16653b;
+      border-color: #bcdcc8;
+      background: #f0faf3;
+      color: #1a6b40;
     }
-
     .status {
       border-bottom: 1px solid var(--line);
-      padding: 10px 12px;
+      padding: 11px 12px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
       font-size: 13px;
-      color: var(--ink-soft);
       background: #fff;
     }
-
     .flag-ok { color: var(--ok); }
     .flag-err { color: var(--err); }
-
-    .result-grid {
+    .board {
       padding: 10px;
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -333,97 +287,72 @@
       align-content: start;
       overflow: auto;
     }
-
-    .result {
+    .block {
       border: 1px solid var(--line);
       border-radius: 12px;
-      min-height: 185px;
       background: #fff;
+      min-height: 196px;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-      animation: fadeUp 0.28s ease both;
+      animation: rise 0.26s ease both;
     }
-
-    .result.full { grid-column: 1 / -1; min-height: 220px; }
-
-    .result h3 {
+    .block.full {
+      grid-column: 1 / -1;
+      min-height: 240px;
+    }
+    .block h3 {
+      border-bottom: 1px solid var(--line);
+      background: #fbfcf9;
+      padding: 9px 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 1px solid var(--line);
-      padding: 9px 10px;
-      font: 700 13px/1 "Space Grotesk", sans-serif;
-      letter-spacing: 0.1px;
-      background: #fbfcf9;
+      font: 600 13px/1 "IBM Plex Sans", sans-serif;
     }
-
-    .pill {
-      font-size: 10px;
-      color: var(--ink-soft);
+    .tag {
       border: 1px solid var(--line);
       border-radius: 999px;
+      font: 500 10px/1 "IBM Plex Sans", sans-serif;
+      color: var(--muted);
       padding: 3px 7px;
       background: #fff;
     }
-
     pre {
       flex: 1;
       padding: 10px;
       white-space: pre-wrap;
       word-break: break-word;
-      font-size: 12px;
-      line-height: 1.62;
       overflow: auto;
-      color: #1f2320;
+      font-size: 12px;
+      line-height: 1.65;
+      color: #20251f;
+      font-family: "Noto Sans SC", sans-serif;
     }
-
-    .result-foot {
+    .block-foot {
       border-top: 1px solid var(--line);
+      background: #fff;
       padding: 8px 10px;
       text-align: right;
-      background: #fff;
     }
-
-    .badge-row {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 8px;
-    }
-
-    .badge {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 5px 10px;
-      font-size: 11px;
-      color: var(--ink-soft);
-      background: #fafcf8;
-    }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(6px); }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(5px); }
       to { opacity: 1; transform: translateY(0); }
     }
-
-    @media (max-width: 1020px) {
+    @media (max-width: 1040px) {
       .layout { grid-template-columns: 1fr; }
-      .right { min-height: auto; }
-      .result-grid { grid-template-columns: 1fr; }
+      .board { grid-template-columns: 1fr; }
       .steps { grid-template-columns: repeat(2, 1fr); }
-      h1 { font-size: 26px; }
+      .right { min-height: auto; }
+      h1 { font-size: 28px; }
     }
   </style>
 </head>
 <body>
-  <div class="grid-pattern"></div>
-  <main class="app">
+  <div class="noise"></div>
+  <div class="container">
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <span>AI Job Helper</span>
-      </div>
-      <nav class="links">
+      <div class="brand"><span class="dot"></span><span>AI Job Assistant</span></div>
+      <nav class="top-links">
         <a href="/">Home</a>
         <a href="/api/ping" target="_blank">Ping</a>
         <a href="/api/health" target="_blank">Health</a>
@@ -431,37 +360,32 @@
     </header>
 
     <section class="layout">
-      <article class="panel left">
-        <div class="kicker">Resume Analysis Studio</div>
-        <h1>简历分析工作台</h1>
-        <p class="sub">上传或粘贴简历，生成职业分析、真实岗位链接、优化简历和面试准备。</p>
+      <aside class="panel left">
+        <div class="eyebrow">Investor Demo Ready</div>
+        <h1>分析工作台</h1>
+        <p class="desc">上传或粘贴简历，生成职业分析、真实岗位推荐、简历优化与面试准备。界面与数据链路均可直接用于演示。</p>
         <label class="upload" id="dropZone">
-          <strong>点击上传简历</strong>
-          <span>支持 PDF / DOCX / TXT / 图片</span>
+          <b>点击上传简历</b>
+          <small>PDF / DOCX / TXT / 图片</small>
           <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
         </label>
         <textarea id="resumeText" placeholder="粘贴简历文本..."></textarea>
         <div class="actions">
           <button class="btn-main" id="runBtn">开始分析</button>
-          <button class="btn-muted" id="sampleBtn">示例</button>
+          <button class="btn-soft" id="sampleBtn">示例</button>
           <button class="btn-danger" id="resetBtn">清空</button>
         </div>
         <div class="meta">
           <span id="fileMeta">未上传文件</span>
           <span id="providerMeta">数据源：-</span>
         </div>
-        <div class="badge-row">
-          <span class="badge">Real Link Priority</span>
-          <span class="badge">Cloud Ready</span>
-          <span class="badge">OpenAI Compatible</span>
-        </div>
-      </article>
+      </aside>
 
-      <article class="panel right">
-        <div class="flow">
-          <div class="flow-head">
-            <strong>Pipeline</strong>
-            <span>Upload -> Analyze -> Match -> Output</span>
+      <section class="panel right">
+        <div class="pipeline">
+          <div class="pipeline-head">
+            <strong>Process</strong>
+            <span>Upload -> AI Analyze -> Match -> Output</span>
           </div>
           <div class="steps">
             <div class="step" data-step="1">1 上传简历</div>
@@ -470,40 +394,38 @@
             <div class="step" data-step="4">4 输出结果</div>
           </div>
         </div>
-
         <div class="status">
           <span id="statusText">等待开始</span>
           <span id="statusFlag">IDLE</span>
         </div>
-
-        <div class="result-grid">
-          <section class="result">
-            <h3>职业分析 <span class="pill">REPORT</span></h3>
+        <div class="board">
+          <article class="block">
+            <h3>职业分析 <span class="tag">REPORT</span></h3>
             <pre id="careerAnalysis">-</pre>
-          </section>
-          <section class="result">
-            <h3>推荐岗位 <span class="pill">JOBS</span></h3>
+          </article>
+          <article class="block">
+            <h3>推荐岗位 <span class="tag">JOBS</span></h3>
             <pre id="jobRecommendations">-</pre>
-          </section>
-          <section class="result">
-            <h3>优化简历 <span class="pill">RESUME</span></h3>
+          </article>
+          <article class="block">
+            <h3>优化简历 <span class="tag">RESUME</span></h3>
             <pre id="optimizedResume">-</pre>
-          </section>
-          <section class="result">
-            <h3>面试准备 <span class="pill">INTERVIEW</span></h3>
+          </article>
+          <article class="block">
+            <h3>面试准备 <span class="tag">INTERVIEW</span></h3>
             <pre id="interviewPrep">-</pre>
-          </section>
-          <section class="result full">
-            <h3>模拟问答与薪资 <span class="pill">MOCK</span></h3>
+          </article>
+          <article class="block full">
+            <h3>模拟问答与薪资 <span class="tag">MOCK</span></h3>
             <pre id="mockInterview">-</pre>
-            <div class="result-foot">
+            <div class="block-foot">
               <button id="downloadBtn">下载完整结果</button>
             </div>
-          </section>
+          </article>
         </div>
-      </article>
+      </section>
     </section>
-  </main>
+  </div>
 
   <script>
     const fileInput = document.getElementById("fileInput");

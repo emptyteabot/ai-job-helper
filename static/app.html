@@ -3,159 +3,128 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI姹傝亴鍔╂墜 | 鍒嗘瀽宸ヤ綔鍙?/title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <title>AI Job Helper - Workspace</title>
   <style>
     :root {
-      --bg: #f4f5f1;
+      --bg: #f6f7f3;
       --card: #ffffff;
+      --line: #dcded5;
       --text: #121212;
-      --muted: #5f5f58;
-      --line: #dfdfd7;
+      --muted: #61635e;
       --main: #111111;
-      --ok: #136a37;
-      --bad: #ad2c2c;
-      --radius: 14px;
+      --ok: #17693f;
+      --err: #b03030;
+      --radius: 12px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Noto Sans SC", "Manrope", sans-serif;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
       color: var(--text);
-      background:
-        radial-gradient(1200px 420px at -10% -10%, #eceee4 0%, transparent 45%),
-        radial-gradient(800px 300px at 110% -20%, #eceee4 0%, transparent 35%),
-        var(--bg);
       min-height: 100vh;
     }
-    .wrap { max-width: 1220px; margin: 0 auto; padding: 18px; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; }
     .top {
       height: 56px;
       border: 1px solid var(--line);
-      background: var(--card);
       border-radius: 999px;
+      background: var(--card);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
+      padding: 0 14px;
       margin-bottom: 12px;
     }
-    .logo { font: 800 16px/1 "Manrope", sans-serif; letter-spacing: .2px; }
-    .nav a { text-decoration: none; color: var(--muted); margin-left: 14px; font-size: 13px; }
-    .layout { display: grid; grid-template-columns: 390px 1fr; gap: 12px; }
+    .top a { color: var(--muted); text-decoration: none; margin-left: 10px; font-size: 13px; }
+    .layout { display: grid; grid-template-columns: 380px 1fr; gap: 12px; }
     .card { border: 1px solid var(--line); background: var(--card); border-radius: var(--radius); }
-    .left { padding: 16px; }
-    .kicker { color: var(--muted); font-size: 11px; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 8px; }
-    h1 { font: 800 26px/1.14 "Manrope", sans-serif; margin-bottom: 8px; }
-    .sub { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
+    .left { padding: 14px; }
+    h1 { font-size: 24px; margin-bottom: 8px; }
+    .sub { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
     .upload {
-      border: 1px dashed #c6c6bc;
+      border: 1px dashed #c5c8be;
       border-radius: 10px;
-      background: #fcfcfa;
       text-align: center;
       padding: 12px;
       margin-bottom: 10px;
+      background: #fafbf8;
       cursor: pointer;
     }
-    .upload.drag { border-color: #87877f; background: #f2f2ec; }
+    .upload.drag { border-color: #80837a; background: #f1f3ec; }
     .upload input { display: none; }
-    .upload b { font-size: 14px; }
-    .upload small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
     textarea {
       width: 100%;
-      min-height: 280px;
+      min-height: 260px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 12px;
-      background: #fff;
+      padding: 10px;
       resize: vertical;
-      font: 13px/1.6 "Noto Sans SC", sans-serif;
+      font-size: 13px;
+      line-height: 1.6;
     }
     .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     button {
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 9px 12px;
       background: #fff;
-      color: var(--text);
-      font: 700 13px/1 "Manrope", sans-serif;
+      padding: 9px 12px;
+      font-weight: 600;
       cursor: pointer;
     }
-    button:disabled { opacity: .55; cursor: not-allowed; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
     .btn-main { border-color: #111; background: #111; color: #fff; }
-    .btn-danger { border-color: #f0dbdb; background: #fff6f6; color: #7a2424; }
-    .meta { margin-top: 10px; color: var(--muted); font-size: 12px; display: grid; gap: 4px; }
-    .right { min-height: 820px; display: grid; grid-template-rows: auto auto 1fr; }
-    .flow { padding: 12px; border-bottom: 1px solid var(--line); }
-    .flow h2 { font: 700 13px/1 "Manrope", sans-serif; margin-bottom: 8px; }
+    .meta { margin-top: 8px; color: var(--muted); font-size: 12px; display: grid; gap: 4px; }
+    .right { min-height: 780px; display: grid; grid-template-rows: auto auto 1fr; }
+    .flow { border-bottom: 1px solid var(--line); padding: 10px; }
     .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .step {
       border: 1px solid var(--line);
-      border-radius: 9px;
+      border-radius: 8px;
       padding: 8px;
-      min-height: 44px;
       font-size: 12px;
       color: var(--muted);
+      min-height: 40px;
       background: #fff;
     }
-    .step.active { border-color: #111; color: #111; background: #f7f7f4; }
-    .step.done { border-color: #bad8c4; color: #1e6b41; background: #f1faf3; }
+    .step.active { border-color: #111; color: #111; background: #f7f7f3; }
+    .step.done { border-color: #b9d6c4; color: #155e36; background: #eff8f2; }
     .status {
-      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
-      font-size: 13px;
+      padding: 10px;
       display: flex;
       justify-content: space-between;
+      font-size: 13px;
       color: var(--muted);
     }
-    .flag-ok { color: var(--ok); }
-    .flag-err { color: var(--bad); }
-    .grid {
-      padding: 10px;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      align-content: start;
-      overflow: auto;
-    }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+    .grid { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .pane {
       border: 1px solid var(--line);
       border-radius: 10px;
-      min-height: 176px;
+      min-height: 170px;
+      background: #fff;
       display: flex;
       flex-direction: column;
-      background: #fff;
     }
     .pane h3 {
       border-bottom: 1px solid var(--line);
-      padding: 9px 10px;
-      font: 700 13px/1 "Manrope", sans-serif;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .tag {
-      font-size: 10px;
-      color: #65655f;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 2px 7px;
-      background: #f9f9f6;
+      padding: 8px 10px;
+      font-size: 13px;
     }
     .pane pre {
       white-space: pre-wrap;
       word-break: break-word;
       padding: 10px;
-      font: 12px/1.58 "Noto Sans SC", sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
       flex: 1;
       overflow: auto;
     }
     .pane.full { grid-column: 1 / -1; }
     .pane-foot { border-top: 1px solid var(--line); padding: 8px 10px; text-align: right; }
-    @media (max-width: 1020px) {
+    @media (max-width: 1000px) {
       .layout { grid-template-columns: 1fr; }
-      .right { min-height: auto; }
       .grid { grid-template-columns: 1fr; }
       .steps { grid-template-columns: repeat(2, 1fr); }
     }
@@ -164,70 +133,54 @@
 <body>
   <div class="wrap">
     <header class="top">
-      <div class="logo">AI姹傝亴鍔╂墜</div>
-      <nav class="nav">
-        <a href="/">棣栭〉</a>
-        <a href="/api/health" target="_blank">鐘舵€?/a>
+      <strong>AI Job Helper</strong>
+      <nav>
+        <a href="/">Home</a>
+        <a href="/api/health" target="_blank">Health</a>
       </nav>
     </header>
     <div class="layout">
       <section class="card left">
-        <div class="kicker">resume input</div>
-        <h1>绠€鍘嗗垎鏋愬伐浣滃彴</h1>
-        <p class="sub">涓婁紶鎴栫矘璐寸畝鍘嗭紝鑷姩鐢熸垚鑱屼笟鍒嗘瀽銆佺湡瀹炲矖浣嶉摼鎺ャ€佷紭鍖栫畝鍘嗕笌闈㈣瘯鍑嗗銆?/p>
+        <h1>简历分析工作台</h1>
+        <p class="sub">上传或粘贴简历，输出职业分析、岗位推荐、优化简历和面试准备。</p>
         <label class="upload" id="dropZone">
-          <b>鐐瑰嚮涓婁紶绠€鍘?/b>
-          <small>鏀寔 PDF / DOCX / TXT / 鍥剧墖</small>
+          <b>点击上传简历</b>
+          <div style="margin-top:4px;color:#666;font-size:12px;">支持 PDF / DOCX / TXT / 图片</div>
           <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
         </label>
-        <textarea id="resumeText" placeholder="绮樿创绠€鍘嗘枃鏈?.."></textarea>
+        <textarea id="resumeText" placeholder="粘贴简历文本..."></textarea>
         <div class="actions">
-          <button class="btn-main" id="runBtn">寮€濮嬪垎鏋?/button>
-          <button id="sampleBtn">绀轰緥</button>
-          <button class="btn-danger" id="resetBtn">娓呯┖</button>
+          <button class="btn-main" id="runBtn">开始分析</button>
+          <button id="sampleBtn">示例</button>
+          <button id="resetBtn">清空</button>
         </div>
         <div class="meta">
-          <span id="fileMeta">鏈笂浼犳枃浠?/span>
-          <span id="providerMeta">鏁版嵁婧愶細-</span>
+          <span id="fileMeta">未上传文件</span>
+          <span id="providerMeta">数据源：-</span>
         </div>
       </section>
       <section class="card right">
         <div class="flow">
-          <h2>娴佺▼</h2>
           <div class="steps">
-            <div class="step" data-step="1">1 涓婁紶绠€鍘?/div>
-            <div class="step" data-step="2">2 AI鍒嗘瀽</div>
-            <div class="step" data-step="3">3 宀椾綅鍖归厤</div>
-            <div class="step" data-step="4">4 杈撳嚭缁撴灉</div>
+            <div class="step" data-step="1">1 上传简历</div>
+            <div class="step" data-step="2">2 AI分析</div>
+            <div class="step" data-step="3">3 岗位匹配</div>
+            <div class="step" data-step="4">4 输出结果</div>
           </div>
         </div>
         <div class="status">
-          <span id="statusText">绛夊緟寮€濮?/span>
+          <span id="statusText">等待开始</span>
           <span id="statusFlag">IDLE</span>
         </div>
         <div class="grid">
-          <article class="pane">
-            <h3>鑱屼笟鍒嗘瀽 <span class="tag">REPORT</span></h3>
-            <pre id="careerAnalysis">-</pre>
-          </article>
-          <article class="pane">
-            <h3>鎺ㄨ崘宀椾綅 <span class="tag">JOBS</span></h3>
-            <pre id="jobRecommendations">-</pre>
-          </article>
-          <article class="pane">
-            <h3>浼樺寲绠€鍘?<span class="tag">RESUME</span></h3>
-            <pre id="optimizedResume">-</pre>
-          </article>
-          <article class="pane">
-            <h3>闈㈣瘯鍑嗗 <span class="tag">INTERVIEW</span></h3>
-            <pre id="interviewPrep">-</pre>
-          </article>
+          <article class="pane"><h3>职业分析</h3><pre id="careerAnalysis">-</pre></article>
+          <article class="pane"><h3>推荐岗位</h3><pre id="jobRecommendations">-</pre></article>
+          <article class="pane"><h3>优化简历</h3><pre id="optimizedResume">-</pre></article>
+          <article class="pane"><h3>面试准备</h3><pre id="interviewPrep">-</pre></article>
           <article class="pane full">
-            <h3>妯℃嫙闂瓟涓庤柂璧?<span class="tag">MOCK</span></h3>
+            <h3>模拟问答与薪资</h3>
             <pre id="mockInterview">-</pre>
-            <div class="pane-foot">
-              <button id="downloadBtn">涓嬭浇瀹屾暣缁撴灉</button>
-            </div>
+            <div class="pane-foot"><button id="downloadBtn">下载结果</button></div>
           </article>
         </div>
       </section>
@@ -251,6 +204,7 @@
     const interviewPrep = document.getElementById("interviewPrep");
     const mockInterview = document.getElementById("mockInterview");
     const steps = [...document.querySelectorAll(".step")];
+
     function setStep(active) {
       steps.forEach((s) => {
         const n = Number(s.dataset.step);
@@ -262,128 +216,97 @@
     function setStatus(text, state = "run") {
       statusText.textContent = text;
       statusFlag.className = "";
-      if (state === "ok") {
-        statusFlag.textContent = "OK";
-        statusFlag.classList.add("flag-ok");
-      } else if (state === "err") {
-        statusFlag.textContent = "ERROR";
-        statusFlag.classList.add("flag-err");
-      } else {
-        statusFlag.textContent = "RUNNING";
-      }
+      if (state === "ok") { statusFlag.textContent = "OK"; statusFlag.classList.add("ok"); }
+      else if (state === "err") { statusFlag.textContent = "ERROR"; statusFlag.classList.add("err"); }
+      else { statusFlag.textContent = "RUNNING"; }
     }
     async function parseJsonSafe(response) {
       const raw = await response.text();
-      try {
-        return JSON.parse(raw);
-      } catch (e) {
-        throw new Error(`鎺ュ彛鏈繑鍥?JSON锛?{raw.slice(0, 180)}`);
-      }
+      try { return JSON.parse(raw); } catch (_) { throw new Error("接口未返回 JSON"); }
     }
     async function uploadFile(file) {
       const fd = new FormData();
       fd.append("file", file);
       setStep(1);
-      setStatus("姝ｅ湪涓婁紶骞惰В鏋愭枃浠?..");
+      setStatus("正在上传并解析文件...");
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await parseJsonSafe(res);
-      if (!res.ok || !data.success) throw new Error(data.error || "涓婁紶澶辫触");
+      if (!res.ok || !data.success) throw new Error(data.error || "上传失败");
       resumeText.value = data.resume_text || "";
-      fileMeta.textContent = `宸蹭笂浼狅細${data.filename || file.name}`;
-      setStatus("鏂囦欢瑙ｆ瀽瀹屾垚", "ok");
+      fileMeta.textContent = `已上传：${data.filename || file.name}`;
+      setStatus("文件解析完成", "ok");
     }
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      try {
-        await uploadFile(file);
-      } catch (err) {
-        setStatus(err.message || "涓婁紶澶辫触", "err");
-      }
+      try { await uploadFile(file); } catch (err) { setStatus(err.message || "上传失败", "err"); }
     });
     ["dragenter", "dragover"].forEach((ev) => {
-      dropZone.addEventListener(ev, (e) => {
-        e.preventDefault();
-        dropZone.classList.add("drag");
-      });
+      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
     });
     ["dragleave", "drop"].forEach((ev) => {
-      dropZone.addEventListener(ev, (e) => {
-        e.preventDefault();
-        dropZone.classList.remove("drag");
-      });
+      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); });
     });
     dropZone.addEventListener("drop", async (e) => {
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      try {
-        await uploadFile(file);
-      } catch (err) {
-        setStatus(err.message || "涓婁紶澶辫触", "err");
-      }
+      try { await uploadFile(file); } catch (err) { setStatus(err.message || "上传失败", "err"); }
     });
     sampleBtn.addEventListener("click", () => {
       resumeText.value = [
         "Yinghua Chen",
         "AI-Native Application Engineer",
         "Skills: Python, FastAPI, SQL, Docker, RAG, React",
-        "Experience: quant data pipeline, AI workflow, model QA gates",
+        "Experience: quant data pipeline, AI workflow, model QA gates"
       ].join("\n");
-      setStatus("宸插～鍏呯ず渚嬬畝鍘?, "ok");
+      setStatus("已填充示例简历", "ok");
     });
     resetBtn.addEventListener("click", () => {
       resumeText.value = "";
-      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => {
-        el.textContent = "-";
-      });
-      fileMeta.textContent = "鏈笂浼犳枃浠?;
-      providerMeta.textContent = "鏁版嵁婧愶細-";
+      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => el.textContent = "-");
+      fileMeta.textContent = "未上传文件";
+      providerMeta.textContent = "数据源：-";
       setStep(0);
-      setStatus("宸查噸缃?, "ok");
+      setStatus("已重置", "ok");
     });
     runBtn.addEventListener("click", async () => {
       const text = resumeText.value.trim();
-      if (!text) {
-        setStatus("璇峰厛涓婁紶鎴栫矘璐寸畝鍘?, "err");
-        return;
-      }
+      if (!text) return setStatus("请先上传或粘贴简历", "err");
       runBtn.disabled = true;
       setStep(2);
-      setStatus("AI 姝ｅ湪鍒嗘瀽绠€鍘?..");
+      setStatus("AI 正在分析简历...");
       try {
         const res = await fetch("/api/process", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resume: text }),
+          body: JSON.stringify({ resume: text })
         });
         const data = await parseJsonSafe(res);
-        if (!res.ok) throw new Error(data.error || "鍒嗘瀽澶辫触");
+        if (!res.ok) throw new Error(data.error || "分析失败");
         setStep(4);
         careerAnalysis.textContent = data.career_analysis || "-";
         jobRecommendations.textContent = data.job_recommendations || "-";
         optimizedResume.textContent = data.optimized_resume || "-";
         interviewPrep.textContent = data.interview_prep || "-";
         mockInterview.textContent = data.mock_interview || "-";
-        providerMeta.textContent = `鏁版嵁婧愶細${data.job_provider_mode || "-"}`;
-        setStatus("鍒嗘瀽瀹屾垚", "ok");
+        providerMeta.textContent = `数据源：${data.job_provider_mode || "-"}`;
+        setStatus("分析完成", "ok");
       } catch (err) {
-        setStatus(err.message || "鍒嗘瀽澶辫触", "err");
+        setStatus(err.message || "分析失败", "err");
       } finally {
         runBtn.disabled = false;
       }
     });
     downloadBtn.addEventListener("click", () => {
       const payload = {
-        鑱屼笟鍒嗘瀽: careerAnalysis.textContent,
-        鎺ㄨ崘宀椾綅: jobRecommendations.textContent,
-        浼樺寲绠€鍘? optimizedResume.textContent,
-        闈㈣瘯鍑嗗: interviewPrep.textContent,
-        妯℃嫙闂瓟涓庤柂璧? mockInterview.textContent,
+        "职业分析": careerAnalysis.textContent,
+        "推荐岗位": jobRecommendations.textContent,
+        "优化简历": optimizedResume.textContent,
+        "面试准备": interviewPrep.textContent,
+        "模拟问答与薪资": mockInterview.textContent
       };
       let text = "";
-      Object.entries(payload).forEach(([k, v]) => {
-        text += `\n${"=".repeat(20)} ${k} ${"=".repeat(20)}\n\n${v}\n`;
-      });
+      Object.entries(payload).forEach(([k, v]) => { text += `\n==================== ${k} ====================\n\n${v}\n`; });
       const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

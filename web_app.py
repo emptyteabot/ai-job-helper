@@ -13,6 +13,10 @@ import sys
 from typing import Optional, List, Dict, Any, Tuple
 import asyncio
 from datetime import datetime
+from urllib.parse import quote_plus, urlparse, parse_qs, unquote
+import re
+import html as html_lib
+import requests
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -135,9 +139,163 @@ def _search_jobs_without_browser(
             limit=max(5, min(int(limit or 10), 50)),
         )
         mode = (real_job_service.get_statistics() or {}).get("provider_mode", "auto")
-        return _normalize_and_filter_jobs(jobs, limit=limit), mode, None
+        normalized = _normalize_and_filter_jobs(jobs, limit=limit)
+        if normalized:
+            return normalized, mode, None
     except Exception as e:
-        return [], "cloud", str(e)
+        first_error = str(e)
+    else:
+        first_error = None
+
+    # Last fallback: DuckDuckGo HTML search (no key, no browser).
+    bing_html_jobs = _search_jobs_bing_html(keywords, location, limit=limit)
+    if bing_html_jobs:
+        return bing_html_jobs, "bing_html", None
+
+    # Last fallback: DuckDuckGo HTML search (no key, no browser).
+    ddg_jobs = _search_jobs_duckduckgo(keywords, location, limit=limit)
+    if ddg_jobs:
+        return ddg_jobs, "duckduckgo", None
+    return [], "cloud", first_error or "no result from no-browser providers"
+
+
+def _platform_from_link(link: str) -> str:
+    host = (urlparse(link).netloc or "").lower()
+    if "zhipin.com" in host:
+        return "Boss直聘"
+    if "liepin.com" in host:
+        return "猎聘"
+    if "zhaopin.com" in host:
+        return "智联招聘"
+    if "51job.com" in host:
+        return "前程无忧"
+    return host or "web"
+
+
+def _normalize_ddg_redirect(href: str) -> str:
+    href = (href or "").strip()
+    if not href:
+        return ""
+    if href.startswith("//"):
+        href = "https:" + href
+    if href.startswith("/l/?"):
+        qs = parse_qs(urlparse("https://duckduckgo.com" + href).query)
+        uddg = (qs.get("uddg") or [""])[0]
+        return unquote(uddg) if uddg else ""
+    return href
+
+
+def _search_jobs_duckduckgo(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    q_parts = [k.strip() for k in (keywords or []) if k and k.strip()]
+    if location:
+        q_parts.append(location.strip())
+    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com")
+    q = " ".join(q_parts).strip() or "招聘 职位 site:zhipin.com"
+
+    url = f"https://html.duckduckgo.com/html/?q={quote_plus(q)}"
+    try:
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+            timeout=12,
+        )
+        text = resp.text or ""
+    except Exception:
+        return []
+
+    # result__a href="...">title</a>
+    pattern = re.compile(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for href, raw_title in pattern.findall(text):
+        link = _normalize_ddg_redirect(href)
+        if not link:
+            continue
+        if not (link.startswith("http://") or link.startswith("https://")):
+            continue
+        low = link.lower()
+        if not any(d in low for d in ("zhipin.com", "liepin.com", "zhaopin.com", "51job.com")):
+            continue
+        if low in seen:
+            continue
+        seen.add(low)
+        title = re.sub(r"<[^>]+>", "", raw_title or "")
+        title = html_lib.unescape(title).strip()
+        out.append(
+            {
+                "id": f"duckduckgo_{abs(hash(low))}",
+                "title": title or "招聘岗位",
+                "company": "",
+                "location": location or "",
+                "salary": "",
+                "platform": _platform_from_link(link),
+                "link": link,
+                "provider": "duckduckgo",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
+
+
+def _search_jobs_bing_html(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    q_parts = [k.strip() for k in (keywords or []) if k and k.strip()]
+    if location:
+        q_parts.append(location.strip())
+    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com")
+    q = " ".join(q_parts).strip() or "招聘 职位 site:zhipin.com"
+
+    try:
+        resp = requests.get(
+            "https://www.bing.com/search",
+            params={"q": q, "count": max(10, min(int(limit or 10) * 2, 50))},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+            timeout=12,
+        )
+        text = resp.text or ""
+    except Exception:
+        return []
+
+    # <li class="b_algo"> ... <h2><a href="...">title</a>
+    pattern = re.compile(r'<li class="b_algo"[^>]*>.*?<h2><a href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for link, raw_title in pattern.findall(text):
+        if not link.startswith(("http://", "https://")):
+            continue
+        low = link.lower()
+        if not any(d in low for d in ("zhipin.com", "liepin.com", "zhaopin.com", "51job.com")):
+            continue
+        if low in seen:
+            continue
+        seen.add(low)
+        title = re.sub(r"<[^>]+>", "", raw_title or "")
+        title = html_lib.unescape(title).strip()
+        out.append(
+            {
+                "id": f"binghtml_{abs(hash(low))}",
+                "title": title or "招聘岗位",
+                "company": "",
+                "location": location or "",
+                "salary": "",
+                "platform": _platform_from_link(link),
+                "link": link,
+                "provider": "bing_html",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -929,6 +1087,10 @@ async def process_resume(request: Request):
                 heading = '【推荐岗位】（来自 Boss 直聘云端缓存）'
             elif mode in ('baidu', 'bing', 'brave'):
                 heading = f'【推荐岗位】（来自搜索引擎 {mode}）'
+            elif mode == 'bing_html':
+                heading = '【推荐岗位】（来自 Bing 无浏览器搜索）'
+            elif mode == 'duckduckgo':
+                heading = '【推荐岗位】（来自 DuckDuckGo 无浏览器搜索）'
             elif mode == 'jooble':
                 heading = '【推荐岗位】（来自 Jooble API）'
 

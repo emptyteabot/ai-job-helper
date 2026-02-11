@@ -321,7 +321,7 @@ def _search_jobs_remotive(
         return []
 
     jobs = data.get("jobs") or []
-    out: List[Dict[str, Any]] = []
+    base_rows: List[Dict[str, Any]] = []
     for it in jobs:
         link = str(it.get("url") or "").strip()
         if not link:
@@ -329,10 +329,7 @@ def _search_jobs_remotive(
         title = str(it.get("title") or "").strip()
         company = str(it.get("company_name") or "").strip()
         loc = str(it.get("candidate_required_location") or location or "").strip()
-        # Optional location preference filter.
-        if location and loc and location not in loc:
-            continue
-        out.append(
+        base_rows.append(
             {
                 "id": f"remotive_{it.get('id')}",
                 "title": title or "招聘岗位",
@@ -345,9 +342,15 @@ def _search_jobs_remotive(
                 "updated": str(it.get("publication_date") or "").strip(),
             }
         )
-        if len(out) >= max(1, int(limit or 10)):
+        if len(base_rows) >= max(30, int(limit or 10) * 4):
             break
-    return _normalize_and_filter_jobs(out, limit=limit)
+
+    if location:
+        narrowed = [j for j in base_rows if location in str(j.get("location") or "")]
+        if narrowed:
+            return _normalize_and_filter_jobs(narrowed, limit=limit)
+    # If no location match, return best available remote jobs instead of empty.
+    return _normalize_and_filter_jobs(base_rows, limit=limit)
 
 @app.get("/", response_class=HTMLResponse)
 async def home():

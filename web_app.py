@@ -61,6 +61,7 @@ cloud_jobs_meta: Dict[str, Any] = {
     "last_received": 0,
     "last_new": 0,
 }
+recent_search_jobs: Dict[str, Dict[str, Any]] = {}
 
 
 def _track_event(name: str, payload: Optional[Dict[str, Any]] = None) -> None:
@@ -69,6 +70,26 @@ def _track_event(name: str, payload: Optional[Dict[str, Any]] = None) -> None:
     except Exception:
         # Do not break core user path due to analytics write failures.
         pass
+
+
+def _cache_recent_jobs(jobs: List[Dict[str, Any]], max_size: int = 2000) -> None:
+    now = datetime.now().isoformat()
+    for j in jobs or []:
+        jid = str(j.get("id") or "").strip()
+        if not jid:
+            continue
+        row = dict(j)
+        row["_cached_at"] = now
+        recent_search_jobs[jid] = row
+    if len(recent_search_jobs) > max_size:
+        # Keep newest max_size by cached time.
+        items = sorted(
+            recent_search_jobs.items(),
+            key=lambda x: str(x[1].get("_cached_at") or ""),
+            reverse=True,
+        )[:max_size]
+        recent_search_jobs.clear()
+        recent_search_jobs.update(items)
 
 
 def _is_seed_or_demo_job(job: Dict[str, Any]) -> bool:
@@ -1411,6 +1432,7 @@ async def search_jobs(
                     "cloud_mode": True,
                 },
             )
+            _cache_recent_jobs(jobs)
             return JSONResponse({
                 "success": True,
                 "total": len(jobs),
@@ -1453,6 +1475,7 @@ async def search_jobs(
                 "cloud_mode": False,
             },
         )
+        _cache_recent_jobs(jobs)
         return JSONResponse({
             "success": True,
             "total": len(jobs),
@@ -1485,6 +1508,32 @@ async def apply_job(request: Request):
         user_info = data.get("user_info", {})
         
         result = real_job_service.apply_job(job_id, resume_text, user_info)
+        if (not result.get("success")) and job_id in recent_search_jobs:
+            # Fallback for no-browser providers whose job detail is not in local provider cache.
+            j = recent_search_jobs.get(job_id, {})
+            link = j.get("link") or j.get("apply_url")
+            if link:
+                app_id = f"EXT{int(datetime.now().timestamp())}"
+                record = {
+                    "application_id": app_id,
+                    "job_id": job_id,
+                    "job_title": j.get("title", ""),
+                    "company": j.get("company", ""),
+                    "platform": j.get("platform", j.get("provider", "")),
+                    "apply_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "待投递",
+                    "apply_link": link,
+                    "user_info": user_info or {},
+                }
+                try:
+                    real_job_service.records.add_record(record)
+                except Exception:
+                    pass
+                result = {
+                    "success": True,
+                    "message": "已生成投递跳转链接（请在招聘网站完成真实投递）",
+                    "data": record,
+                }
         _track_event(
             "job_apply",
             {

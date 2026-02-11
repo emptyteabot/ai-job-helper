@@ -161,8 +161,20 @@ class OpenClawCrawlerService:
         print(f"\n🔄 首次爬取将在启动后立即开始...\n")
         
         # 立即执行一次
-        self.crawl_and_push_all()
-        
+                # Wait until the user attaches OpenClaw to a tab. Without this, every crawl will fail.
+        while True:
+            try:
+                status = self.openclaw.health_check()
+                if status.get("tab_attached"):
+                    break
+                print("\n❌ OpenClaw 未 Attach 到标签页，等待你在 Chrome 里点击 OpenClaw 扩展的 Attach...")
+                print("   打开 Boss 页面后 Attach：https://www.zhipin.com\n")
+            except Exception as e:
+                print(f"\n❌ OpenClaw 状态检查失败：{e}\n")
+            time.sleep(5)
+
+        # 立即执行一次（首次抓取）
+        self.crawl_and_push_all()        
         # 设置定时任务
         schedule.every(interval_hours).hours.do(self.crawl_and_push_all)
         

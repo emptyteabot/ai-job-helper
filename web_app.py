@@ -26,6 +26,7 @@ from app.core.market_driven_engine import market_driven_pipeline
 from app.services.resume_analyzer import ResumeAnalyzer
 from app.services.job_searcher import JobSearcher
 from app.services.real_job_service import RealJobService
+from app.services.business_service import BusinessService
 from app.core.realtime_progress import progress_tracker
 
 app = FastAPI(title="AI求职助手")
@@ -51,6 +52,7 @@ pipeline = JobApplicationPipeline()
 analyzer = ResumeAnalyzer()
 searcher = JobSearcher()
 real_job_service = RealJobService()  # 真实招聘数据服务
+business_service = BusinessService()
 
 # 云端岗位缓存（内存）
 cloud_jobs_cache: List[Dict[str, Any]] = []
@@ -59,6 +61,14 @@ cloud_jobs_meta: Dict[str, Any] = {
     "last_received": 0,
     "last_new": 0,
 }
+
+
+def _track_event(name: str, payload: Optional[Dict[str, Any]] = None) -> None:
+    try:
+        business_service.track_event(name, payload or {})
+    except Exception:
+        # Do not break core user path due to analytics write failures.
+        pass
 
 
 def _is_seed_or_demo_job(job: Dict[str, Any]) -> bool:
@@ -1059,7 +1069,15 @@ async def upload_resume(file: UploadFile = File(...)):
                 return JSONResponse({
                     "error": "文件解析成功，但未能提取到有效内容。请检查文件是否为空或格式是否正确。"
                 }, status_code=500)
-            
+
+            _track_event(
+                "resume_uploaded",
+                {
+                    "filename": file.filename,
+                    "ext": file_ext,
+                    "chars": len(resume_text.strip()),
+                },
+            )
             return JSONResponse({
                 "success": True,
                 "resume_text": resume_text.strip(),
@@ -1072,6 +1090,7 @@ async def upload_resume(file: UploadFile = File(...)):
             }, status_code=500)
         
     except Exception as e:
+        _track_event("api_error", {"api": "/api/upload", "error": str(e)[:300]})
         return JSONResponse({"error": f"上传失败: {str(e)}"}, status_code=500)
 
 @app.websocket("/ws/progress")
@@ -1200,7 +1219,8 @@ async def process_resume(request: Request):
                 mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
                 return jobs[:10], mode
             except Exception:
-                return [], cfg_mode
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(kw, loc, limit=10)
+                return fallback_jobs, fallback_mode or cfg_mode
 
         real_jobs, real_mode = await _get_real_jobs_for_recommendation()
         results['job_recommendations'] = _format_real_jobs(real_jobs, real_mode)
@@ -1209,6 +1229,14 @@ async def process_resume(request: Request):
         # 完成
         await progress_tracker.complete()
         await progress_tracker.add_ai_message("系统", "🎉 市场分析完成！")
+        _track_event(
+            "resume_processed",
+            {
+                "ok": True,
+                "provider_mode": provider_mode,
+                "skills_count": len(seed_keywords),
+            },
+        )
         
         return JSONResponse({
             "career_analysis": results['market_analysis'],
@@ -1225,6 +1253,8 @@ async def process_resume(request: Request):
         })
         
     except Exception as e:
+        _track_event("resume_processed", {"ok": False, "error": str(e)[:300]})
+        _track_event("api_error", {"api": "/api/process", "error": str(e)[:300]})
         await progress_tracker.error(f"处理出错: {str(e)}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -1232,6 +1262,7 @@ async def process_resume(request: Request):
 async def health_check():
     """健康检查"""
     stats = real_job_service.get_statistics()
+    biz = business_service.metrics()
     
     # 检查OpenClaw状态
     openclaw_status = None
@@ -1245,6 +1276,13 @@ async def health_check():
         "message": "AI求职助手运行正常",
         "job_database": stats,
         "openclaw": openclaw_status,
+        "business": {
+            "leads_total": biz.get("leads", {}).get("total", 0),
+            "uploads": biz.get("funnel", {}).get("uploads", 0),
+            "process_runs": biz.get("funnel", {}).get("process_runs", 0),
+            "searches": biz.get("funnel", {}).get("searches", 0),
+            "applies": biz.get("funnel", {}).get("applies", 0),
+        },
         "config": {
             "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
             "cloud_cache_total": len(cloud_jobs_cache),
@@ -1263,6 +1301,73 @@ async def version():
         "railway_git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA"),
         "github_sha": os.getenv("GITHUB_SHA"),
     }
+
+
+@app.post("/api/business/lead")
+async def capture_business_lead(request: Request):
+    """Capture B2B/B2C monetization leads from landing page."""
+    try:
+        data = await request.json()
+        email = (data.get("email") or "").strip()
+        if ("@" not in email) or ("." not in email):
+            return JSONResponse({"error": "请输入有效邮箱"}, status_code=400)
+
+        payload = business_service.add_lead(
+            email=email,
+            name=(data.get("name") or "").strip(),
+            company=(data.get("company") or "").strip(),
+            use_case=(data.get("use_case") or "").strip(),
+            budget=(data.get("budget") or "").strip(),
+            source=(data.get("source") or "landing").strip(),
+            note=(data.get("note") or "").strip(),
+        )
+        return JSONResponse({"success": True, "data": payload})
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/business/lead", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/metrics")
+async def business_metrics(request: Request):
+    """Operational funnel metrics for fundraising / monetization tracking."""
+    token = os.getenv("ADMIN_METRICS_TOKEN", "").strip()
+    supplied = request.headers.get("x-admin-token", "").strip()
+    if token and supplied != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        return JSONResponse({"success": True, "data": business_service.metrics()})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/readiness")
+async def business_readiness(request: Request):
+    """Simple GTM readiness snapshot for investor demos."""
+    token = os.getenv("ADMIN_METRICS_TOKEN", "").strip()
+    supplied = request.headers.get("x-admin-token", "").strip()
+    if token and supplied != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        m = business_service.metrics()
+        funnel = m.get("funnel", {})
+        leads = m.get("leads", {})
+        checks = {
+            "lead_capture_ready": leads.get("total", 0) >= 1,
+            "activation_flow_ready": funnel.get("upload_to_process_pct", 0) > 0,
+            "job_match_flow_ready": funnel.get("process_to_search_pct", 0) > 0,
+            "monetization_signal_ready": funnel.get("search_to_apply_pct", 0) > 0,
+        }
+        score = round(sum(1 for v in checks.values() if v) / len(checks) * 100, 1)
+        return JSONResponse(
+            {
+                "success": True,
+                "score": score,
+                "checks": checks,
+                "metrics": m,
+            }
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/jobs/search")
 async def search_jobs(
@@ -1298,6 +1403,14 @@ async def search_jobs(
                         else "cloud cache is empty and no real jobs were found"
                     )
                 )
+            _track_event(
+                "job_search",
+                {
+                    "provider_mode": mode,
+                    "result_count": len(jobs),
+                    "cloud_mode": True,
+                },
+            )
             return JSONResponse({
                 "success": True,
                 "total": len(jobs),
@@ -1317,22 +1430,37 @@ async def search_jobs(
                 )
             )
 
-        jobs = real_job_service.search_jobs(
-            keywords=kw,
-            location=location,
-            salary_min=salary_min,
-            experience=experience,
-            limit=n,
-            progress_callback=progress_cb,
+        try:
+            jobs = real_job_service.search_jobs(
+                keywords=kw,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=n,
+                progress_callback=progress_cb,
+            )
+            jobs = _normalize_and_filter_jobs(jobs, limit=n)
+            mode = (real_job_service.get_statistics() or {}).get("provider_mode", cfg_mode)
+        except Exception as e:
+            jobs, mode, _ = _search_jobs_without_browser(kw, location, limit=n)
+            if not jobs:
+                raise e
+        _track_event(
+            "job_search",
+            {
+                "provider_mode": mode,
+                "result_count": len(jobs),
+                "cloud_mode": False,
+            },
         )
-        jobs = _normalize_and_filter_jobs(jobs, limit=n)
         return JSONResponse({
             "success": True,
             "total": len(jobs),
             "jobs": jobs,
-            "provider_mode": (real_job_service.get_statistics() or {}).get("provider_mode", cfg_mode),
+            "provider_mode": mode,
         })
     except Exception as e:
+        _track_event("api_error", {"api": "/api/jobs/search", "error": str(e)[:300]})
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/jobs/{job_id}")
@@ -1357,8 +1485,16 @@ async def apply_job(request: Request):
         user_info = data.get("user_info", {})
         
         result = real_job_service.apply_job(job_id, resume_text, user_info)
+        _track_event(
+            "job_apply",
+            {
+                "job_id": job_id,
+                "success": bool(result.get("success")),
+            },
+        )
         return JSONResponse(result)
     except Exception as e:
+        _track_event("api_error", {"api": "/api/jobs/apply", "error": str(e)[:300]})
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.post("/api/jobs/batch_apply")
@@ -1371,12 +1507,21 @@ async def batch_apply_jobs(request: Request):
         user_info = data.get("user_info", {})
         
         results = real_job_service.batch_apply(job_ids, resume_text, user_info)
+        _track_event(
+            "job_apply",
+            {
+                "batch": True,
+                "requested": len(job_ids),
+                "success_count": len([r for r in results if r.get("success")]),
+            },
+        )
         return JSONResponse({
             "success": True,
             "total": len(results),
             "results": results
         })
     except Exception as e:
+        _track_event("api_error", {"api": "/api/jobs/batch_apply", "error": str(e)[:300]})
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/statistics")
@@ -1442,6 +1587,10 @@ async def receive_crawler_data(request: Request, authorization: str = Header(Non
         cloud_jobs_meta["last_push_at"] = datetime.now().isoformat()
         cloud_jobs_meta["last_received"] = len(jobs)
         cloud_jobs_meta["last_new"] = len(new_jobs)
+        _track_event(
+            "crawler_upload",
+            {"received": len(jobs), "new": len(new_jobs), "total": len(cloud_jobs_cache)},
+        )
 
         print(f"✅ 接收爬虫数据：{len(new_jobs)} 个新岗位（总计：{len(cloud_jobs_cache)}）")
         

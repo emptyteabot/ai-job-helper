@@ -10,8 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import sys
-from typing import Optional
+from typing import Optional, List, Dict, Any, Tuple
 import asyncio
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -46,6 +47,97 @@ pipeline = JobApplicationPipeline()
 analyzer = ResumeAnalyzer()
 searcher = JobSearcher()
 real_job_service = RealJobService()  # 真实招聘数据服务
+
+# 云端岗位缓存（内存）
+cloud_jobs_cache: List[Dict[str, Any]] = []
+cloud_jobs_meta: Dict[str, Any] = {
+    "last_push_at": None,
+    "last_received": 0,
+    "last_new": 0,
+}
+
+
+def _is_seed_or_demo_job(job: Dict[str, Any]) -> bool:
+    """Filter obvious seed/demo jobs so they never show in production recommendations."""
+    jid = str(job.get("id") or "").strip().lower()
+    if jid.startswith("seed") or jid.startswith("demo"):
+        return True
+    link = str(job.get("link") or job.get("apply_url") or "").strip().lower()
+    if "/job_detail/seed" in link:
+        return True
+    company = str(job.get("company") or "").strip().lower()
+    if company in {"示例公司", "测试公司", "demo"}:
+        return True
+    return False
+
+
+def _job_has_actionable_link(job: Dict[str, Any]) -> bool:
+    link = str(job.get("link") or job.get("apply_url") or "").strip()
+    return link.startswith("http://") or link.startswith("https://")
+
+
+def _normalize_and_filter_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+    """Keep only actionable real jobs and deduplicate by link/id/title-company."""
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for job in jobs or []:
+        if not isinstance(job, dict):
+            continue
+        if _is_seed_or_demo_job(job):
+            continue
+        if not _job_has_actionable_link(job):
+            continue
+
+        link = str(job.get("link") or job.get("apply_url") or "").strip().lower()
+        jid = str(job.get("id") or "").strip().lower()
+        title = str(job.get("title") or job.get("job_title") or "").strip().lower()
+        company = str(job.get("company") or "").strip().lower()
+        dedupe_key = link or jid or f"{title}|{company}"
+        if not dedupe_key or dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        out.append(job)
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return out
+
+
+def _filter_cloud_cache_by_query(
+    keywords: List[str], location: Optional[str], limit: int
+) -> List[Dict[str, Any]]:
+    kw = [k.strip().lower() for k in (keywords or []) if k and k.strip()]
+
+    def hit(job: Dict[str, Any]) -> bool:
+        text = f"{job.get('title','')} {job.get('company','')}".lower()
+        if kw and not any(k in text for k in kw):
+            return False
+        if location and job.get("location") and location not in str(job.get("location")):
+            return False
+        return True
+
+    matched = [j for j in cloud_jobs_cache if hit(j)]
+    if not matched:
+        matched = list(cloud_jobs_cache)
+    return _normalize_and_filter_jobs(matched, limit=limit)
+
+
+def _search_jobs_without_browser(
+    keywords: List[str], location: Optional[str], limit: int
+) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
+    """
+    Cloud-safe real-time search path.
+    No local browser/OpenClaw required.
+    """
+    try:
+        jobs = real_job_service.search_jobs(
+            keywords=keywords,
+            location=location,
+            limit=max(5, min(int(limit or 10), 50)),
+        )
+        mode = (real_job_service.get_statistics() or {}).get("provider_mode", "auto")
+        return _normalize_and_filter_jobs(jobs, limit=limit), mode, None
+    except Exception as e:
+        return [], "cloud", str(e)
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -818,16 +910,16 @@ async def process_resume(request: Request):
         provider_mode = (real_job_service.get_statistics() or {}).get("provider_mode", "")
         
         # Replace the old hardcoded job list with real, actionable job links.
-        # Priority: cloud(crawler cache) -> openclaw(local) -> search providers -> local dataset.
+        # Priority: cloud(cache) -> cloud-safe real-time search (no browser).
         def _format_real_jobs(jobs, mode: str) -> str:
             if not jobs:
                 return (
                     '【推荐岗位】（当前暂无可用岗位）\n\n'
                     '排查建议：\n'
                     '1. 检查云端缓存：访问 /api/crawler/status 是否为 empty。\n'
-                    '2. 本机模式请先在 Chrome 的 Boss 页面点击 OpenClaw 扩展并 Attach。\n'
-                    '3. 若实时搜索被风控，可暂时切换到 cloud/baidu/bing/brave 数据源。\n\n'
-                    '提示：Railway 云端无法直接驱动本地浏览器。Boss 实时抓取建议本机 OpenClaw，云端读取 cloud 缓存。\n'
+                    '2. 当前已启用无浏览器搜索回退（baidu/bing/brave/jooble）。\n'
+                    '3. 若搜索引擎触发风控，可切换 API 数据源或稍后重试。\n\n'
+                    '注意：系统不会回退到演示岗位；无真实数据时只展示该提示。\n'
                 )
 
             heading = '【推荐岗位】（真实市场数据）'
@@ -874,23 +966,18 @@ async def process_resume(request: Request):
             loc = seed_location
 
             if cfg_mode == 'cloud' or cloud_jobs_cache:
-                if cloud_jobs_cache:
-                    def hit(job):
-                        text = f"{job.get('title','')} {job.get('company','')}".lower()
-                        if kw and not any(k.lower() in text for k in kw if k):
-                            return False
-                        if loc and job.get('location') and loc not in str(job.get('location')):
-                            return False
-                        return True
-
-                    matched = [j for j in cloud_jobs_cache if hit(j)]
-                    if not matched:
-                        matched = list(cloud_jobs_cache)
-                    return matched[:10], 'cloud'
-                return [], 'cloud'
+                cached = _filter_cloud_cache_by_query(kw, loc, limit=10)
+                if cached:
+                    return cached, 'cloud'
+                # Cache empty/insufficient: fallback to cloud-safe real-time providers.
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(kw, loc, limit=10)
+                return fallback_jobs, fallback_mode
 
             try:
-                jobs = real_job_service.search_jobs(keywords=kw, location=loc, limit=10)
+                jobs = _normalize_and_filter_jobs(
+                    real_job_service.search_jobs(keywords=kw, location=loc, limit=10),
+                    limit=10,
+                )
                 mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
                 return jobs[:10], mode
             except Exception:
@@ -942,6 +1029,8 @@ async def health_check():
         "config": {
             "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
             "cloud_cache_total": len(cloud_jobs_cache),
+            "cloud_last_push_at": cloud_jobs_meta.get("last_push_at"),
+            "no_browser_fallback_enabled": True,
         },
     }
 
@@ -967,35 +1056,35 @@ async def search_jobs(
     """搜索真实岗位"""
     try:
         cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+        n = int(limit) if limit is not None else 50
+        n = max(1, min(n, 100))
+        keyword_list = keywords.split(",") if keywords else []
+        kw = [k.strip() for k in keyword_list if k and k.strip()]
 
-        # Cloud mode: prefer crawler-pushed Boss links (no OpenClaw, no Baidu captcha).
+        # Cloud mode: prefer crawler cache; fallback to cloud-safe real-time providers.
         if cfg_mode == "cloud" or cloud_jobs_cache:
-            keyword_list = keywords.split(",") if keywords else []
-            kw = [k.strip() for k in keyword_list if k and k.strip()]
-
-            def hit(job):
-                text = f"{job.get('title','')} {job.get('company','')}".lower()
-                if kw and not any(k.lower() in text for k in kw):
-                    return False
-                if location and job.get("location") and location not in str(job.get("location")):
-                    return False
-                return True
-
-            matched = [j for j in cloud_jobs_cache if hit(j)]
-            if not matched:
-                matched = list(cloud_jobs_cache)
-
-            n = int(limit) if limit is not None else 50
-            jobs = matched[:n] if n > 0 else []
+            jobs = _filter_cloud_cache_by_query(kw, location, limit=n)
+            warning = None
+            mode = "cloud"
+            if not jobs:
+                fallback_jobs, fallback_mode, fallback_err = _search_jobs_without_browser(kw, location, limit=n)
+                jobs = fallback_jobs
+                mode = fallback_mode or "cloud"
+                warning = (
+                    f"cloud cache is empty; switched to no-browser provider: {mode}"
+                    if jobs
+                    else (
+                        f"cloud cache empty and no-browser search failed: {fallback_err}"
+                        if fallback_err
+                        else "cloud cache is empty and no real jobs were found"
+                    )
+                )
             return JSONResponse({
                 "success": True,
                 "total": len(jobs),
                 "jobs": jobs,
-                "provider_mode": "cloud",
-                "warning": (
-                    "cloud cache is empty; run the local OpenClaw crawler to push Boss jobs"
-                    if not cloud_jobs_cache else None
-                ),
+                "provider_mode": mode,
+                "warning": warning,
             })
 
         # Stream progress to the same WebSocket channel as the AI pipeline.
@@ -1009,19 +1098,20 @@ async def search_jobs(
                 )
             )
 
-        keyword_list = keywords.split(',') if keywords else []
         jobs = real_job_service.search_jobs(
-            keywords=keyword_list,
+            keywords=kw,
             location=location,
             salary_min=salary_min,
             experience=experience,
-            limit=limit,
+            limit=n,
             progress_callback=progress_cb,
         )
+        jobs = _normalize_and_filter_jobs(jobs, limit=n)
         return JSONResponse({
             "success": True,
             "total": len(jobs),
-            "jobs": jobs
+            "jobs": jobs,
+            "provider_mode": (real_job_service.get_statistics() or {}).get("provider_mode", cfg_mode),
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -1088,9 +1178,6 @@ from fastapi import Header
 # 简单的API密钥验证
 CRAWLER_API_KEY = os.getenv("CRAWLER_API_KEY", "your-secret-key-change-this")
 
-# 云端岗位数据库（内存存储）
-cloud_jobs_cache = []
-
 @app.post("/api/crawler/upload")
 async def receive_crawler_data(request: Request, authorization: str = Header(None)):
     """接收本地爬虫推送的岗位数据"""
@@ -1111,20 +1198,32 @@ async def receive_crawler_data(request: Request, authorization: str = Header(Non
             return JSONResponse({"error": "岗位数据为空"}, status_code=400)
         
         # 添加接收时间戳
-        from datetime import datetime
         for job in jobs:
             job["received_at"] = datetime.now().isoformat()
-        
-        # 存储到缓存（去重）
-        existing_ids = {job.get("id") for job in cloud_jobs_cache}
-        new_jobs = [job for job in jobs if job.get("id") not in existing_ids]
-        
+
+        # 存储到缓存（去重 + 过滤 seed/demo + 必须可跳转）
+        incoming = _normalize_and_filter_jobs(jobs, limit=5000)
+        existing_keys = {
+            str(j.get("link") or j.get("apply_url") or j.get("id") or "").strip().lower()
+            for j in cloud_jobs_cache
+        }
+        new_jobs = []
+        for job in incoming:
+            key = str(job.get("link") or job.get("apply_url") or job.get("id") or "").strip().lower()
+            if key and key not in existing_keys:
+                existing_keys.add(key)
+                new_jobs.append(job)
+
         cloud_jobs_cache.extend(new_jobs)
-        
+
         # 限制缓存大小（保留最新的5000个）
         if len(cloud_jobs_cache) > 5000:
             cloud_jobs_cache[:] = cloud_jobs_cache[-5000:]
-        
+
+        cloud_jobs_meta["last_push_at"] = datetime.now().isoformat()
+        cloud_jobs_meta["last_received"] = len(jobs)
+        cloud_jobs_meta["last_new"] = len(new_jobs)
+
         print(f"✅ 接收爬虫数据：{len(new_jobs)} 个新岗位（总计：{len(cloud_jobs_cache)}）")
         
         return JSONResponse({
@@ -1143,12 +1242,18 @@ async def get_crawler_status():
     if not cloud_jobs_cache:
         return JSONResponse({
             "status": "empty",
-            "total": 0
+            "total": 0,
+            "last_push_at": cloud_jobs_meta.get("last_push_at"),
+            "last_received": cloud_jobs_meta.get("last_received", 0),
+            "last_new": cloud_jobs_meta.get("last_new", 0),
         })
     
     return JSONResponse({
         "status": "ok",
-        "total": len(cloud_jobs_cache)
+        "total": len(cloud_jobs_cache),
+        "last_push_at": cloud_jobs_meta.get("last_push_at"),
+        "last_received": cloud_jobs_meta.get("last_received", 0),
+        "last_new": cloud_jobs_meta.get("last_new", 0),
     })
 
 if __name__ == "__main__":

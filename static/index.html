@@ -3,153 +3,279 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI求职助手 | 简洁版</title>
+  <title>AI Job Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f6f7f3;
-      --card: #fff;
-      --line: #dfdfd7;
-      --text: #101010;
-      --muted: #63635d;
-      --main: #111;
-      --main-hover: #242424;
-      --ok: #136a37;
-      --err: #ad2c2c;
-      --radius: 14px;
+      --bg: #f4f7f1;
+      --card: #ffffff;
+      --text: #11130f;
+      --muted: #667061;
+      --line: #d8dfd1;
+      --accent: #1b7f65;
+      --accent-soft: #e9f7f1;
+      --ok: #1f7d4a;
+      --err: #bb3f3f;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Noto Sans SC", "Manrope", sans-serif;
+      font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
       color: var(--text);
       background:
-        radial-gradient(1100px 400px at -10% -10%, #eceee4 0%, transparent 50%),
-        radial-gradient(800px 260px at 110% -20%, #eceee4 0%, transparent 40%),
-        var(--bg);
+        radial-gradient(900px 300px at 10% -10%, rgba(27,127,101,0.10), transparent 55%),
+        linear-gradient(180deg, #f7faf4, var(--bg));
       min-height: 100vh;
     }
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 18px; }
-    .nav {
+    .container {
+      width: min(1080px, calc(100% - 32px));
+      margin: 14px auto 24px;
+    }
+    .top {
       height: 56px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: var(--card);
+      background: rgba(255,255,255,0.86);
+      backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 16px;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
     }
-    .logo { font: 800 16px/1 "Manrope", sans-serif; }
-    .nav a { text-decoration: none; color: var(--muted); margin-left: 14px; font-size: 13px; }
-
+    .brand {
+      font: 700 15px/1 "IBM Plex Sans", sans-serif;
+      letter-spacing: 0.2px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #1b7f65, #33c18d);
+      box-shadow: 0 0 0 5px rgba(27,127,101,0.13);
+    }
+    .nav a {
+      text-decoration: none;
+      color: var(--muted);
+      font: 500 13px/1 "IBM Plex Sans", sans-serif;
+      margin-left: 8px;
+      border: 1px solid transparent;
+      padding: 7px 10px;
+      border-radius: 999px;
+      transition: all .2s ease;
+    }
+    .nav a:hover {
+      border-color: var(--line);
+      color: var(--text);
+      background: #fff;
+    }
     .hero {
       border: 1px solid var(--line);
+      border-radius: 22px;
       background: var(--card);
-      border-radius: var(--radius);
-      padding: 22px;
-      display: grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap: 16px;
+      padding: 28px 24px 24px;
     }
-    h1 { font: 800 42px/1.06 "Manrope", sans-serif; margin-bottom: 10px; letter-spacing: -.6px; }
-    .sub { color: var(--muted); font-size: 15px; line-height: 1.65; max-width: 720px; }
-
-    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
-    .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fbfbf8; }
-    .kpi b { display: block; font: 800 20px/1 "Manrope", sans-serif; margin-bottom: 4px; }
-    .kpi span { font-size: 12px; color: var(--muted); }
-
-    .ctas { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .mono {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      margin-bottom: 12px;
+      background: #fbfdf9;
+    }
+    .mono::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    h1 {
+      font: 700 54px/1.02 "IBM Plex Sans", sans-serif;
+      letter-spacing: -1.4px;
+      margin-bottom: 10px;
+      max-width: 920px;
+    }
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1em;
+      background: #142117;
+      margin-left: 4px;
+      animation: blink 1s steps(1,end) infinite;
+      vertical-align: -2px;
+    }
+    @keyframes blink {
+      0%, 48% { opacity: 1; }
+      49%, 100% { opacity: 0; }
+    }
+    .sub {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.72;
+      min-height: 56px;
+      margin-bottom: 18px;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+    }
     .btn {
       text-decoration: none;
       border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px 14px;
-      font: 700 13px/1 "Manrope", sans-serif;
-      background: #fff;
+      border-radius: 12px;
+      padding: 11px 14px;
+      font: 600 13px/1 "IBM Plex Sans", sans-serif;
       color: var(--text);
-      cursor: pointer;
-    }
-    .btn-main { background: var(--main); color: #fff; border-color: var(--main); }
-    .btn-main:hover { background: var(--main-hover); }
-
-    .lead {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 12px;
-      background: #fbfbf8;
-    }
-    .lead h3 { font: 700 14px/1 "Manrope", sans-serif; margin-bottom: 8px; }
-    .lead .hint { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-    .row { margin-bottom: 8px; }
-    .row label { font-size: 12px; color: var(--muted); margin-bottom: 3px; display: block; }
-    .row input, .row select, .row textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px;
-      font: 13px/1.4 "Noto Sans SC", sans-serif;
       background: #fff;
+      transition: all .2s ease;
     }
-    .row textarea { min-height: 72px; resize: vertical; }
-    .msg { margin-top: 6px; font-size: 12px; }
-    .ok { color: var(--ok); }
-    .err { color: var(--err); }
-
-    .strip {
-      margin-top: 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--card);
-      padding: 14px;
+    .btn:hover { transform: translateY(-1px); }
+    .btn-main {
+      background: linear-gradient(135deg, #17684f, #1b7f65);
+      border-color: #17684f;
+      color: #fff;
+    }
+    .minimal-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
     }
-    .strip .item { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fff; }
-    .strip h4 { font-size: 13px; margin-bottom: 4px; }
-    .strip p { color: var(--muted); font-size: 12px; line-height: 1.6; }
-
-    .foot { text-align: center; color: var(--muted); font-size: 12px; margin: 14px 0 8px; }
-
-    @media (max-width: 930px) {
-      .hero { grid-template-columns: 1fr; }
-      .kpis, .strip { grid-template-columns: 1fr; }
-      h1 { font-size: 34px; }
+    .item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fcfdfa;
+    }
+    .item b {
+      display: block;
+      font: 600 12px/1 "IBM Plex Sans", sans-serif;
+      margin-bottom: 6px;
+    }
+    .item p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .lead {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 14px;
+    }
+    .lead h3 {
+      font: 600 14px/1 "IBM Plex Sans", sans-serif;
+      margin-bottom: 8px;
+    }
+    .lead-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .row label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-size: 13px;
+      background: #fff;
+      color: var(--text);
+      font-family: inherit;
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    .lead-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 13px;
+      font: 600 13px/1 "IBM Plex Sans", sans-serif;
+      cursor: pointer;
+    }
+    .lead-btn {
+      background: #121512;
+      border-color: #121512;
+      color: #fff;
+    }
+    .msg { font-size: 12px; }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+    .foot {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      margin-top: 12px;
+    }
+    @media (max-width: 920px) {
+      h1 { font-size: 40px; }
+      .minimal-grid { grid-template-columns: 1fr; }
+      .lead-grid { grid-template-columns: 1fr; }
+      .sub { font-size: 15px; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="nav">
-      <div class="logo">AI求职助手</div>
-      <nav>
-        <a href="/app">分析工作台</a>
-        <a href="/api/health" target="_blank">服务状态</a>
+  <div class="container">
+    <header class="top">
+      <div class="brand"><span class="dot"></span><span>AI Job Assistant</span></div>
+      <nav class="nav">
+        <a href="/app">Workspace</a>
+        <a href="/api/ping" target="_blank">Ping</a>
+        <a href="/api/health" target="_blank">Health</a>
       </nav>
     </header>
 
     <section class="hero">
-      <div>
-        <h1>上传简历，直接得到可投递结果</h1>
-        <p class="sub">系统会输出职业分析、真实岗位链接、优化简历和面试准备。默认启用云端可运行的数据源回退，不依赖本地浏览器插件。</p>
-        <div class="kpis">
-          <div class="kpi"><b>24h</b><span>云端持续在线</span></div>
-          <div class="kpi"><b>真实链接</b><span>岗位可直接跳转投递</span></div>
-          <div class="kpi"><b>可验证</b><span>内置健康检查与版本接口</span></div>
-        </div>
-        <div class="ctas">
-          <a class="btn btn-main" href="/app">立即开始</a>
-          <a class="btn" href="/api/version" target="_blank">查看版本</a>
-        </div>
+      <div class="mono">openai-style / product-first / simple</div>
+      <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
+      <p class="sub" id="typeSub"></p>
+      <div class="actions">
+        <a class="btn btn-main" href="/app">开始使用</a>
+        <a class="btn" href="/api/version" target="_blank">查看版本</a>
       </div>
+      <div class="minimal-grid">
+        <article class="item">
+          <b>真实岗位链路</b>
+          <p>优先输出可点击可投递岗位，支持云端回退，不展示演示占位数据。</p>
+        </article>
+        <article class="item">
+          <b>求职闭环</b>
+          <p>上传简历 -> AI分析 -> 岗位匹配 -> 简历优化 -> 面试准备，一次完成。</p>
+        </article>
+        <article class="item">
+          <b>融资可演示</b>
+          <p>内置健康检查、转化漏斗与线索收集接口，可直接用于 Demo Day。</p>
+        </article>
+      </div>
+    </section>
 
-      <aside class="lead">
-        <h3>试用登记 / 商务咨询</h3>
-        <p class="hint">用于收集早期用户和企业线索，支持后续商业化。</p>
+    <section class="lead">
+      <h3>试用登记 / 商务咨询</h3>
+      <div class="lead-grid">
         <div class="row">
           <label for="leadEmail">邮箱</label>
           <input id="leadEmail" placeholder="you@company.com" />
@@ -159,7 +285,7 @@
           <input id="leadName" placeholder="张三" />
         </div>
         <div class="row">
-          <label for="leadCompany">公司/学校</label>
+          <label for="leadCompany">公司 / 学校</label>
           <input id="leadCompany" placeholder="某某科技" />
         </div>
         <div class="row">
@@ -171,74 +297,77 @@
             <option>企业版（1000+/月）</option>
           </select>
         </div>
-        <div class="row">
+        <div class="row" style="grid-column: 1 / -1;">
           <label for="leadUseCase">使用场景</label>
-          <textarea id="leadUseCase" placeholder="例如：批量优化校招简历，提高面试通过率"></textarea>
+          <textarea id="leadUseCase" placeholder="例如：批量优化简历，提高面试通过率"></textarea>
         </div>
-        <button class="btn btn-main" id="leadSubmit" type="button">提交线索</button>
+      </div>
+      <div class="lead-actions">
+        <button class="lead-btn" id="leadSubmit" type="button">提交线索</button>
         <div class="msg" id="leadMsg"></div>
-      </aside>
+      </div>
     </section>
 
-    <section class="strip">
-      <article class="item">
-        <h4>求职端</h4>
-        <p>自动输出职业分析、岗位推荐、简历优化和面试问答。</p>
-      </article>
-      <article class="item">
-        <h4>运营端</h4>
-        <p>已提供线索收集和漏斗指标接口，便于增长复盘和融资展示。</p>
-      </article>
-      <article class="item">
-        <h4>部署端</h4>
-        <p>默认 Railway，支持 Cloudflare 前端分发，整体成本可控。</p>
-      </article>
-    </section>
-
-    <div class="foot">© 2026 AI求职助手</div>
+    <div class="foot">© 2026 AI Job Assistant</div>
   </div>
 
   <script>
-    const leadBtn = document.getElementById('leadSubmit');
-    const leadMsg = document.getElementById('leadMsg');
+    const titleText = "Build a great job product, not a pretty demo.";
+    const subText = "让每一次简历上传，都指向真实面试和真实 offer。";
+    const titleNode = document.getElementById("typeTitle");
+    const subNode = document.getElementById("typeSub");
 
-    leadBtn.addEventListener('click', async () => {
-      leadMsg.textContent = '';
+    function typewriter(node, text, speed, done) {
+      let i = 0;
+      const timer = setInterval(() => {
+        i += 1;
+        node.textContent = text.slice(0, i);
+        if (i >= text.length) {
+          clearInterval(timer);
+          if (done) done();
+        }
+      }, speed);
+    }
+
+    typewriter(titleNode, titleText, 28, () => {
+      typewriter(subNode, subText, 22);
+    });
+
+    const leadBtn = document.getElementById("leadSubmit");
+    const leadMsg = document.getElementById("leadMsg");
+    leadBtn.addEventListener("click", async () => {
+      leadMsg.textContent = "";
       const payload = {
-        email: document.getElementById('leadEmail').value.trim(),
-        name: document.getElementById('leadName').value.trim(),
-        company: document.getElementById('leadCompany').value.trim(),
-        budget: document.getElementById('leadBudget').value,
-        use_case: document.getElementById('leadUseCase').value.trim(),
-        source: 'landing'
+        email: document.getElementById("leadEmail").value.trim(),
+        name: document.getElementById("leadName").value.trim(),
+        company: document.getElementById("leadCompany").value.trim(),
+        budget: document.getElementById("leadBudget").value,
+        use_case: document.getElementById("leadUseCase").value.trim(),
+        source: "landing"
       };
-
-      if (!payload.email || !payload.email.includes('@')) {
-        leadMsg.className = 'msg err';
-        leadMsg.textContent = '请先填写有效邮箱';
+      if (!payload.email || !payload.email.includes("@")) {
+        leadMsg.className = "msg err";
+        leadMsg.textContent = "请先填写有效邮箱";
         return;
       }
-
       leadBtn.disabled = true;
-      leadBtn.textContent = '提交中...';
+      leadBtn.textContent = "提交中...";
       try {
-        const res = await fetch('/api/business/lead', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        const res = await fetch("/api/business/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if (!res.ok || !data.success) {
-          throw new Error(data.error || '提交失败');
-        }
-        leadMsg.className = 'msg ok';
-        leadMsg.textContent = '提交成功，我们会尽快联系你。';
+        if (!res.ok || !data.success) throw new Error(data.error || "提交失败");
+        leadMsg.className = "msg ok";
+        leadMsg.textContent = "提交成功，我们会尽快联系你。";
       } catch (err) {
-        leadMsg.className = 'msg err';
-        leadMsg.textContent = '提交失败：' + (err.message || 'unknown error');
+        leadMsg.className = "msg err";
+        leadMsg.textContent = "提交失败：" + (err.message || "unknown error");
       } finally {
         leadBtn.disabled = false;
-        leadBtn.textContent = '提交线索';
+        leadBtn.textContent = "提交线索";
       }
     });
   </script>

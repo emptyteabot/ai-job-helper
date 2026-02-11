@@ -58,7 +58,7 @@ async def home():
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page():
-    """????"""
+    """主应用页面"""
     app_html = "static/app.html"
     # If `static/app.html` is missing or accidentally empty, fall back to the embedded page below.
     if os.path.exists(app_html) and os.path.getsize(app_html) > 64:
@@ -822,27 +822,27 @@ async def process_resume(request: Request):
         def _format_real_jobs(jobs, mode: str) -> str:
             if not jobs:
                 return (
-                    '??????????????????\n\n'
-                    '??????\n'
-                    '1. ?????????????/api/crawler/status ? empty?\n'
-                    '2. ??? Attach OpenClaw?openclaw ???\n'
-                    '3. ?????????/???baidu/bing/brave ???\n\n'
-                    '???????? Railway ???? Boss ??????????? openclaw ?????????cloud ????\n'
+                    '【推荐岗位】（当前暂无可用岗位）\n\n'
+                    '排查建议：\n'
+                    '1. 检查云端缓存：访问 /api/crawler/status 是否为 empty。\n'
+                    '2. 本机模式请先在 Chrome 的 Boss 页面点击 OpenClaw 扩展并 Attach。\n'
+                    '3. 若实时搜索被风控，可暂时切换到 cloud/baidu/bing/brave 数据源。\n\n'
+                    '提示：Railway 云端无法直接驱动本地浏览器。Boss 实时抓取建议本机 OpenClaw，云端读取 cloud 缓存。\n'
                 )
 
-            heading = '??????????????'
+            heading = '【推荐岗位】（真实市场数据）'
             if mode == 'openclaw':
-                heading = '?????????Boss???????OpenClaw????'
+                heading = '【推荐岗位】（来自 Boss 直聘实时数据，OpenClaw）'
             elif mode == 'cloud':
-                heading = '?????????Boss???????cloud????'
+                heading = '【推荐岗位】（来自 Boss 直聘云端缓存）'
             elif mode in ('baidu', 'bing', 'brave'):
-                heading = f'????????????????{mode}?'
+                heading = f'【推荐岗位】（来自搜索引擎 {mode}）'
             elif mode == 'jooble':
-                heading = '?????????Jooble API?????'
+                heading = '【推荐岗位】（来自 Jooble API）'
 
             lines = [heading, '']
             for i, job in enumerate(jobs, 1):
-                title = job.get('title') or job.get('job_title') or '?????'
+                title = job.get('title') or job.get('job_title') or '未知岗位'
                 company = job.get('company') or ''
                 loc = job.get('location') or ''
                 salary = job.get('salary') or job.get('salary_range') or ''
@@ -857,13 +857,13 @@ async def process_resume(request: Request):
 
                 lines.append(f"{i}. {title}" + (f" - {company}" if company else ''))
                 if salary:
-                    lines.append(f"   ?? ???{salary}")
+                    lines.append(f"   薪资：{salary}")
                 if loc:
-                    lines.append(f"   ?? ???{loc}")
+                    lines.append(f"   地点：{loc}")
                 if mp_str:
-                    lines.append(f"   ?? ????{mp_str}")
+                    lines.append(f"   匹配度：{mp_str}")
                 if link:
-                    lines.append(f"   ?? ???{link}")
+                    lines.append(f"   链接：{link}")
                 lines.append('')
 
             return "\n".join(lines).strip() + "\n"
@@ -936,7 +936,7 @@ async def health_check():
     
     return {
         "status": "ok",
-        "message": "AI????????",
+        "message": "AI求职助手运行正常",
         "job_database": stats,
         "openclaw": openclaw_status,
         "config": {

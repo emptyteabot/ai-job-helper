@@ -3,121 +3,113 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI求职助手</title>
+  <title>AI姹傝亴鍔╂墜 | 鍒嗘瀽宸ヤ綔鍙?/title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f7f7f5;
+      --bg: #f4f5f1;
       --card: #ffffff;
-      --line: #e7e7e3;
-      --text: #151515;
-      --muted: #666;
-      --brand: #111;
-      --good: #147d3f;
-      --bad: #b42318;
-      --radius: 12px;
+      --text: #121212;
+      --muted: #5f5f58;
+      --line: #dfdfd7;
+      --main: #111111;
+      --ok: #136a37;
+      --bad: #ad2c2c;
+      --radius: 14px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Noto Sans SC", "DM Sans", sans-serif;
-      background: var(--bg);
+      font-family: "Noto Sans SC", "Manrope", sans-serif;
       color: var(--text);
+      background:
+        radial-gradient(1200px 420px at -10% -10%, #eceee4 0%, transparent 45%),
+        radial-gradient(800px 300px at 110% -20%, #eceee4 0%, transparent 35%),
+        var(--bg);
       min-height: 100vh;
     }
-    .wrap { max-width: 1240px; margin: 0 auto; padding: 20px; }
+    .wrap { max-width: 1220px; margin: 0 auto; padding: 18px; }
     .top {
-      height: 54px;
+      height: 56px;
       border: 1px solid var(--line);
       background: var(--card);
       border-radius: 999px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 14px;
-      margin-bottom: 14px;
+      padding: 0 16px;
+      margin-bottom: 12px;
     }
-    .logo { font-family: "DM Sans", sans-serif; font-weight: 700; font-size: 16px; }
-    .top a { text-decoration: none; color: var(--muted); margin-left: 14px; font-size: 13px; }
-    .layout {
-      display: grid;
-      grid-template-columns: 400px 1fr;
-      gap: 12px;
-    }
-    .card {
-      border: 1px solid var(--line);
-      background: var(--card);
-      border-radius: var(--radius);
-    }
+    .logo { font: 800 16px/1 "Manrope", sans-serif; letter-spacing: .2px; }
+    .nav a { text-decoration: none; color: var(--muted); margin-left: 14px; font-size: 13px; }
+    .layout { display: grid; grid-template-columns: 390px 1fr; gap: 12px; }
+    .card { border: 1px solid var(--line); background: var(--card); border-radius: var(--radius); }
     .left { padding: 16px; }
-    .kicker { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
-    h1 { font-size: 26px; line-height: 1.15; margin-bottom: 8px; }
-    .sub { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+    .kicker { color: var(--muted); font-size: 11px; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 8px; }
+    h1 { font: 800 26px/1.14 "Manrope", sans-serif; margin-bottom: 8px; }
+    .sub { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 10px; }
     .upload {
-      border: 1px dashed #c7c7c2;
+      border: 1px dashed #c6c6bc;
       border-radius: 10px;
-      padding: 12px;
+      background: #fcfcfa;
       text-align: center;
+      padding: 12px;
       margin-bottom: 10px;
-      background: #fcfcfb;
       cursor: pointer;
     }
-    .upload.drag { border-color: #888; background: #f3f3f1; }
+    .upload.drag { border-color: #87877f; background: #f2f2ec; }
     .upload input { display: none; }
     .upload b { font-size: 14px; }
     .upload small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
     textarea {
       width: 100%;
-      min-height: 250px;
+      min-height: 280px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: #fff;
       padding: 12px;
-      font-size: 13px;
-      line-height: 1.6;
+      background: #fff;
       resize: vertical;
-      font-family: inherit;
+      font: 13px/1.6 "Noto Sans SC", sans-serif;
     }
-    .actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
     button {
       border: 1px solid var(--line);
       border-radius: 10px;
       padding: 9px 12px;
       background: #fff;
-      color: #111;
-      font-weight: 700;
-      font-family: "DM Sans", sans-serif;
+      color: var(--text);
+      font: 700 13px/1 "Manrope", sans-serif;
       cursor: pointer;
     }
-    .btn-main { background: #111; color: #fff; border-color: #111; }
-    .btn-danger { color: #6a1f1f; background: #fff6f6; border-color: #f0dddd; }
-    .meta { margin-top: 10px; font-size: 12px; color: var(--muted); display: flex; gap: 10px; flex-wrap: wrap; }
-
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .btn-main { border-color: #111; background: #111; color: #fff; }
+    .btn-danger { border-color: #f0dbdb; background: #fff6f6; color: #7a2424; }
+    .meta { margin-top: 10px; color: var(--muted); font-size: 12px; display: grid; gap: 4px; }
     .right { min-height: 820px; display: grid; grid-template-rows: auto auto 1fr; }
-    .flow { border-bottom: 1px solid var(--line); padding: 12px; }
-    .flow h2 { font-size: 13px; margin-bottom: 8px; font-family: "DM Sans", sans-serif; }
+    .flow { padding: 12px; border-bottom: 1px solid var(--line); }
+    .flow h2 { font: 700 13px/1 "Manrope", sans-serif; margin-bottom: 8px; }
     .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
     .step {
       border: 1px solid var(--line);
       border-radius: 9px;
       padding: 8px;
+      min-height: 44px;
       font-size: 12px;
       color: var(--muted);
       background: #fff;
-      min-height: 44px;
     }
-    .step.active { border-color: #111; color: #111; background: #f7f7f7; }
-    .step.done { border-color: #b6d7c0; color: #155739; background: #f2faf4; }
+    .step.active { border-color: #111; color: #111; background: #f7f7f4; }
+    .step.done { border-color: #bad8c4; color: #1e6b41; background: #f1faf3; }
     .status {
-      border-bottom: 1px solid var(--line);
       padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
       display: flex;
       justify-content: space-between;
-      font-size: 13px;
       color: var(--muted);
     }
-    .flag-ok { color: var(--good); }
+    .flag-ok { color: var(--ok); }
     .flag-err { color: var(--bad); }
     .grid {
       padding: 10px;
@@ -130,40 +122,37 @@
     .pane {
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: #fff;
-      min-height: 170px;
+      min-height: 176px;
       display: flex;
       flex-direction: column;
+      background: #fff;
     }
     .pane h3 {
       border-bottom: 1px solid var(--line);
       padding: 9px 10px;
-      font-size: 13px;
+      font: 700 13px/1 "Manrope", sans-serif;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-family: "DM Sans", sans-serif;
     }
     .tag {
       font-size: 10px;
-      color: #666;
+      color: #65655f;
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 2px 7px;
-      background: #fafafa;
+      background: #f9f9f6;
     }
     .pane pre {
       white-space: pre-wrap;
       word-break: break-word;
-      font-size: 12px;
-      line-height: 1.58;
       padding: 10px;
+      font: 12px/1.58 "Noto Sans SC", sans-serif;
       flex: 1;
       overflow: auto;
     }
     .pane.full { grid-column: 1 / -1; }
     .pane-foot { border-top: 1px solid var(--line); padding: 8px 10px; text-align: right; }
-
     @media (max-width: 1020px) {
       .layout { grid-template-columns: 1fr; }
       .right { min-height: auto; }
@@ -174,181 +163,232 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="top">
-      <div class="logo">AI求职助手</div>
-      <div><a href="/">首页</a><a href="/api/health" target="_blank">状态</a></div>
-    </div>
-
+    <header class="top">
+      <div class="logo">AI姹傝亴鍔╂墜</div>
+      <nav class="nav">
+        <a href="/">棣栭〉</a>
+        <a href="/api/health" target="_blank">鐘舵€?/a>
+      </nav>
+    </header>
     <div class="layout">
       <section class="card left">
         <div class="kicker">resume input</div>
-        <h1>简历分析工作台</h1>
-        <p class="sub">上传或粘贴简历，生成分析报告、岗位链接、优化简历和面试准备。</p>
+        <h1>绠€鍘嗗垎鏋愬伐浣滃彴</h1>
+        <p class="sub">涓婁紶鎴栫矘璐寸畝鍘嗭紝鑷姩鐢熸垚鑱屼笟鍒嗘瀽銆佺湡瀹炲矖浣嶉摼鎺ャ€佷紭鍖栫畝鍘嗕笌闈㈣瘯鍑嗗銆?/p>
         <label class="upload" id="dropZone">
-          <b>点击上传简历</b>
-          <small>支持 PDF / DOCX / TXT / 图片</small>
-          <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif">
+          <b>鐐瑰嚮涓婁紶绠€鍘?/b>
+          <small>鏀寔 PDF / DOCX / TXT / 鍥剧墖</small>
+          <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
         </label>
-        <textarea id="resumeText" placeholder="粘贴简历文本..."></textarea>
+        <textarea id="resumeText" placeholder="绮樿创绠€鍘嗘枃鏈?.."></textarea>
         <div class="actions">
-          <button class="btn-main" id="runBtn">开始分析</button>
-          <button id="sampleBtn">示例</button>
-          <button class="btn-danger" id="resetBtn">清空</button>
+          <button class="btn-main" id="runBtn">寮€濮嬪垎鏋?/button>
+          <button id="sampleBtn">绀轰緥</button>
+          <button class="btn-danger" id="resetBtn">娓呯┖</button>
         </div>
-        <div class="meta"><span id="fileMeta">未上传文件</span><span id="providerMeta">数据源：-</span></div>
+        <div class="meta">
+          <span id="fileMeta">鏈笂浼犳枃浠?/span>
+          <span id="providerMeta">鏁版嵁婧愶細-</span>
+        </div>
       </section>
-
       <section class="card right">
         <div class="flow">
-          <h2>流程</h2>
+          <h2>娴佺▼</h2>
           <div class="steps">
-            <div class="step" data-step="1">1 上传简历</div>
-            <div class="step" data-step="2">2 AI分析</div>
-            <div class="step" data-step="3">3 岗位匹配</div>
-            <div class="step" data-step="4">4 输出结果</div>
+            <div class="step" data-step="1">1 涓婁紶绠€鍘?/div>
+            <div class="step" data-step="2">2 AI鍒嗘瀽</div>
+            <div class="step" data-step="3">3 宀椾綅鍖归厤</div>
+            <div class="step" data-step="4">4 杈撳嚭缁撴灉</div>
           </div>
         </div>
-        <div class="status"><span id="statusText">等待开始</span><span id="statusFlag">IDLE</span></div>
+        <div class="status">
+          <span id="statusText">绛夊緟寮€濮?/span>
+          <span id="statusFlag">IDLE</span>
+        </div>
         <div class="grid">
-          <article class="pane"><h3>职业分析 <span class="tag">REPORT</span></h3><pre id="careerAnalysis">-</pre></article>
-          <article class="pane"><h3>推荐岗位 <span class="tag">JOBS</span></h3><pre id="jobRecommendations">-</pre></article>
-          <article class="pane"><h3>优化简历 <span class="tag">RESUME</span></h3><pre id="optimizedResume">-</pre></article>
-          <article class="pane"><h3>面试准备 <span class="tag">INTERVIEW</span></h3><pre id="interviewPrep">-</pre></article>
+          <article class="pane">
+            <h3>鑱屼笟鍒嗘瀽 <span class="tag">REPORT</span></h3>
+            <pre id="careerAnalysis">-</pre>
+          </article>
+          <article class="pane">
+            <h3>鎺ㄨ崘宀椾綅 <span class="tag">JOBS</span></h3>
+            <pre id="jobRecommendations">-</pre>
+          </article>
+          <article class="pane">
+            <h3>浼樺寲绠€鍘?<span class="tag">RESUME</span></h3>
+            <pre id="optimizedResume">-</pre>
+          </article>
+          <article class="pane">
+            <h3>闈㈣瘯鍑嗗 <span class="tag">INTERVIEW</span></h3>
+            <pre id="interviewPrep">-</pre>
+          </article>
           <article class="pane full">
-            <h3>模拟问答与薪资 <span class="tag">MOCK</span></h3>
+            <h3>妯℃嫙闂瓟涓庤柂璧?<span class="tag">MOCK</span></h3>
             <pre id="mockInterview">-</pre>
-            <div class="pane-foot"><button id="downloadBtn">下载完整结果</button></div>
+            <div class="pane-foot">
+              <button id="downloadBtn">涓嬭浇瀹屾暣缁撴灉</button>
+            </div>
           </article>
         </div>
       </section>
     </div>
   </div>
-
   <script>
-    const fileInput = document.getElementById('fileInput');
-    const dropZone = document.getElementById('dropZone');
-    const resumeText = document.getElementById('resumeText');
-    const runBtn = document.getElementById('runBtn');
-    const sampleBtn = document.getElementById('sampleBtn');
-    const resetBtn = document.getElementById('resetBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
-    const fileMeta = document.getElementById('fileMeta');
-    const providerMeta = document.getElementById('providerMeta');
-    const statusText = document.getElementById('statusText');
-    const statusFlag = document.getElementById('statusFlag');
-    const careerAnalysis = document.getElementById('careerAnalysis');
-    const jobRecommendations = document.getElementById('jobRecommendations');
-    const optimizedResume = document.getElementById('optimizedResume');
-    const interviewPrep = document.getElementById('interviewPrep');
-    const mockInterview = document.getElementById('mockInterview');
-    const steps = [...document.querySelectorAll('.step')];
-
+    const fileInput = document.getElementById("fileInput");
+    const dropZone = document.getElementById("dropZone");
+    const resumeText = document.getElementById("resumeText");
+    const runBtn = document.getElementById("runBtn");
+    const sampleBtn = document.getElementById("sampleBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const providerMeta = document.getElementById("providerMeta");
+    const statusText = document.getElementById("statusText");
+    const statusFlag = document.getElementById("statusFlag");
+    const careerAnalysis = document.getElementById("careerAnalysis");
+    const jobRecommendations = document.getElementById("jobRecommendations");
+    const optimizedResume = document.getElementById("optimizedResume");
+    const interviewPrep = document.getElementById("interviewPrep");
+    const mockInterview = document.getElementById("mockInterview");
+    const steps = [...document.querySelectorAll(".step")];
     function setStep(active) {
-      steps.forEach(s => {
+      steps.forEach((s) => {
         const n = Number(s.dataset.step);
-        s.classList.remove('active', 'done');
-        if (n < active) s.classList.add('done');
-        else if (n === active) s.classList.add('active');
+        s.classList.remove("active", "done");
+        if (n < active) s.classList.add("done");
+        else if (n === active) s.classList.add("active");
       });
     }
-
-    function setStatus(text, state = 'run') {
+    function setStatus(text, state = "run") {
       statusText.textContent = text;
-      statusFlag.className = '';
-      if (state === 'ok') { statusFlag.textContent = 'OK'; statusFlag.classList.add('flag-ok'); }
-      else if (state === 'err') { statusFlag.textContent = 'ERROR'; statusFlag.classList.add('flag-err'); }
-      else { statusFlag.textContent = 'RUNNING'; }
+      statusFlag.className = "";
+      if (state === "ok") {
+        statusFlag.textContent = "OK";
+        statusFlag.classList.add("flag-ok");
+      } else if (state === "err") {
+        statusFlag.textContent = "ERROR";
+        statusFlag.classList.add("flag-err");
+      } else {
+        statusFlag.textContent = "RUNNING";
+      }
     }
-
+    async function parseJsonSafe(response) {
+      const raw = await response.text();
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        throw new Error(`鎺ュ彛鏈繑鍥?JSON锛?{raw.slice(0, 180)}`);
+      }
+    }
     async function uploadFile(file) {
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append("file", file);
       setStep(1);
-      setStatus('正在上传并解析...');
-      const r = await fetch('/api/upload', { method: 'POST', body: fd });
-      const d = await r.json();
-      if (!r.ok || !d.success) throw new Error(d.error || '上传失败');
-      resumeText.value = d.resume_text || '';
-      fileMeta.textContent = `已上传：${d.filename || file.name}`;
-      setStatus('文件解析完成', 'ok');
+      setStatus("姝ｅ湪涓婁紶骞惰В鏋愭枃浠?..");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.success) throw new Error(data.error || "涓婁紶澶辫触");
+      resumeText.value = data.resume_text || "";
+      fileMeta.textContent = `宸蹭笂浼狅細${data.filename || file.name}`;
+      setStatus("鏂囦欢瑙ｆ瀽瀹屾垚", "ok");
     }
-
-    fileInput.addEventListener('change', async (e) => {
+    fileInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      try { await uploadFile(file); } catch (err) { setStatus(err.message || '上传失败', 'err'); }
+      try {
+        await uploadFile(file);
+      } catch (err) {
+        setStatus(err.message || "涓婁紶澶辫触", "err");
+      }
     });
-
-    ['dragenter', 'dragover'].forEach(ev => dropZone.addEventListener(ev, e => {
-      e.preventDefault(); dropZone.classList.add('drag');
-    }));
-    ['dragleave', 'drop'].forEach(ev => dropZone.addEventListener(ev, e => {
-      e.preventDefault(); dropZone.classList.remove('drag');
-    }));
-    dropZone.addEventListener('drop', async (e) => {
+    ["dragenter", "dragover"].forEach((ev) => {
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag");
+      });
+    });
+    ["dragleave", "drop"].forEach((ev) => {
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag");
+      });
+    });
+    dropZone.addEventListener("drop", async (e) => {
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      try { await uploadFile(file); } catch (err) { setStatus(err.message || '上传失败', 'err'); }
+      try {
+        await uploadFile(file);
+      } catch (err) {
+        setStatus(err.message || "涓婁紶澶辫触", "err");
+      }
     });
-
-    sampleBtn.addEventListener('click', () => {
-      resumeText.value = `Yinghua Chen\nAI-Native Application Engineer\nSkills: Python, FastAPI, SQL, Docker, RAG, React\nExperience: quant data pipeline, AI workflow, model QA gates`;
-      setStatus('已填入示例文本', 'ok');
+    sampleBtn.addEventListener("click", () => {
+      resumeText.value = [
+        "Yinghua Chen",
+        "AI-Native Application Engineer",
+        "Skills: Python, FastAPI, SQL, Docker, RAG, React",
+        "Experience: quant data pipeline, AI workflow, model QA gates",
+      ].join("\n");
+      setStatus("宸插～鍏呯ず渚嬬畝鍘?, "ok");
     });
-
-    resetBtn.addEventListener('click', () => {
-      resumeText.value = '';
-      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach(el => el.textContent = '-');
-      fileMeta.textContent = '未上传文件';
-      providerMeta.textContent = '数据源：-';
+    resetBtn.addEventListener("click", () => {
+      resumeText.value = "";
+      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => {
+        el.textContent = "-";
+      });
+      fileMeta.textContent = "鏈笂浼犳枃浠?;
+      providerMeta.textContent = "鏁版嵁婧愶細-";
       setStep(0);
-      setStatus('已重置', 'ok');
+      setStatus("宸查噸缃?, "ok");
     });
-
-    runBtn.addEventListener('click', async () => {
+    runBtn.addEventListener("click", async () => {
       const text = resumeText.value.trim();
-      if (!text) return setStatus('请先上传或粘贴简历', 'err');
+      if (!text) {
+        setStatus("璇峰厛涓婁紶鎴栫矘璐寸畝鍘?, "err");
+        return;
+      }
       runBtn.disabled = true;
       setStep(2);
-      setStatus('AI 正在分析简历...');
+      setStatus("AI 姝ｅ湪鍒嗘瀽绠€鍘?..");
       try {
-        const r = await fetch('/api/process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ resume: text })
+        const res = await fetch("/api/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume: text }),
         });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || '分析失败');
+        const data = await parseJsonSafe(res);
+        if (!res.ok) throw new Error(data.error || "鍒嗘瀽澶辫触");
         setStep(4);
-        careerAnalysis.textContent = d.career_analysis || '-';
-        jobRecommendations.textContent = d.job_recommendations || '-';
-        optimizedResume.textContent = d.optimized_resume || '-';
-        interviewPrep.textContent = d.interview_prep || '-';
-        mockInterview.textContent = d.mock_interview || '-';
-        providerMeta.textContent = `数据源：${d.job_provider_mode || '-'}`;
-        setStatus('分析完成', 'ok');
+        careerAnalysis.textContent = data.career_analysis || "-";
+        jobRecommendations.textContent = data.job_recommendations || "-";
+        optimizedResume.textContent = data.optimized_resume || "-";
+        interviewPrep.textContent = data.interview_prep || "-";
+        mockInterview.textContent = data.mock_interview || "-";
+        providerMeta.textContent = `鏁版嵁婧愶細${data.job_provider_mode || "-"}`;
+        setStatus("鍒嗘瀽瀹屾垚", "ok");
       } catch (err) {
-        setStatus(err.message || '分析失败', 'err');
+        setStatus(err.message || "鍒嗘瀽澶辫触", "err");
       } finally {
         runBtn.disabled = false;
       }
     });
-
-    downloadBtn.addEventListener('click', () => {
+    downloadBtn.addEventListener("click", () => {
       const payload = {
-        '职业分析': careerAnalysis.textContent,
-        '推荐岗位': jobRecommendations.textContent,
-        '优化简历': optimizedResume.textContent,
-        '面试准备': interviewPrep.textContent,
-        '模拟问答与薪资': mockInterview.textContent
+        鑱屼笟鍒嗘瀽: careerAnalysis.textContent,
+        鎺ㄨ崘宀椾綅: jobRecommendations.textContent,
+        浼樺寲绠€鍘? optimizedResume.textContent,
+        闈㈣瘯鍑嗗: interviewPrep.textContent,
+        妯℃嫙闂瓟涓庤柂璧? mockInterview.textContent,
       };
-      let txt = '';
-      Object.entries(payload).forEach(([k, v]) => { txt += `\n${'='.repeat(20)} ${k} ${'='.repeat(20)}\n\n${v}\n`; });
-      const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+      let text = "";
+      Object.entries(payload).forEach(([k, v]) => {
+        text += `\n${"=".repeat(20)} ${k} ${"=".repeat(20)}\n\n${v}\n`;
+      });
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = 'ai-job-report.txt';
+      a.download = "ai-job-report.txt";
       a.click();
       URL.revokeObjectURL(url);
     });

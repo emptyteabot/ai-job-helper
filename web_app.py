@@ -24,7 +24,6 @@ from app.core.multi_ai_debate import JobApplicationPipeline
 from app.core.fast_ai_engine import fast_pipeline, HighPerformanceAIEngine
 from app.core.market_driven_engine import market_driven_pipeline
 from app.services.resume_analyzer import ResumeAnalyzer
-from app.services.job_searcher import JobSearcher
 from app.services.real_job_service import RealJobService
 from app.services.business_service import BusinessService
 from app.core.realtime_progress import progress_tracker
@@ -50,7 +49,6 @@ app.add_middleware(
 # 全局变量
 pipeline = JobApplicationPipeline()
 analyzer = ResumeAnalyzer()
-searcher = JobSearcher()
 real_job_service = RealJobService()  # 真实招聘数据服务
 business_service = BusinessService()
 

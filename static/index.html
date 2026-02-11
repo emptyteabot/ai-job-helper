@@ -1,123 +1,155 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI求职助手 | 简历优化与岗位匹配</title>
+  <title>AI求职助手 | 简洁版</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f5f7fa;
-      --card: #ffffff;
-      --text: #111827;
-      --muted: #6b7280;
-      --brand: #0ea5a4;
-      --brand-hover: #0b8f8e;
-      --line: #e5e7eb;
-      --ok: #16a34a;
-      --err: #dc2626;
+      --bg: #f6f7f3;
+      --card: #fff;
+      --line: #dfdfd7;
+      --text: #101010;
+      --muted: #63635d;
+      --main: #111;
+      --main-hover: #242424;
+      --ok: #136a37;
+      --err: #ad2c2c;
+      --radius: 14px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-family: "Noto Sans SC", "Manrope", sans-serif;
       color: var(--text);
-      background: radial-gradient(circle at 10% 0%, #dff7f3 0%, #f5f7fa 45%), var(--bg);
-      line-height: 1.6;
+      background:
+        radial-gradient(1100px 400px at -10% -10%, #eceee4 0%, transparent 50%),
+        radial-gradient(800px 260px at 110% -20%, #eceee4 0%, transparent 40%),
+        var(--bg);
+      min-height: 100vh;
     }
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 24px; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 18px; }
     .nav {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 0;
-    }
-    .logo { font-weight: 800; font-size: 20px; }
-    .nav a { color: var(--muted); text-decoration: none; margin-left: 18px; }
-    .hero {
-      margin-top: 20px;
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 24px;
-      align-items: stretch;
-    }
-    .panel {
-      background: var(--card);
+      height: 56px;
       border: 1px solid var(--line);
-      border-radius: 16px;
-      padding: 28px;
-      box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
+      border-radius: 999px;
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      margin-bottom: 14px;
     }
-    h1 { font-size: 42px; line-height: 1.12; margin-bottom: 14px; }
-    .sub { color: var(--muted); font-size: 17px; margin-bottom: 22px; }
-    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 22px; }
-    .kpi { background: #f8fafc; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-    .kpi b { font-size: 20px; display: block; }
-    .cta-row { display: flex; gap: 10px; flex-wrap: wrap; }
-    .btn {
-      border: none; border-radius: 10px; padding: 12px 18px; cursor: pointer; font-weight: 700; text-decoration: none;
-      display: inline-block;
-    }
-    .btn-main { background: var(--brand); color: white; }
-    .btn-main:hover { background: var(--brand-hover); }
-    .btn-ghost { background: white; color: var(--text); border: 1px solid var(--line); }
+    .logo { font: 800 16px/1 "Manrope", sans-serif; }
+    .nav a { text-decoration: none; color: var(--muted); margin-left: 14px; font-size: 13px; }
 
-    .form h3 { margin-bottom: 8px; }
-    .form p { color: var(--muted); margin-bottom: 14px; font-size: 14px; }
-    .row { margin-bottom: 10px; }
-    label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 4px; }
-    input, select, textarea {
-      width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; font-size: 14px;
-      background: white;
+    .hero {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 22px;
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 16px;
     }
-    textarea { min-height: 82px; resize: vertical; }
-    .msg { margin-top: 10px; font-size: 13px; }
+    h1 { font: 800 42px/1.06 "Manrope", sans-serif; margin-bottom: 10px; letter-spacing: -.6px; }
+    .sub { color: var(--muted); font-size: 15px; line-height: 1.65; max-width: 720px; }
+
+    .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+    .kpi { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fbfbf8; }
+    .kpi b { display: block; font: 800 20px/1 "Manrope", sans-serif; margin-bottom: 4px; }
+    .kpi span { font-size: 12px; color: var(--muted); }
+
+    .ctas { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .btn {
+      text-decoration: none;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font: 700 13px/1 "Manrope", sans-serif;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
+    }
+    .btn-main { background: var(--main); color: #fff; border-color: var(--main); }
+    .btn-main:hover { background: var(--main-hover); }
+
+    .lead {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background: #fbfbf8;
+    }
+    .lead h3 { font: 700 14px/1 "Manrope", sans-serif; margin-bottom: 8px; }
+    .lead .hint { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .row { margin-bottom: 8px; }
+    .row label { font-size: 12px; color: var(--muted); margin-bottom: 3px; display: block; }
+    .row input, .row select, .row textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      font: 13px/1.4 "Noto Sans SC", sans-serif;
+      background: #fff;
+    }
+    .row textarea { min-height: 72px; resize: vertical; }
+    .msg { margin-top: 6px; font-size: 12px; }
     .ok { color: var(--ok); }
     .err { color: var(--err); }
 
-    .section { margin-top: 28px; }
-    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-    .card h4 { margin-bottom: 6px; }
-    .card p { color: var(--muted); font-size: 14px; }
+    .strip {
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .strip .item { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fff; }
+    .strip h4 { font-size: 13px; margin-bottom: 4px; }
+    .strip p { color: var(--muted); font-size: 12px; line-height: 1.6; }
 
-    .foot { margin: 28px 0 12px; color: var(--muted); font-size: 13px; text-align: center; }
+    .foot { text-align: center; color: var(--muted); font-size: 12px; margin: 14px 0 8px; }
 
-    @media (max-width: 900px) {
+    @media (max-width: 930px) {
       .hero { grid-template-columns: 1fr; }
-      .cards { grid-template-columns: 1fr; }
-      .kpis { grid-template-columns: 1fr; }
+      .kpis, .strip { grid-template-columns: 1fr; }
       h1 { font-size: 34px; }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <nav class="nav">
+    <header class="nav">
       <div class="logo">AI求职助手</div>
-      <div>
-        <a href="#features">能力</a>
-        <a href="#pricing">定价</a>
-        <a href="/app">立即试用</a>
-      </div>
-    </nav>
+      <nav>
+        <a href="/app">分析工作台</a>
+        <a href="/api/health" target="_blank">服务状态</a>
+      </nav>
+    </header>
 
     <section class="hero">
-      <div class="panel">
-        <h1>让 AI 帮你更快拿 Offer</h1>
-        <p class="sub">
-          上传简历后，自动完成岗位匹配、简历优化和面试准备。支持 24h 在线访问，可扩展为企业招聘效率工具。
-        </p>
+      <div>
+        <h1>上传简历，直接得到可投递结果</h1>
+        <p class="sub">系统会输出职业分析、真实岗位链接、优化简历和面试准备。默认启用云端可运行的数据源回退，不依赖本地浏览器插件。</p>
         <div class="kpis">
-          <div class="kpi"><b>24h</b><span>Railway 在线服务</span></div>
-          <div class="kpi"><b>多源</b><span>真实岗位链接回退</span></div>
-          <div class="kpi"><b>可量化</b><span>漏斗转化指标</span></div>
+          <div class="kpi"><b>24h</b><span>云端持续在线</span></div>
+          <div class="kpi"><b>真实链接</b><span>岗位可直接跳转投递</span></div>
+          <div class="kpi"><b>可验证</b><span>内置健康检查与版本接口</span></div>
         </div>
-        <div class="cta-row">
-          <a class="btn btn-main" href="/app">开始使用</a>
-          <a class="btn btn-ghost" href="/api/health" target="_blank">查看服务状态</a>
+        <div class="ctas">
+          <a class="btn btn-main" href="/app">立即开始</a>
+          <a class="btn" href="/api/version" target="_blank">查看版本</a>
         </div>
       </div>
 
-      <div class="panel form" id="pricing">
-        <h3>申请试用/商务咨询</h3>
-        <p>用于收集早期种子用户和企业客户线索，支持融资阶段转化证明。</p>
+      <aside class="lead">
+        <h3>试用登记 / 商务咨询</h3>
+        <p class="hint">用于收集早期用户和企业线索，支持后续商业化。</p>
         <div class="row">
           <label for="leadEmail">邮箱</label>
           <input id="leadEmail" placeholder="you@company.com" />
@@ -141,31 +173,29 @@
         </div>
         <div class="row">
           <label for="leadUseCase">使用场景</label>
-          <textarea id="leadUseCase" placeholder="例如：批量优化校招简历，提升面试转化"></textarea>
+          <textarea id="leadUseCase" placeholder="例如：批量优化校招简历，提高面试通过率"></textarea>
         </div>
         <button class="btn btn-main" id="leadSubmit" type="button">提交线索</button>
         <div class="msg" id="leadMsg"></div>
-      </div>
+      </aside>
     </section>
 
-    <section class="section" id="features">
-      <div class="cards">
-        <div class="card">
-          <h4>求职端</h4>
-          <p>上传简历后自动输出职业分析、岗位推荐、优化简历和面试问答清单。</p>
-        </div>
-        <div class="card">
-          <h4>运营端</h4>
-          <p>内置线索收集与漏斗指标接口，可直接用于融资材料和增长复盘。</p>
-        </div>
-        <div class="card">
-          <h4>商业化端</h4>
-          <p>支持个人订阅、企业招聘助手、校园服务等多路径变现。</p>
-        </div>
-      </div>
+    <section class="strip">
+      <article class="item">
+        <h4>求职端</h4>
+        <p>自动输出职业分析、岗位推荐、简历优化和面试问答。</p>
+      </article>
+      <article class="item">
+        <h4>运营端</h4>
+        <p>已提供线索收集和漏斗指标接口，便于增长复盘和融资展示。</p>
+      </article>
+      <article class="item">
+        <h4>部署端</h4>
+        <p>默认 Railway，支持 Cloudflare 前端分发，整体成本可控。</p>
+      </article>
     </section>
 
-    <div class="foot">© 2026 AI求职助手 · Product-ready for pilot monetization</div>
+    <div class="foot">© 2026 AI求职助手</div>
   </div>
 
   <script>

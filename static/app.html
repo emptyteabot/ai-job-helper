@@ -3,164 +3,466 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Job Helper - Workspace</title>
+  <title>AI Job Helper - Analyze Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f6f7f3;
+      --bg: #f3f5ef;
+      --bg-deep: #e8ecdf;
       --card: #ffffff;
-      --line: #dcded5;
-      --text: #121212;
-      --muted: #61635e;
-      --main: #111111;
-      --ok: #17693f;
-      --err: #b03030;
-      --radius: 12px;
+      --ink: #11120f;
+      --ink-soft: #5c6156;
+      --line: #d7dccd;
+      --line-strong: #bfc7b2;
+      --accent: #0f766e;
+      --accent-soft: #e6f6f2;
+      --ok: #1d7a46;
+      --err: #b03232;
+      --radius: 14px;
+      --radius-lg: 20px;
+      --shadow: 0 10px 30px rgba(19, 23, 15, 0.08);
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: var(--bg);
-      color: var(--text);
+      font-family: "Noto Sans SC", "Space Grotesk", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(135deg, rgba(20, 117, 108, 0.08), transparent 35%),
+        radial-gradient(circle at 100% 0%, rgba(58, 99, 68, 0.12), transparent 40%),
+        linear-gradient(180deg, var(--bg), var(--bg-deep));
       min-height: 100vh;
     }
-    .wrap { max-width: 1180px; margin: 0 auto; padding: 16px; }
-    .top {
-      height: 56px;
+
+    .grid-pattern {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, rgba(70, 90, 64, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(70, 90, 64, 0.05) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+      mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.7), transparent 90%);
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 1260px;
+      margin: 0 auto;
+      padding: 18px;
+    }
+
+    .topbar {
+      height: 58px;
       border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(8px);
       border-radius: 999px;
-      background: var(--card);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 14px;
+      padding: 0 16px 0 18px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .brand-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0f766e, #34d399);
+      box-shadow: 0 0 0 5px rgba(15, 118, 110, 0.14);
+    }
+
+    .links a {
+      color: var(--ink-soft);
+      text-decoration: none;
+      font-size: 13px;
+      margin-left: 12px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 6px 10px;
+      transition: all 0.2s ease;
+    }
+
+    .links a:hover {
+      border-color: var(--line);
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 390px 1fr;
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .left {
+      padding: 16px;
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px;
+      color: var(--ink-soft);
+      margin-bottom: 10px;
+      background: #fbfcf9;
+    }
+
+    .kicker::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    h1 {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 30px;
+      letter-spacing: -0.3px;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+
+    .sub {
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--ink-soft);
       margin-bottom: 12px;
     }
-    .top a { color: var(--muted); text-decoration: none; margin-left: 10px; font-size: 13px; }
-    .layout { display: grid; grid-template-columns: 380px 1fr; gap: 12px; }
-    .card { border: 1px solid var(--line); background: var(--card); border-radius: var(--radius); }
-    .left { padding: 14px; }
-    h1 { font-size: 24px; margin-bottom: 8px; }
-    .sub { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+
     .upload {
-      border: 1px dashed #c5c8be;
-      border-radius: 10px;
+      border: 1px dashed var(--line-strong);
+      border-radius: 12px;
+      background: linear-gradient(180deg, #fcfdf9, #f6f9f2);
+      padding: 14px;
       text-align: center;
-      padding: 12px;
       margin-bottom: 10px;
-      background: #fafbf8;
       cursor: pointer;
+      transition: border-color 0.2s ease, transform 0.2s ease;
     }
-    .upload.drag { border-color: #80837a; background: #f1f3ec; }
+
+    .upload.drag {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
     .upload input { display: none; }
+
+    .upload strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+
+    .upload span {
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+
     textarea {
       width: 100%;
-      min-height: 260px;
+      min-height: 280px;
       border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 10px;
+      border-radius: 12px;
+      padding: 12px;
       resize: vertical;
-      font-size: 13px;
-      line-height: 1.6;
+      font: 13px/1.6 "Noto Sans SC", sans-serif;
+      background: #fff;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    .actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+    textarea:focus {
+      outline: none;
+      border-color: #99b8ad;
+      box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
+    }
+
+    .actions {
+      margin-top: 10px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     button {
       border: 1px solid var(--line);
       border-radius: 10px;
       background: #fff;
-      padding: 9px 12px;
-      font-weight: 600;
+      color: var(--ink);
+      font: 700 13px/1 "Space Grotesk", sans-serif;
+      padding: 10px 12px;
       cursor: pointer;
+      transition: all 0.2s ease;
     }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
-    .btn-main { border-color: #111; background: #111; color: #fff; }
-    .meta { margin-top: 8px; color: var(--muted); font-size: 12px; display: grid; gap: 4px; }
-    .right { min-height: 780px; display: grid; grid-template-rows: auto auto 1fr; }
-    .flow { border-bottom: 1px solid var(--line); padding: 10px; }
-    .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-    .step {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 8px;
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+
+    .btn-main {
+      border-color: #0f766e;
+      background: linear-gradient(135deg, #0f766e, #15803d);
+      color: #fff;
+    }
+
+    .btn-muted {
+      background: #f8faf5;
+    }
+
+    .btn-danger {
+      border-color: #efcfcf;
+      color: #8f2d2d;
+      background: #fff6f6;
+    }
+
+    .meta {
+      margin-top: 10px;
       font-size: 12px;
-      color: var(--muted);
-      min-height: 40px;
-      background: #fff;
+      color: var(--ink-soft);
+      display: grid;
+      gap: 4px;
     }
-    .step.active { border-color: #111; color: #111; background: #f7f7f3; }
-    .step.done { border-color: #b9d6c4; color: #155e36; background: #eff8f2; }
-    .status {
+
+    .right {
+      min-height: 860px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+    }
+
+    .flow {
+      padding: 12px;
       border-bottom: 1px solid var(--line);
-      padding: 10px;
+      background: linear-gradient(180deg, #fcfdf9, #f7faf3);
+    }
+
+    .flow-head {
       display: flex;
       justify-content: space-between;
-      font-size: 13px;
-      color: var(--muted);
+      align-items: center;
+      margin-bottom: 8px;
     }
-    .ok { color: var(--ok); }
-    .err { color: var(--err); }
-    .grid { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .pane {
+
+    .flow-head strong {
+      font-family: "Space Grotesk", sans-serif;
+      font-size: 13px;
+    }
+
+    .flow-head span {
+      color: var(--ink-soft);
+      font-size: 12px;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .step {
       border: 1px solid var(--line);
       border-radius: 10px;
-      min-height: 170px;
+      background: #fff;
+      padding: 8px;
+      min-height: 46px;
+      color: var(--ink-soft);
+      font-size: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .step.active {
+      border-color: #89b5a7;
+      background: #eef8f5;
+      color: #124a44;
+      transform: translateY(-1px);
+    }
+
+    .step.done {
+      border-color: #b7d9c5;
+      background: #eff9f3;
+      color: #16653b;
+    }
+
+    .status {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--ink-soft);
+      background: #fff;
+    }
+
+    .flag-ok { color: var(--ok); }
+    .flag-err { color: var(--err); }
+
+    .result-grid {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      align-content: start;
+      overflow: auto;
+    }
+
+    .result {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      min-height: 185px;
       background: #fff;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      animation: fadeUp 0.28s ease both;
     }
-    .pane h3 {
+
+    .result.full { grid-column: 1 / -1; min-height: 220px; }
+
+    .result h3 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       border-bottom: 1px solid var(--line);
-      padding: 8px 10px;
-      font-size: 13px;
+      padding: 9px 10px;
+      font: 700 13px/1 "Space Grotesk", sans-serif;
+      letter-spacing: 0.1px;
+      background: #fbfcf9;
     }
-    .pane pre {
+
+    .pill {
+      font-size: 10px;
+      color: var(--ink-soft);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 7px;
+      background: #fff;
+    }
+
+    pre {
+      flex: 1;
+      padding: 10px;
       white-space: pre-wrap;
       word-break: break-word;
-      padding: 10px;
       font-size: 12px;
-      line-height: 1.6;
-      flex: 1;
+      line-height: 1.62;
       overflow: auto;
+      color: #1f2320;
     }
-    .pane.full { grid-column: 1 / -1; }
-    .pane-foot { border-top: 1px solid var(--line); padding: 8px 10px; text-align: right; }
-    @media (max-width: 1000px) {
+
+    .result-foot {
+      border-top: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: right;
+      background: #fff;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 11px;
+      color: var(--ink-soft);
+      background: #fafcf8;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 1020px) {
       .layout { grid-template-columns: 1fr; }
-      .grid { grid-template-columns: 1fr; }
+      .right { min-height: auto; }
+      .result-grid { grid-template-columns: 1fr; }
       .steps { grid-template-columns: repeat(2, 1fr); }
+      h1 { font-size: 26px; }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="top">
-      <strong>AI Job Helper</strong>
-      <nav>
+  <div class="grid-pattern"></div>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <span>AI Job Helper</span>
+      </div>
+      <nav class="links">
         <a href="/">Home</a>
+        <a href="/api/ping" target="_blank">Ping</a>
         <a href="/api/health" target="_blank">Health</a>
       </nav>
     </header>
-    <div class="layout">
-      <section class="card left">
+
+    <section class="layout">
+      <article class="panel left">
+        <div class="kicker">Resume Analysis Studio</div>
         <h1>简历分析工作台</h1>
-        <p class="sub">上传或粘贴简历，输出职业分析、岗位推荐、优化简历和面试准备。</p>
+        <p class="sub">上传或粘贴简历，生成职业分析、真实岗位链接、优化简历和面试准备。</p>
         <label class="upload" id="dropZone">
-          <b>点击上传简历</b>
-          <div style="margin-top:4px;color:#666;font-size:12px;">支持 PDF / DOCX / TXT / 图片</div>
+          <strong>点击上传简历</strong>
+          <span>支持 PDF / DOCX / TXT / 图片</span>
           <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
         </label>
         <textarea id="resumeText" placeholder="粘贴简历文本..."></textarea>
         <div class="actions">
           <button class="btn-main" id="runBtn">开始分析</button>
-          <button id="sampleBtn">示例</button>
-          <button id="resetBtn">清空</button>
+          <button class="btn-muted" id="sampleBtn">示例</button>
+          <button class="btn-danger" id="resetBtn">清空</button>
         </div>
         <div class="meta">
           <span id="fileMeta">未上传文件</span>
           <span id="providerMeta">数据源：-</span>
         </div>
-      </section>
-      <section class="card right">
+        <div class="badge-row">
+          <span class="badge">Real Link Priority</span>
+          <span class="badge">Cloud Ready</span>
+          <span class="badge">OpenAI Compatible</span>
+        </div>
+      </article>
+
+      <article class="panel right">
         <div class="flow">
+          <div class="flow-head">
+            <strong>Pipeline</strong>
+            <span>Upload -> Analyze -> Match -> Output</span>
+          </div>
           <div class="steps">
             <div class="step" data-step="1">1 上传简历</div>
             <div class="step" data-step="2">2 AI分析</div>
@@ -168,24 +470,41 @@
             <div class="step" data-step="4">4 输出结果</div>
           </div>
         </div>
+
         <div class="status">
           <span id="statusText">等待开始</span>
           <span id="statusFlag">IDLE</span>
         </div>
-        <div class="grid">
-          <article class="pane"><h3>职业分析</h3><pre id="careerAnalysis">-</pre></article>
-          <article class="pane"><h3>推荐岗位</h3><pre id="jobRecommendations">-</pre></article>
-          <article class="pane"><h3>优化简历</h3><pre id="optimizedResume">-</pre></article>
-          <article class="pane"><h3>面试准备</h3><pre id="interviewPrep">-</pre></article>
-          <article class="pane full">
-            <h3>模拟问答与薪资</h3>
+
+        <div class="result-grid">
+          <section class="result">
+            <h3>职业分析 <span class="pill">REPORT</span></h3>
+            <pre id="careerAnalysis">-</pre>
+          </section>
+          <section class="result">
+            <h3>推荐岗位 <span class="pill">JOBS</span></h3>
+            <pre id="jobRecommendations">-</pre>
+          </section>
+          <section class="result">
+            <h3>优化简历 <span class="pill">RESUME</span></h3>
+            <pre id="optimizedResume">-</pre>
+          </section>
+          <section class="result">
+            <h3>面试准备 <span class="pill">INTERVIEW</span></h3>
+            <pre id="interviewPrep">-</pre>
+          </section>
+          <section class="result full">
+            <h3>模拟问答与薪资 <span class="pill">MOCK</span></h3>
             <pre id="mockInterview">-</pre>
-            <div class="pane-foot"><button id="downloadBtn">下载结果</button></div>
-          </article>
+            <div class="result-foot">
+              <button id="downloadBtn">下载完整结果</button>
+            </div>
+          </section>
         </div>
-      </section>
-    </div>
-  </div>
+      </article>
+    </section>
+  </main>
+
   <script>
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
@@ -213,17 +532,30 @@
         else if (n === active) s.classList.add("active");
       });
     }
+
     function setStatus(text, state = "run") {
       statusText.textContent = text;
       statusFlag.className = "";
-      if (state === "ok") { statusFlag.textContent = "OK"; statusFlag.classList.add("ok"); }
-      else if (state === "err") { statusFlag.textContent = "ERROR"; statusFlag.classList.add("err"); }
-      else { statusFlag.textContent = "RUNNING"; }
+      if (state === "ok") {
+        statusFlag.textContent = "OK";
+        statusFlag.classList.add("flag-ok");
+      } else if (state === "err") {
+        statusFlag.textContent = "ERROR";
+        statusFlag.classList.add("flag-err");
+      } else {
+        statusFlag.textContent = "RUNNING";
+      }
     }
+
     async function parseJsonSafe(response) {
       const raw = await response.text();
-      try { return JSON.parse(raw); } catch (_) { throw new Error("接口未返回 JSON"); }
+      try {
+        return JSON.parse(raw);
+      } catch (_) {
+        throw new Error(`接口未返回 JSON：${raw.slice(0, 180)}`);
+      }
     }
+
     async function uploadFile(file) {
       const fd = new FormData();
       fd.append("file", file);
@@ -236,42 +568,68 @@
       fileMeta.textContent = `已上传：${data.filename || file.name}`;
       setStatus("文件解析完成", "ok");
     }
+
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      try { await uploadFile(file); } catch (err) { setStatus(err.message || "上传失败", "err"); }
+      try {
+        await uploadFile(file);
+      } catch (err) {
+        setStatus(err.message || "上传失败", "err");
+      }
     });
+
     ["dragenter", "dragover"].forEach((ev) => {
-      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag");
+      });
     });
+
     ["dragleave", "drop"].forEach((ev) => {
-      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); });
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag");
+      });
     });
+
     dropZone.addEventListener("drop", async (e) => {
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      try { await uploadFile(file); } catch (err) { setStatus(err.message || "上传失败", "err"); }
+      try {
+        await uploadFile(file);
+      } catch (err) {
+        setStatus(err.message || "上传失败", "err");
+      }
     });
+
     sampleBtn.addEventListener("click", () => {
       resumeText.value = [
         "Yinghua Chen",
         "AI-Native Application Engineer",
         "Skills: Python, FastAPI, SQL, Docker, RAG, React",
-        "Experience: quant data pipeline, AI workflow, model QA gates"
+        "Experience: quant data pipeline, AI workflow, model QA gates",
       ].join("\n");
       setStatus("已填充示例简历", "ok");
     });
+
     resetBtn.addEventListener("click", () => {
       resumeText.value = "";
-      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => el.textContent = "-");
+      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => {
+        el.textContent = "-";
+      });
       fileMeta.textContent = "未上传文件";
       providerMeta.textContent = "数据源：-";
       setStep(0);
       setStatus("已重置", "ok");
     });
+
     runBtn.addEventListener("click", async () => {
       const text = resumeText.value.trim();
-      if (!text) return setStatus("请先上传或粘贴简历", "err");
+      if (!text) {
+        setStatus("请先上传或粘贴简历", "err");
+        return;
+      }
       runBtn.disabled = true;
       setStep(2);
       setStatus("AI 正在分析简历...");
@@ -279,7 +637,7 @@
         const res = await fetch("/api/process", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resume: text })
+          body: JSON.stringify({ resume: text }),
         });
         const data = await parseJsonSafe(res);
         if (!res.ok) throw new Error(data.error || "分析失败");
@@ -297,16 +655,19 @@
         runBtn.disabled = false;
       }
     });
+
     downloadBtn.addEventListener("click", () => {
       const payload = {
-        "职业分析": careerAnalysis.textContent,
-        "推荐岗位": jobRecommendations.textContent,
-        "优化简历": optimizedResume.textContent,
-        "面试准备": interviewPrep.textContent,
-        "模拟问答与薪资": mockInterview.textContent
+        职业分析: careerAnalysis.textContent,
+        推荐岗位: jobRecommendations.textContent,
+        优化简历: optimizedResume.textContent,
+        面试准备: interviewPrep.textContent,
+        模拟问答与薪资: mockInterview.textContent,
       };
       let text = "";
-      Object.entries(payload).forEach(([k, v]) => { text += `\n==================== ${k} ====================\n\n${v}\n`; });
+      Object.entries(payload).forEach(([k, v]) => {
+        text += `\n${"=".repeat(20)} ${k} ${"=".repeat(20)}\n\n${v}\n`;
+      });
       const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

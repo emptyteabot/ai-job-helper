@@ -1324,6 +1324,12 @@ async def version():
     }
 
 
+@app.get("/api/ping")
+async def ping():
+    """Ultra-light probe for availability checks."""
+    return {"ok": True, "ts": datetime.now().isoformat()}
+
+
 @app.post("/api/business/lead")
 async def capture_business_lead(request: Request):
     """Capture B2B/B2C monetization leads from landing page."""

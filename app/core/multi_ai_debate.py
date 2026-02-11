@@ -8,6 +8,7 @@ import json
 from typing import List, Dict, Any
 from openai import OpenAI
 from dotenv import load_dotenv
+from app.core.llm_client import get_sync_llm_client, get_llm_settings
 
 # 加载.env文件
 load_dotenv()
@@ -16,10 +17,9 @@ class MultiAIDebateEngine:
     """多AI辩论引擎 - 让AI互相辩论、改进、检查"""
     
     def __init__(self):
-        self.deepseek_client = OpenAI(
-            api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-            base_url="https://api.deepseek.com"
-        )
+        self.llm_client = get_sync_llm_client()
+        settings = get_llm_settings()
+        self.reasoning_model = settings["reasoning_model"]
         
         # 定义6个AI角色
         self.ai_roles = {
@@ -114,14 +114,15 @@ class MultiAIDebateEngine:
         
         # 调用DeepSeek推理模式
         try:
-            response = self.deepseek_client.chat.completions.create(
-                model="deepseek-reasoner",
+            response = self.llm_client.chat.completions.create(
+                model=self.reasoning_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7
             )
             
-            reasoning = response.choices[0].message.reasoning_content or ""
-            output = response.choices[0].message.content or ""
+            message = response.choices[0].message
+            reasoning = getattr(message, "reasoning_content", "") or ""
+            output = message.content or ""
             
             # 清理Markdown格式
             output = self._clean_markdown(output)
@@ -302,4 +303,3 @@ def quick_test():
 
 if __name__ == "__main__":
     quick_test()
-

@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from app.core.multi_ai_debate import JobApplicationPipeline
 from app.core.fast_ai_engine import fast_pipeline, HighPerformanceAIEngine
 from app.core.market_driven_engine import market_driven_pipeline
+from app.core.llm_client import get_public_llm_config
 from app.services.resume_analyzer import ResumeAnalyzer
 from app.services.real_job_service import RealJobService
 from app.services.business_service import BusinessService
@@ -1307,6 +1308,7 @@ async def health_check():
             "cloud_cache_total": len(cloud_jobs_cache),
             "cloud_last_push_at": cloud_jobs_meta.get("last_push_at"),
             "no_browser_fallback_enabled": True,
+            "llm": get_public_llm_config(),
         },
     }
 

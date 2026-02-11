@@ -6,8 +6,8 @@
 import os
 import asyncio
 from typing import Dict, List, Any
-from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from app.core.llm_client import get_async_llm_client, get_llm_settings
 
 load_dotenv()
 
@@ -15,10 +15,8 @@ class JobMarketEngine:
     """求职市场引擎 - 核心驱动"""
     
     def __init__(self):
-        self.client = AsyncOpenAI(
-            api_key=os.getenv("DEEPSEEK_API_KEY", ""),
-            base_url="https://api.deepseek.com"
-        )
+        self.client = get_async_llm_client()
+        self.chat_model = get_llm_settings()["chat_model"]
         
         # 真实市场数据（从招聘网站爬取/API获取）
         self.hot_jobs = self._load_hot_jobs()
@@ -276,7 +274,7 @@ class JobMarketEngine:
         
         try:
             response = await self.client.chat.completions.create(
-                model="deepseek-chat",
+                model=self.chat_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=500
@@ -313,7 +311,7 @@ class JobMarketEngine:
         
         try:
             response = await self.client.chat.completions.create(
-                model="deepseek-chat",
+                model=self.chat_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=1500
@@ -345,7 +343,7 @@ class JobMarketEngine:
         
         try:
             response = await self.client.chat.completions.create(
-                model="deepseek-chat",
+                model=self.chat_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=800

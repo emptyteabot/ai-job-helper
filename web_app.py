@@ -974,7 +974,7 @@ async def search_jobs(
             kw = [k.strip() for k in keyword_list if k and k.strip()]
 
             def hit(job):
-                text = f"{job.get("title","")} {job.get("company","")}".lower()
+                text = f"{job.get('title','')} {job.get('company','')}".lower()
                 if kw and not any(k.lower() in text for k in kw):
                     return False
                 if location and job.get("location") and location not in str(job.get("location")):

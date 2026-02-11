@@ -1,0 +1,12 @@
+name = "ai-job-helper-api-proxy"
+main = "worker-proxy.js"
+compatibility_date = "2026-02-11"
+
+[vars]
+BACKEND_ORIGIN = "https://api-origin.yourdomain.com"
+
+# Optional route binding:
+# routes = [
+#   { pattern = "api.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]
+

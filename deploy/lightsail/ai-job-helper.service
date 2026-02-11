@@ -1,0 +1,19 @@
+[Unit]
+Description=AI Job Helper FastAPI Service
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/ai-job-helper
+EnvironmentFile=/opt/ai-job-helper/.env
+ExecStart=/opt/ai-job-helper/.venv/bin/uvicorn web_app:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
+

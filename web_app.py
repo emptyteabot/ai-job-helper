@@ -148,6 +148,11 @@ def _search_jobs_without_browser(
         first_error = None
 
     # Last fallback: DuckDuckGo HTML search (no key, no browser).
+    # Stable public API fallback (no browser, no local extension).
+    remotive_jobs = _search_jobs_remotive(keywords, location, limit=limit)
+    if remotive_jobs:
+        return remotive_jobs, "remotive", None
+
     bing_html_jobs = _search_jobs_bing_html(keywords, location, limit=limit)
     if bing_html_jobs:
         return bing_html_jobs, "bing_html", None
@@ -291,6 +296,53 @@ def _search_jobs_bing_html(
                 "platform": _platform_from_link(link),
                 "link": link,
                 "provider": "bing_html",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
+
+
+def _search_jobs_remotive(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    # Remotive is a public job API and currently reachable in cloud environments.
+    cleaned = [k.strip() for k in (keywords or []) if k and k.strip()]
+    q = cleaned[0] if cleaned else "python"
+    try:
+        resp = requests.get(
+            "https://remotive.com/api/remote-jobs",
+            params={"search": q},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        data = resp.json() if resp.content else {}
+    except Exception:
+        return []
+
+    jobs = data.get("jobs") or []
+    out: List[Dict[str, Any]] = []
+    for it in jobs:
+        link = str(it.get("url") or "").strip()
+        if not link:
+            continue
+        title = str(it.get("title") or "").strip()
+        company = str(it.get("company_name") or "").strip()
+        loc = str(it.get("candidate_required_location") or location or "").strip()
+        # Optional location preference filter.
+        if location and loc and location not in loc:
+            continue
+        out.append(
+            {
+                "id": f"remotive_{it.get('id')}",
+                "title": title or "招聘岗位",
+                "company": company,
+                "location": loc,
+                "salary": str(it.get("salary") or "").strip(),
+                "platform": "Remotive",
+                "link": link,
+                "provider": "remotive",
+                "updated": str(it.get("publication_date") or "").strip(),
             }
         )
         if len(out) >= max(1, int(limit or 10)):
@@ -1087,6 +1139,8 @@ async def process_resume(request: Request):
                 heading = '【推荐岗位】（来自 Boss 直聘云端缓存）'
             elif mode in ('baidu', 'bing', 'brave'):
                 heading = f'【推荐岗位】（来自搜索引擎 {mode}）'
+            elif mode == 'remotive':
+                heading = '【推荐岗位】（来自 Remotive 公共招聘 API）'
             elif mode == 'bing_html':
                 heading = '【推荐岗位】（来自 Bing 无浏览器搜索）'
             elif mode == 'duckduckgo':

@@ -16,6 +16,8 @@ data/
 .vscode/
 .idea/
 *.log
+*_snapshot.py
+*head_snapshot.py
 .cursor/
 ~$*
 

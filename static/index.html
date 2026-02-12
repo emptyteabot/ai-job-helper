@@ -1,48 +1,45 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Job Assistant</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #f4f7f1;
-      --card: #ffffff;
-      --text: #11130f;
-      --muted: #667061;
-      --line: #d8dfd1;
-      --accent: #1b7f65;
-      --accent-soft: #e9f7f1;
+      --bg: #ffffff;
+      --text: #111111;
+      --muted: #5f5f5f;
+      --line: #e5e5e5;
+      --card: #fafafa;
+      --btn: #111111;
+      --btn-text: #ffffff;
       --ok: #1f7d4a;
       --err: #bb3f3f;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Noto Sans SC", "IBM Plex Sans", sans-serif;
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
       color: var(--text);
-      background:
-        radial-gradient(900px 300px at 10% -10%, rgba(27,127,101,0.10), transparent 55%),
-        linear-gradient(180deg, #f7faf4, var(--bg));
+      background: var(--bg);
       min-height: 100vh;
     }
     .container {
-      width: min(1080px, calc(100% - 32px));
-      margin: 14px auto 24px;
+      width: min(1100px, calc(100% - 36px));
+      margin: 14px auto 28px;
     }
     .top {
       height: 56px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: rgba(255,255,255,0.86);
-      backdrop-filter: blur(10px);
+      background: #fff;
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 16px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
     }
     .brand {
       font: 700 15px/1 "IBM Plex Sans", sans-serif;
@@ -52,66 +49,63 @@
       gap: 10px;
     }
     .dot {
-      width: 9px;
-      height: 9px;
+      width: 8px;
+      height: 8px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #1b7f65, #33c18d);
-      box-shadow: 0 0 0 5px rgba(27,127,101,0.13);
+      background: #111;
+      box-shadow: 0 0 0 5px rgba(17, 17, 17, 0.08);
     }
     .nav a {
       text-decoration: none;
       color: var(--muted);
       font: 500 13px/1 "IBM Plex Sans", sans-serif;
-      margin-left: 8px;
       border: 1px solid transparent;
-      padding: 7px 10px;
       border-radius: 999px;
+      padding: 7px 10px;
+      margin-left: 8px;
       transition: all .2s ease;
     }
-    .nav a:hover {
-      border-color: var(--line);
-      color: var(--text);
-      background: #fff;
-    }
+    .nav a:hover { color: var(--text); border-color: var(--line); }
+
     .hero {
       border: 1px solid var(--line);
       border-radius: 22px;
-      background: var(--card);
-      padding: 28px 24px 24px;
+      padding: 28px 24px;
+      margin-bottom: 12px;
     }
     .mono {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
-      font: 500 11px/1 "IBM Plex Mono", monospace;
-      color: var(--muted);
+      gap: 8px;
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 6px 10px;
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      color: var(--muted);
       margin-bottom: 12px;
-      background: #fbfdf9;
+      background: #fff;
     }
     .mono::before {
       content: "";
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: var(--accent);
+      background: #111;
     }
     h1 {
-      font: 700 54px/1.02 "IBM Plex Sans", sans-serif;
-      letter-spacing: -1.4px;
+      font: 700 58px/1 "IBM Plex Sans", sans-serif;
+      letter-spacing: -1.7px;
       margin-bottom: 10px;
-      max-width: 920px;
+      max-width: 960px;
     }
     .cursor {
       display: inline-block;
       width: 8px;
       height: 1em;
-      background: #142117;
+      background: #111;
+      vertical-align: -2px;
       margin-left: 4px;
       animation: blink 1s steps(1,end) infinite;
-      vertical-align: -2px;
     }
     @keyframes blink {
       0%, 48% { opacity: 1; }
@@ -120,16 +114,16 @@
     .sub {
       max-width: 760px;
       color: var(--muted);
-      font-size: 16px;
+      font-size: 17px;
       line-height: 1.72;
-      min-height: 56px;
-      margin-bottom: 18px;
+      min-height: 58px;
+      margin-bottom: 20px;
     }
     .actions {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 22px;
+      margin-bottom: 20px;
     }
     .btn {
       text-decoration: none;
@@ -143,11 +137,11 @@
     }
     .btn:hover { transform: translateY(-1px); }
     .btn-main {
-      background: linear-gradient(135deg, #17684f, #1b7f65);
-      border-color: #17684f;
-      color: #fff;
+      background: var(--btn);
+      border-color: var(--btn);
+      color: var(--btn-text);
     }
-    .minimal-grid {
+    .grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 10px;
@@ -156,7 +150,7 @@
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 12px;
-      background: #fcfdfa;
+      background: var(--card);
     }
     .item b {
       display: block;
@@ -172,8 +166,8 @@
       margin-top: 12px;
       border: 1px solid var(--line);
       border-radius: 18px;
-      background: #fff;
       padding: 14px;
+      background: #fff;
     }
     .lead h3 {
       font: 600 14px/1 "IBM Plex Sans", sans-serif;
@@ -217,8 +211,8 @@
       cursor: pointer;
     }
     .lead-btn {
-      background: #121512;
-      border-color: #121512;
+      background: #111;
+      border-color: #111;
       color: #fff;
     }
     .msg { font-size: 12px; }
@@ -230,9 +224,9 @@
       text-align: center;
       margin-top: 12px;
     }
-    @media (max-width: 920px) {
-      h1 { font-size: 40px; }
-      .minimal-grid { grid-template-columns: 1fr; }
+    @media (max-width: 940px) {
+      h1 { font-size: 42px; }
+      .grid { grid-template-columns: 1fr; }
       .lead-grid { grid-template-columns: 1fr; }
       .sub { font-size: 15px; }
     }
@@ -250,70 +244,70 @@
     </header>
 
     <section class="hero">
-      <div class="mono">openai-style / product-first / simple</div>
+      <div class="mono">openai-style / minimal / product-first</div>
       <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
       <p class="sub" id="typeSub"></p>
       <div class="actions">
-        <a class="btn btn-main" href="/app">开始使用</a>
-        <a class="btn" href="/api/version" target="_blank">查看版本</a>
+        <a class="btn btn-main" href="/app">Open Workspace</a>
+        <a class="btn" href="/api/version" target="_blank">Build Info</a>
       </div>
-      <div class="minimal-grid">
+      <div class="grid">
         <article class="item">
-          <b>真实岗位链路</b>
-          <p>优先输出可点击可投递岗位，支持云端回退，不展示演示占位数据。</p>
+          <b>Real Job Links</b>
+          <p>Recommendations are rendered with actionable links and provider sources.</p>
         </article>
         <article class="item">
-          <b>求职闭环</b>
-          <p>上传简历 -> AI分析 -> 岗位匹配 -> 简历优化 -> 面试准备，一次完成。</p>
+          <b>End-to-End Flow</b>
+          <p>Upload -> Analysis -> Match -> Resume rewrite -> Interview prep in one run.</p>
         </article>
         <article class="item">
-          <b>融资可演示</b>
-          <p>内置健康检查、转化漏斗与线索收集接口，可直接用于 Demo Day。</p>
+          <b>Fundraising Ready</b>
+          <p>Health checks, funnel APIs, and lead capture are available for demos.</p>
         </article>
       </div>
     </section>
 
     <section class="lead">
-      <h3>试用登记 / 商务咨询</h3>
+      <h3>Trial / Business Inquiry</h3>
       <div class="lead-grid">
         <div class="row">
-          <label for="leadEmail">邮箱</label>
+          <label for="leadEmail">Email</label>
           <input id="leadEmail" placeholder="you@company.com" />
         </div>
         <div class="row">
-          <label for="leadName">姓名</label>
-          <input id="leadName" placeholder="张三" />
+          <label for="leadName">Name</label>
+          <input id="leadName" placeholder="Your name" />
         </div>
         <div class="row">
-          <label for="leadCompany">公司 / 学校</label>
-          <input id="leadCompany" placeholder="某某科技" />
+          <label for="leadCompany">Company / School</label>
+          <input id="leadCompany" placeholder="Organization" />
         </div>
         <div class="row">
-          <label for="leadBudget">预算区间</label>
+          <label for="leadBudget">Budget</label>
           <select id="leadBudget">
-            <option value="">未确定</option>
-            <option>个人版（< 99/月）</option>
-            <option>小团队（99-999/月）</option>
-            <option>企业版（1000+/月）</option>
+            <option value="">Undecided</option>
+            <option>Individual (< 99 / month)</option>
+            <option>Small Team (99-999 / month)</option>
+            <option>Enterprise (1000+ / month)</option>
           </select>
         </div>
         <div class="row" style="grid-column: 1 / -1;">
-          <label for="leadUseCase">使用场景</label>
-          <textarea id="leadUseCase" placeholder="例如：批量优化简历，提高面试通过率"></textarea>
+          <label for="leadUseCase">Use Case</label>
+          <textarea id="leadUseCase" placeholder="Example: optimize batch resumes and improve interview pass rate"></textarea>
         </div>
       </div>
       <div class="lead-actions">
-        <button class="lead-btn" id="leadSubmit" type="button">提交线索</button>
+        <button class="lead-btn" id="leadSubmit" type="button">Submit Lead</button>
         <div class="msg" id="leadMsg"></div>
       </div>
     </section>
 
-    <div class="foot">© 2026 AI Job Assistant</div>
+    <div class="foot">漏 2026 AI Job Assistant</div>
   </div>
 
   <script>
     const titleText = "Build a great job product, not a pretty demo.";
-    const subText = "让每一次简历上传，都指向真实面试和真实 offer。";
+    const subText = "Every upload should lead to a real interview and a real offer.";
     const titleNode = document.getElementById("typeTitle");
     const subNode = document.getElementById("typeSub");
 
@@ -329,8 +323,8 @@
       }, speed);
     }
 
-    typewriter(titleNode, titleText, 28, () => {
-      typewriter(subNode, subText, 22);
+    typewriter(titleNode, titleText, 26, () => {
+      typewriter(subNode, subText, 20);
     });
 
     const leadBtn = document.getElementById("leadSubmit");
@@ -345,13 +339,15 @@
         use_case: document.getElementById("leadUseCase").value.trim(),
         source: "landing"
       };
+
       if (!payload.email || !payload.email.includes("@")) {
         leadMsg.className = "msg err";
-        leadMsg.textContent = "请先填写有效邮箱";
+        leadMsg.textContent = "Please enter a valid email.";
         return;
       }
+
       leadBtn.disabled = true;
-      leadBtn.textContent = "提交中...";
+      leadBtn.textContent = "Submitting...";
       try {
         const res = await fetch("/api/business/lead", {
           method: "POST",
@@ -359,15 +355,15 @@
           body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.error || "提交失败");
+        if (!res.ok || !data.success) throw new Error(data.error || "submit failed");
         leadMsg.className = "msg ok";
-        leadMsg.textContent = "提交成功，我们会尽快联系你。";
+        leadMsg.textContent = "Submitted. We will contact you soon.";
       } catch (err) {
         leadMsg.className = "msg err";
-        leadMsg.textContent = "提交失败：" + (err.message || "unknown error");
+        leadMsg.textContent = "Submit failed: " + (err.message || "unknown error");
       } finally {
         leadBtn.disabled = false;
-        leadBtn.textContent = "提交线索";
+        leadBtn.textContent = "Submit Lead";
       }
     });
   </script>

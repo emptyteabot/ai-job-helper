@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Job Assistant | Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#fff; --text:#101010; --muted:#666; --line:#ececec; --soft:#fafafa; --black:#111; --ok:#1f7d4a; --err:#b13a3a; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:"IBM Plex Sans",system-ui,sans-serif; background:var(--bg); color:var(--text); }
+    .wrap { width:min(1040px,calc(100% - 28px)); margin:18px auto 30px; }
+    .top { border:1px solid var(--line); border-radius:999px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+    .brand { font-size:14px; font-weight:700; display:flex; align-items:center; gap:10px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:#111; box-shadow:0 0 0 5px rgba(17,17,17,.08); }
+    .nav a { text-decoration:none; color:var(--muted); border:1px solid transparent; border-radius:999px; padding:6px 10px; font-size:12px; margin-left:6px; }
+    .nav a:hover { color:var(--text); border-color:var(--line); }
+    .hero { border:1px solid var(--line); border-radius:22px; padding:24px 20px; margin-bottom:12px; }
+    .mono { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font:500 11px/1 "IBM Plex Mono",monospace; color:var(--muted); margin-bottom:10px; }
+    .mono:before { content:""; width:5px; height:5px; border-radius:50%; background:#111; }
+    h1 { font-size:clamp(26px,5vw,40px); line-height:1.08; letter-spacing:-.8px; font-weight:700; margin-bottom:8px; min-height:52px; }
+    .cursor { display:inline-block; width:8px; height:1em; background:#111; margin-left:3px; vertical-align:-2px; animation:blink 1s steps(1,end) infinite; }
+    @keyframes blink { 0%,48%{opacity:1;}49%,100%{opacity:0;} }
+    .hero p { color:var(--muted); font-size:14px; line-height:1.7; min-height:24px; }
+    .panel { border:1px solid var(--line); border-radius:20px; padding:16px; margin-bottom:12px; }
+    .head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
+    .head h2 { font-size:18px; }
+    .meta { color:var(--muted); font-size:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    .upload { display:block; border:1px dashed #d0d0d0; border-radius:12px; padding:14px; text-align:center; background:var(--soft); margin-bottom:10px; cursor:pointer; }
+    .upload.drag { border-color:#666; background:#f2f2f2; }
+    .upload b { display:block; font-size:14px; margin-bottom:4px; }
+    .upload span { color:var(--muted); font-size:12px; }
+    .upload input { display:none; }
+    textarea { width:100%; min-height:220px; border:1px solid var(--line); border-radius:12px; padding:12px; resize:vertical; font-size:13px; line-height:1.7; font-family:inherit; margin-bottom:10px; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+    button { border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--text); padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; }
+    button:disabled { opacity:.6; cursor:not-allowed; }
+    .main-btn { background:#111; color:#fff; border-color:#111; }
+    .status { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex; justify-content:space-between; color:var(--muted); font-size:12px; background:var(--soft); margin-bottom:8px; }
+    .flag-ok { color:var(--ok); }
+    .flag-err { color:var(--err); }
+    .steps { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .step { border:1px solid var(--line); border-radius:10px; padding:8px; font-size:12px; color:var(--muted); text-align:center; }
+    .step.active { border-color:#999; color:#111; background:#f7f7f7; }
+    .step.done { border-color:#d7d7d7; color:#333; background:#fbfbfb; }
+    .jobs-meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
+    .job-cards { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .job-card { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--soft); }
+    .job-card b { display:block; font-size:13px; margin-bottom:4px; }
+    .job-card p { color:var(--muted); font-size:12px; line-height:1.6; margin-bottom:5px; }
+    .job-card a { color:var(--text); font-size:12px; text-decoration:underline; word-break:break-all; }
+    .job-empty { border:1px dashed var(--line); border-radius:10px; padding:10px; color:var(--muted); font-size:12px; background:var(--soft); }
+    details { border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:8px; }
+    summary { list-style:none; cursor:pointer; padding:10px 12px; font-size:13px; font-weight:600; background:#fcfcfc; }
+    summary::-webkit-details-marker { display:none; }
+    pre { padding:12px; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.7; min-height:110px; max-height:320px; overflow:auto; font-family:inherit; }
+    @media (max-width:860px) { .steps{grid-template-columns:repeat(2,1fr);} .job-cards{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><span class="dot"></span>AI Job Assistant</div>
+      <nav class="nav">
+        <a href="/">Home</a>
+        <a href="/api/ping" target="_blank" rel="noopener">Ping</a>
+        <a href="/api/health" target="_blank" rel="noopener">Health</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="mono">openai-style / one-page flow</div>
+      <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
+      <p id="typeSub"></p>
+    </section>
+
+    <section class="panel">
+      <div class="head">
+        <h2>简历输入</h2>
+        <div class="meta">
+          <span id="fileMeta">No file uploaded</span>
+          <span id="providerMeta">Provider: -</span>
+        </div>
+      </div>
+      <label class="upload" id="dropZone">
+        <b>上传简历</b>
+        <span>支持 PDF / DOCX / TXT / 图片</span>
+        <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
+      </label>
+      <textarea id="resumeText" placeholder="粘贴简历正文，或上传文件自动解析..."></textarea>
+      <div class="actions">
+        <button class="main-btn" id="runBtn">开始分析</button>
+        <button id="sampleBtn">填充示例</button>
+        <button id="resetBtn">重置</button>
+        <button id="downloadBtn">下载结果</button>
+      </div>
+      <div class="status">
+        <span id="statusText">Ready</span>
+        <span id="statusFlag">IDLE</span>
+      </div>
+      <div class="steps">
+        <div class="step" data-step="1">1 上传简历</div>
+        <div class="step" data-step="2">2 AI分析</div>
+        <div class="step" data-step="3">3 岗位匹配</div>
+        <div class="step" data-step="4">4 输出结果</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="head"><h2>推荐岗位（真实链接）</h2></div>
+      <div class="jobs-meta" id="jobsMeta">分析完成后展示可点击岗位链接。</div>
+      <div class="job-cards" id="jobCards">
+        <div class="job-empty">暂无实时岗位，请先点击“开始分析”。</div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <details open><summary>职业分析</summary><pre id="careerAnalysis">-</pre></details>
+      <details><summary>推荐岗位文本</summary><pre id="jobRecommendations">-</pre></details>
+      <details><summary>优化后的简历</summary><pre id="optimizedResume">-</pre></details>
+      <details><summary>面试准备</summary><pre id="interviewPrep">-</pre></details>
+      <details><summary>模拟面试与薪资</summary><pre id="mockInterview">-</pre></details>
+    </section>
+  </div>
+
+  <script>
+    const typeTitle = "One page. One flow. Real job links.";
+    const typeSub = "上传简历后，优先展示真实可点击岗位，再给分析与优化结果。";
+    const titleNode = document.getElementById("typeTitle");
+    const subNode = document.getElementById("typeSub");
+
+    function typewriter(node, text, speed, done) {
+      let i = 0;
+      const timer = setInterval(() => {
+        i += 1;
+        node.textContent = text.slice(0, i);
+        if (i >= text.length) { clearInterval(timer); if (done) done(); }
+      }, speed);
+    }
+    typewriter(titleNode, typeTitle, 23, () => typewriter(subNode, typeSub, 18));
+
+    const fileInput = document.getElementById("fileInput");
+    const dropZone = document.getElementById("dropZone");
+    const resumeText = document.getElementById("resumeText");
+    const runBtn = document.getElementById("runBtn");
+    const sampleBtn = document.getElementById("sampleBtn");
+    const resetBtn = document.getElementById("resetBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const fileMeta = document.getElementById("fileMeta");
+    const providerMeta = document.getElementById("providerMeta");
+    const statusText = document.getElementById("statusText");
+    const statusFlag = document.getElementById("statusFlag");
+    const careerAnalysis = document.getElementById("careerAnalysis");
+    const jobRecommendations = document.getElementById("jobRecommendations");
+    const optimizedResume = document.getElementById("optimizedResume");
+    const interviewPrep = document.getElementById("interviewPrep");
+    const mockInterview = document.getElementById("mockInterview");
+    const jobCards = document.getElementById("jobCards");
+    const jobsMeta = document.getElementById("jobsMeta");
+    const steps = [...document.querySelectorAll(".step")];
+
+    function setStep(active) {
+      steps.forEach((s) => {
+        const n = Number(s.dataset.step);
+        s.classList.remove("active", "done");
+        if (n < active) s.classList.add("done");
+        else if (n === active) s.classList.add("active");
+      });
+    }
+
+    function setStatus(text, state = "run") {
+      statusText.textContent = text;
+      statusFlag.className = "";
+      if (state === "ok") { statusFlag.textContent = "OK"; statusFlag.classList.add("flag-ok"); }
+      else if (state === "err") { statusFlag.textContent = "ERROR"; statusFlag.classList.add("flag-err"); }
+      else { statusFlag.textContent = "RUNNING"; }
+    }
+
+    async function parseJsonSafe(response) {
+      const raw = await response.text();
+      try { return JSON.parse(raw); } catch (_) { throw new Error(`Non-JSON response: ${raw.slice(0, 180)}`); }
+    }
+
+    function renderJobCards(jobs, provider) {
+      const rows = (jobs || []).filter((j) => (j.link || j.apply_url || "").startsWith("http"));
+      if (!rows.length) {
+        jobsMeta.textContent = `Provider: ${provider || "-"}. No actionable links returned.`;
+        jobCards.innerHTML = '<div class="job-empty">没有可点击岗位链接，请稍后重试。</div>';
+        return;
+      }
+      jobsMeta.textContent = `Provider: ${provider || "-"} | ${rows.length} jobs`;
+      jobCards.innerHTML = rows.map((j) => {
+        const title = j.title || j.job_title || "Unknown Role";
+        const company = j.company || "Unknown Company";
+        const loc = j.location || "-";
+        const platform = j.platform || j.provider || "-";
+        const salary = j.salary || j.salary_range || "";
+        const link = j.link || j.apply_url || "#";
+        return `<article class="job-card"><b>${title}</b><p>${company} | ${loc}${salary ? ` | ${salary}` : ""}</p><p>Source: ${platform}</p><a href="${link}" target="_blank" rel="noopener noreferrer">Open Link</a></article>`;
+      }).join("");
+    }
+
+    async function refreshRealtimeJobs(seed, providerMode) {
+      const kw = (seed?.keywords || []).filter(Boolean);
+      const location = seed?.location || "";
+      if (!kw.length) {
+        jobsMeta.textContent = "No seed keywords extracted from resume.";
+        jobCards.innerHTML = '<div class="job-empty">未提取到关键词，请补充简历技能后重试。</div>';
+        return;
+      }
+      jobsMeta.textContent = `Searching with: ${kw.join(" / ")}...`;
+      const params = new URLSearchParams({ keywords: kw.join(","), location, limit: "8" });
+      try {
+        const res = await fetch(`/api/jobs/search?${params.toString()}`);
+        const data = await parseJsonSafe(res);
+        if (!res.ok || !data.success) throw new Error(data.error || "job search failed");
+        renderJobCards(data.jobs || [], data.provider_mode || providerMode);
+      } catch (err) {
+        jobsMeta.textContent = `Search failed: ${err.message || "unknown error"}`;
+        jobCards.innerHTML = '<div class="job-empty">岗位搜索失败，请重试。</div>';
+      }
+    }
+
+    async function uploadFile(file) {
+      const fd = new FormData();
+      fd.append("file", file);
+      setStep(1);
+      setStatus("Uploading and parsing file...");
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await parseJsonSafe(res);
+      if (!res.ok || !data.success) throw new Error(data.error || "upload failed");
+      resumeText.value = data.resume_text || "";
+      fileMeta.textContent = `Uploaded: ${data.filename || file.name}`;
+      setStatus("File parsed", "ok");
+    }
+
+    fileInput.addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try { await uploadFile(file); } catch (err) { setStatus(err.message || "upload failed", "err"); }
+    });
+
+    ["dragenter", "dragover"].forEach((ev) => {
+      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
+    });
+    ["dragleave", "drop"].forEach((ev) => {
+      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); });
+    });
+    dropZone.addEventListener("drop", async (e) => {
+      const file = e.dataTransfer?.files?.[0];
+      if (!file) return;
+      try { await uploadFile(file); } catch (err) { setStatus(err.message || "upload failed", "err"); }
+    });
+
+    sampleBtn.addEventListener("click", () => {
+      resumeText.value = [
+        "Yinghua Chen",
+        "AI-Native Application Engineer",
+        "Skills: Python, FastAPI, SQL, Docker, RAG, React",
+        "Experience: quant data pipeline, AI workflow, model QA gates",
+      ].join("\n");
+      setStatus("Sample loaded", "ok");
+    });
+
+    resetBtn.addEventListener("click", () => {
+      resumeText.value = "";
+      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => { el.textContent = "-"; });
+      fileMeta.textContent = "No file uploaded";
+      providerMeta.textContent = "Provider: -";
+      jobsMeta.textContent = "分析完成后展示可点击岗位链接。";
+      jobCards.innerHTML = '<div class="job-empty">暂无实时岗位，请先点击“开始分析”。</div>';
+      setStep(0);
+      setStatus("Reset", "ok");
+    });
+
+    runBtn.addEventListener("click", async () => {
+      const text = resumeText.value.trim();
+      if (!text) { setStatus("Please upload or paste a resume first.", "err"); return; }
+      runBtn.disabled = true;
+      setStep(2);
+      setStatus("AI is analyzing...");
+      try {
+        const res = await fetch("/api/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume: text }),
+        });
+        const data = await parseJsonSafe(res);
+        if (!res.ok) throw new Error(data.error || "analysis failed");
+        setStep(4);
+        careerAnalysis.textContent = data.career_analysis || "-";
+        jobRecommendations.textContent = data.job_recommendations || "-";
+        optimizedResume.textContent = data.optimized_resume || "-";
+        interviewPrep.textContent = data.interview_prep || "-";
+        mockInterview.textContent = data.mock_interview || "-";
+        providerMeta.textContent = `Provider: ${data.job_provider_mode || "-"}`;
+        setStatus("Analysis completed", "ok");
+        await refreshRealtimeJobs(data.boss_seed || {}, data.job_provider_mode || "-");
+      } catch (err) {
+        setStatus(err.message || "analysis failed", "err");
+      } finally {
+        runBtn.disabled = false;
+      }
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      const payload = {
+        "Career Analysis": careerAnalysis.textContent,
+        "Job Summary Text": jobRecommendations.textContent,
+        "Optimized Resume": optimizedResume.textContent,
+        "Interview Prep": interviewPrep.textContent,
+        "Mock & Salary": mockInterview.textContent,
+      };
+      let text = "";
+      Object.entries(payload).forEach(([k, v]) => { text += `\n${"=".repeat(20)} ${k} ${"=".repeat(20)}\n\n${v}\n`; });
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "ai-job-report.txt";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,39 +10,38 @@
   <style>
     :root {
       --bg: #ffffff;
-      --text: #111111;
-      --muted: #5f5f5f;
-      --line: #e5e5e5;
+      --text: #101010;
+      --muted: #666666;
+      --line: #ececec;
       --card: #fafafa;
-      --btn: #111111;
-      --btn-text: #ffffff;
+      --black: #111111;
+      --white: #ffffff;
       --ok: #1f7d4a;
-      --err: #bb3f3f;
+      --err: #b13a3a;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: "IBM Plex Sans", system-ui, sans-serif;
-      color: var(--text);
       background: var(--bg);
-      min-height: 100vh;
+      color: var(--text);
     }
-    .container {
-      width: min(1100px, calc(100% - 36px));
-      margin: 14px auto 28px;
+    .wrap {
+      width: min(1080px, calc(100% - 40px));
+      margin: 18px auto 36px;
     }
     .top {
-      height: 56px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #fff;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 16px;
-      margin-bottom: 18px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      margin-bottom: 28px;
+      background: var(--white);
     }
     .brand {
-      font: 700 15px/1 "IBM Plex Sans", sans-serif;
+      font-weight: 700;
+      font-size: 14px;
       letter-spacing: 0.2px;
       display: flex;
       align-items: center;
@@ -52,26 +51,38 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #111;
+      background: var(--black);
       box-shadow: 0 0 0 5px rgba(17, 17, 17, 0.08);
+    }
+    .nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
     .nav a {
       text-decoration: none;
       color: var(--muted);
-      font: 500 13px/1 "IBM Plex Sans", sans-serif;
       border: 1px solid transparent;
       border-radius: 999px;
-      padding: 7px 10px;
-      margin-left: 8px;
-      transition: all .2s ease;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 500;
     }
-    .nav a:hover { color: var(--text); border-color: var(--line); }
+    .nav a:hover {
+      color: var(--text);
+      border-color: var(--line);
+    }
 
     .hero {
       border: 1px solid var(--line);
-      border-radius: 22px;
-      padding: 28px 24px;
-      margin-bottom: 12px;
+      border-radius: 28px;
+      padding: 44px 34px;
+      margin-bottom: 18px;
+      min-height: 340px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: var(--white);
     }
     .mono {
       display: inline-flex;
@@ -80,105 +91,103 @@
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 6px 10px;
-      font: 500 11px/1 "IBM Plex Mono", monospace;
       color: var(--muted);
-      margin-bottom: 12px;
-      background: #fff;
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      margin-bottom: 16px;
+      width: fit-content;
     }
     .mono::before {
       content: "";
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: #111;
+      background: var(--black);
     }
     h1 {
-      font: 700 58px/1 "IBM Plex Sans", sans-serif;
-      letter-spacing: -1.7px;
-      margin-bottom: 10px;
-      max-width: 960px;
+      font-size: clamp(34px, 8vw, 68px);
+      line-height: 1.03;
+      letter-spacing: -1.6px;
+      max-width: 900px;
+      margin-bottom: 16px;
+      font-weight: 700;
+      min-height: 140px;
     }
     .cursor {
       display: inline-block;
       width: 8px;
       height: 1em;
-      background: #111;
-      vertical-align: -2px;
       margin-left: 4px;
-      animation: blink 1s steps(1,end) infinite;
+      background: var(--black);
+      vertical-align: -2px;
+      animation: blink 1s steps(1, end) infinite;
     }
     @keyframes blink {
       0%, 48% { opacity: 1; }
       49%, 100% { opacity: 0; }
     }
     .sub {
-      max-width: 760px;
-      color: var(--muted);
-      font-size: 17px;
+      font-size: 18px;
       line-height: 1.72;
+      color: var(--muted);
+      max-width: 760px;
+      margin-bottom: 24px;
       min-height: 58px;
-      margin-bottom: 20px;
     }
     .actions {
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 20px;
     }
     .btn {
       text-decoration: none;
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 11px 14px;
-      font: 600 13px/1 "IBM Plex Sans", sans-serif;
+      font-size: 13px;
+      font-weight: 600;
       color: var(--text);
-      background: #fff;
-      transition: all .2s ease;
+      background: var(--white);
     }
-    .btn:hover { transform: translateY(-1px); }
     .btn-main {
-      background: var(--btn);
-      border-color: var(--btn);
-      color: var(--btn-text);
+      background: var(--black);
+      color: var(--white);
+      border-color: var(--black);
     }
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-    }
-    .item {
+
+    .simple {
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 12px;
-      background: var(--card);
+      border-radius: 20px;
+      padding: 18px;
+      background: var(--white);
+      margin-bottom: 12px;
     }
-    .item b {
-      display: block;
-      font: 600 12px/1 "IBM Plex Sans", sans-serif;
-      margin-bottom: 6px;
+    .simple h2 {
+      font-size: 15px;
+      margin-bottom: 10px;
     }
-    .item p {
+    .simple p {
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.6;
+      font-size: 13px;
+      line-height: 1.75;
     }
+
     .lead {
-      margin-top: 12px;
       border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 14px;
-      background: #fff;
+      border-radius: 20px;
+      padding: 16px;
+      background: var(--white);
     }
     .lead h3 {
-      font: 600 14px/1 "IBM Plex Sans", sans-serif;
+      font-size: 14px;
       margin-bottom: 8px;
     }
     .lead-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
+      margin-bottom: 10px;
     }
-    .row label {
+    label {
       display: block;
       color: var(--muted);
       font-size: 12px;
@@ -188,126 +197,119 @@
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 9px 10px;
+      padding: 10px;
       font-size: 13px;
-      background: #fff;
       color: var(--text);
+      background: var(--white);
       font-family: inherit;
     }
-    textarea { min-height: 76px; resize: vertical; }
+    textarea { min-height: 80px; resize: vertical; }
     .lead-actions {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 10px;
     }
     button {
       border: 1px solid var(--line);
-      background: #fff;
-      color: var(--text);
       border-radius: 10px;
       padding: 10px 13px;
-      font: 600 13px/1 "IBM Plex Sans", sans-serif;
+      font-weight: 600;
+      font-size: 13px;
       cursor: pointer;
+      background: var(--white);
+      color: var(--text);
     }
     .lead-btn {
-      background: #111;
-      border-color: #111;
-      color: #fff;
+      background: var(--black);
+      color: var(--white);
+      border-color: var(--black);
     }
     .msg { font-size: 12px; }
     .ok { color: var(--ok); }
     .err { color: var(--err); }
     .foot {
+      text-align: center;
       color: var(--muted);
       font-size: 12px;
-      text-align: center;
       margin-top: 12px;
     }
-    @media (max-width: 940px) {
-      h1 { font-size: 42px; }
-      .grid { grid-template-columns: 1fr; }
-      .lead-grid { grid-template-columns: 1fr; }
+
+    @media (max-width: 860px) {
+      .wrap { width: min(1080px, calc(100% - 24px)); }
+      .hero { padding: 30px 20px; min-height: 280px; }
+      h1 { min-height: 118px; }
       .sub { font-size: 15px; }
+      .lead-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="wrap">
     <header class="top">
-      <div class="brand"><span class="dot"></span><span>AI Job Assistant</span></div>
+      <div class="brand"><span class="dot"></span>AI Job Assistant</div>
       <nav class="nav">
         <a href="/app">Workspace</a>
-        <a href="/api/ping" target="_blank">Ping</a>
-        <a href="/api/health" target="_blank">Health</a>
+        <a href="/api/ping" target="_blank" rel="noopener">Ping</a>
+        <a href="/api/health" target="_blank" rel="noopener">Health</a>
       </nav>
     </header>
 
     <section class="hero">
-      <div class="mono">openai-style / minimal / product-first</div>
+      <div class="mono">minimal / product-first / cn-ready</div>
       <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
       <p class="sub" id="typeSub"></p>
       <div class="actions">
-        <a class="btn btn-main" href="/app">Open Workspace</a>
-        <a class="btn" href="/api/version" target="_blank">Build Info</a>
-      </div>
-      <div class="grid">
-        <article class="item">
-          <b>Real Job Links</b>
-          <p>Recommendations are rendered with actionable links and provider sources.</p>
-        </article>
-        <article class="item">
-          <b>End-to-End Flow</b>
-          <p>Upload -> Analysis -> Match -> Resume rewrite -> Interview prep in one run.</p>
-        </article>
-        <article class="item">
-          <b>Fundraising Ready</b>
-          <p>Health checks, funnel APIs, and lead capture are available for demos.</p>
-        </article>
+        <a class="btn btn-main" href="/app">开始使用</a>
+        <a class="btn" href="/api/version" target="_blank" rel="noopener">版本信息</a>
       </div>
     </section>
 
+    <section class="simple">
+      <h2>中国市场优先</h2>
+      <p>默认走云端可用的数据源与真实可点击岗位链接。界面只保留核心路径: 上传简历 -> 生成分析 -> 查看岗位链接。</p>
+    </section>
+
     <section class="lead">
-      <h3>Trial / Business Inquiry</h3>
+      <h3>试用 / 商务合作</h3>
       <div class="lead-grid">
-        <div class="row">
-          <label for="leadEmail">Email</label>
+        <div>
+          <label for="leadEmail">邮箱</label>
           <input id="leadEmail" placeholder="you@company.com" />
         </div>
-        <div class="row">
-          <label for="leadName">Name</label>
-          <input id="leadName" placeholder="Your name" />
+        <div>
+          <label for="leadName">姓名</label>
+          <input id="leadName" placeholder="你的名字" />
         </div>
-        <div class="row">
-          <label for="leadCompany">Company / School</label>
-          <input id="leadCompany" placeholder="Organization" />
+        <div>
+          <label for="leadCompany">公司 / 学校</label>
+          <input id="leadCompany" placeholder="组织名称" />
         </div>
-        <div class="row">
-          <label for="leadBudget">Budget</label>
+        <div>
+          <label for="leadBudget">预算范围</label>
           <select id="leadBudget">
-            <option value="">Undecided</option>
-            <option>Individual (< 99 / month)</option>
-            <option>Small Team (99-999 / month)</option>
-            <option>Enterprise (1000+ / month)</option>
+            <option value="">待评估</option>
+            <option>个人版 (< 99 / 月)</option>
+            <option>团队版 (99-999 / 月)</option>
+            <option>企业版 (1000+ / 月)</option>
           </select>
         </div>
-        <div class="row" style="grid-column: 1 / -1;">
-          <label for="leadUseCase">Use Case</label>
-          <textarea id="leadUseCase" placeholder="Example: optimize batch resumes and improve interview pass rate"></textarea>
+        <div style="grid-column: 1 / -1;">
+          <label for="leadUseCase">场景</label>
+          <textarea id="leadUseCase" placeholder="例如: 批量投递优化、岗位匹配、面试通过率提升"></textarea>
         </div>
       </div>
       <div class="lead-actions">
-        <button class="lead-btn" id="leadSubmit" type="button">Submit Lead</button>
+        <button class="lead-btn" id="leadSubmit" type="button">提交</button>
         <div class="msg" id="leadMsg"></div>
       </div>
     </section>
 
-    <div class="foot">漏 2026 AI Job Assistant</div>
+    <div class="foot">2026 AI Job Assistant</div>
   </div>
 
   <script>
-    const titleText = "Build a great job product, not a pretty demo.";
-    const subText = "Every upload should lead to a real interview and a real offer.";
+    const titleText = "Find better jobs, faster.";
+    const subText = "OpenAI-style minimal interface. Focus on action, not decoration.";
     const titleNode = document.getElementById("typeTitle");
     const subNode = document.getElementById("typeSub");
 
@@ -323,8 +325,8 @@
       }, speed);
     }
 
-    typewriter(titleNode, titleText, 26, () => {
-      typewriter(subNode, subText, 20);
+    typewriter(titleNode, titleText, 24, () => {
+      typewriter(subNode, subText, 18);
     });
 
     const leadBtn = document.getElementById("leadSubmit");
@@ -342,12 +344,12 @@
 
       if (!payload.email || !payload.email.includes("@")) {
         leadMsg.className = "msg err";
-        leadMsg.textContent = "Please enter a valid email.";
+        leadMsg.textContent = "请输入有效邮箱。";
         return;
       }
 
       leadBtn.disabled = true;
-      leadBtn.textContent = "Submitting...";
+      leadBtn.textContent = "提交中...";
       try {
         const res = await fetch("/api/business/lead", {
           method: "POST",
@@ -357,13 +359,13 @@
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || "submit failed");
         leadMsg.className = "msg ok";
-        leadMsg.textContent = "Submitted. We will contact you soon.";
+        leadMsg.textContent = "已提交，我们会尽快联系你。";
       } catch (err) {
         leadMsg.className = "msg err";
-        leadMsg.textContent = "Submit failed: " + (err.message || "unknown error");
+        leadMsg.textContent = "提交失败: " + (err.message || "unknown error");
       } finally {
         leadBtn.disabled = false;
-        leadBtn.textContent = "Submit Lead";
+        leadBtn.textContent = "提交";
       }
     });
   </script>

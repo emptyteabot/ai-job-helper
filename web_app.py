@@ -394,9 +394,10 @@ async def home():
 @app.get("/app", response_class=HTMLResponse)
 async def app_page():
     """主应用页面"""
-    app_html = "static/app.html"
-    # If `static/app.html` is missing or accidentally empty, fall back to the embedded page below.
-    if os.path.exists(app_html) and os.path.getsize(app_html) > 64:
+    app_candidates = ["static/app_clean.html", "static/app.html"]
+    for app_html in app_candidates:
+        if not (os.path.exists(app_html) and os.path.getsize(app_html) > 64):
+            continue
         with open(app_html, 'r', encoding='utf-8') as f:
             return HTMLResponse(content=f.read())
 

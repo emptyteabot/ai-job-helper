@@ -8,55 +8,52 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#fff; --text:#101010; --muted:#666; --line:#ececec; --soft:#fafafa; --black:#111; --ok:#1f7d4a; --err:#b13a3a; }
+    :root { --bg:#fff; --text:#101010; --muted:#676767; --line:#ececec; --soft:#fafafa; --black:#111; --ok:#1f7d4a; --err:#b13a3a; }
     * { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:"IBM Plex Sans",system-ui,sans-serif; background:var(--bg); color:var(--text); }
-    .wrap { width:min(1040px,calc(100% - 28px)); margin:18px auto 30px; }
-    .top { border:1px solid var(--line); border-radius:999px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
-    .brand { font-size:14px; font-weight:700; display:flex; align-items:center; gap:10px; }
+    .wrap { width:min(920px,calc(100% - 28px)); margin:20px auto 34px; }
+    .top { border:1px solid var(--line); border-radius:999px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
+    .brand { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; }
     .dot { width:8px; height:8px; border-radius:50%; background:#111; box-shadow:0 0 0 5px rgba(17,17,17,.08); }
     .nav a { text-decoration:none; color:var(--muted); border:1px solid transparent; border-radius:999px; padding:6px 10px; font-size:12px; margin-left:6px; }
-    .nav a:hover { color:var(--text); border-color:var(--line); }
-    .hero { border:1px solid var(--line); border-radius:22px; padding:24px 20px; margin-bottom:12px; }
+    .nav a:hover { border-color:var(--line); color:var(--text); }
+    .hero { padding:18px 0 30px; }
     .mono { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font:500 11px/1 "IBM Plex Mono",monospace; color:var(--muted); margin-bottom:10px; }
     .mono:before { content:""; width:5px; height:5px; border-radius:50%; background:#111; }
-    h1 { font-size:clamp(26px,5vw,40px); line-height:1.08; letter-spacing:-.8px; font-weight:700; margin-bottom:8px; min-height:52px; }
+    h1 { font-size:clamp(28px,6vw,48px); line-height:1.06; letter-spacing:-1px; margin-bottom:10px; min-height:56px; }
     .cursor { display:inline-block; width:8px; height:1em; background:#111; margin-left:3px; vertical-align:-2px; animation:blink 1s steps(1,end) infinite; }
     @keyframes blink { 0%,48%{opacity:1;}49%,100%{opacity:0;} }
-    .hero p { color:var(--muted); font-size:14px; line-height:1.7; min-height:24px; }
-    .panel { border:1px solid var(--line); border-radius:20px; padding:16px; margin-bottom:12px; }
-    .head { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; }
-    .head h2 { font-size:18px; }
+    .hero p { color:var(--muted); font-size:15px; line-height:1.75; }
+    .panel { border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; }
+    .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:10px; }
+    .head h2 { font-size:15px; font-weight:600; }
     .meta { color:var(--muted); font-size:12px; display:flex; gap:8px; flex-wrap:wrap; }
-    .upload { display:block; border:1px dashed #d0d0d0; border-radius:12px; padding:14px; text-align:center; background:var(--soft); margin-bottom:10px; cursor:pointer; }
-    .upload.drag { border-color:#666; background:#f2f2f2; }
-    .upload b { display:block; font-size:14px; margin-bottom:4px; }
+    .upload { display:block; border:1px dashed #cfcfcf; border-radius:12px; padding:12px; text-align:center; background:var(--soft); margin-bottom:10px; cursor:pointer; }
+    .upload.drag { border-color:#666; background:#f4f4f4; }
+    .upload b { display:block; font-size:13px; margin-bottom:3px; }
     .upload span { color:var(--muted); font-size:12px; }
     .upload input { display:none; }
-    textarea { width:100%; min-height:220px; border:1px solid var(--line); border-radius:12px; padding:12px; resize:vertical; font-size:13px; line-height:1.7; font-family:inherit; margin-bottom:10px; }
-    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+    textarea { width:100%; min-height:230px; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:13px; line-height:1.72; resize:vertical; font-family:inherit; margin-bottom:10px; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; }
     button { border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--text); padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; }
     button:disabled { opacity:.6; cursor:not-allowed; }
-    .main-btn { background:#111; color:#fff; border-color:#111; }
-    .status { border:1px solid var(--line); border-radius:10px; padding:10px; display:flex; justify-content:space-between; color:var(--muted); font-size:12px; background:var(--soft); margin-bottom:8px; }
+    .main-btn { background:#111; border-color:#111; color:#fff; }
+    .status { margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:9px 10px; display:flex; justify-content:space-between; color:var(--muted); font-size:12px; background:var(--soft); }
     .flag-ok { color:var(--ok); }
     .flag-err { color:var(--err); }
-    .steps { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
-    .step { border:1px solid var(--line); border-radius:10px; padding:8px; font-size:12px; color:var(--muted); text-align:center; }
-    .step.active { border-color:#999; color:#111; background:#f7f7f7; }
-    .step.done { border-color:#d7d7d7; color:#333; background:#fbfbfb; }
+    .steps { display:none; }
     .jobs-meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
-    .job-cards { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+    .job-cards { display:grid; grid-template-columns:1fr; gap:8px; }
     .job-card { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--soft); }
-    .job-card b { display:block; font-size:13px; margin-bottom:4px; }
+    .job-card b { display:block; font-size:13px; margin-bottom:4px; line-height:1.45; }
     .job-card p { color:var(--muted); font-size:12px; line-height:1.6; margin-bottom:5px; }
-    .job-card a { color:var(--text); font-size:12px; text-decoration:underline; word-break:break-all; }
+    .job-card a { color:var(--text); text-decoration:underline; font-size:12px; word-break:break-all; }
     .job-empty { border:1px dashed var(--line); border-radius:10px; padding:10px; color:var(--muted); font-size:12px; background:var(--soft); }
-    details { border:1px solid var(--line); border-radius:12px; overflow:hidden; margin-bottom:8px; }
-    summary { list-style:none; cursor:pointer; padding:10px 12px; font-size:13px; font-weight:600; background:#fcfcfc; }
+    details { border:1px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden; }
+    summary { list-style:none; cursor:pointer; padding:9px 11px; font-size:13px; font-weight:600; background:#fcfcfc; }
     summary::-webkit-details-marker { display:none; }
-    pre { padding:12px; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.7; min-height:110px; max-height:320px; overflow:auto; font-family:inherit; }
-    @media (max-width:860px) { .steps{grid-template-columns:repeat(2,1fr);} .job-cards{grid-template-columns:1fr;} }
+    pre { padding:11px; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.72; min-height:90px; max-height:320px; overflow:auto; font-family:inherit; }
+    @media (max-width:640px) { .wrap { width:min(920px,calc(100% - 20px)); } .hero p { font-size:14px; } }
   </style>
 </head>
 <body>
@@ -65,13 +62,12 @@
       <div class="brand"><span class="dot"></span>AI Job Assistant</div>
       <nav class="nav">
         <a href="/">Home</a>
-        <a href="/api/ping" target="_blank" rel="noopener">Ping</a>
         <a href="/api/health" target="_blank" rel="noopener">Health</a>
       </nav>
     </header>
 
     <section class="hero">
-      <div class="mono">openai-style / one-page flow</div>
+      <div class="mono">openai-style / cn-market only</div>
       <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
       <p id="typeSub"></p>
     </section>
@@ -86,7 +82,7 @@
       </div>
       <label class="upload" id="dropZone">
         <b>上传简历</b>
-        <span>支持 PDF / DOCX / TXT / 图片</span>
+        <span>PDF / DOCX / TXT / 图片</span>
         <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
       </label>
       <textarea id="resumeText" placeholder="粘贴简历正文，或上传文件自动解析..."></textarea>
@@ -101,16 +97,16 @@
         <span id="statusFlag">IDLE</span>
       </div>
       <div class="steps">
-        <div class="step" data-step="1">1 上传简历</div>
-        <div class="step" data-step="2">2 AI分析</div>
-        <div class="step" data-step="3">3 岗位匹配</div>
-        <div class="step" data-step="4">4 输出结果</div>
+        <div class="step" data-step="1">1</div>
+        <div class="step" data-step="2">2</div>
+        <div class="step" data-step="3">3</div>
+        <div class="step" data-step="4">4</div>
       </div>
     </section>
 
     <section class="panel">
-      <div class="head"><h2>推荐岗位（真实链接）</h2></div>
-      <div class="jobs-meta" id="jobsMeta">分析完成后展示可点击岗位链接。</div>
+      <div class="head"><h2>推荐岗位（中国市场真实链接）</h2></div>
+      <div class="jobs-meta" id="jobsMeta">分析完成后展示 Boss / 猎聘 / 智联 / 51job / 拉勾 链接。</div>
       <div class="job-cards" id="jobCards">
         <div class="job-empty">暂无实时岗位，请先点击“开始分析”。</div>
       </div>
@@ -126,11 +122,10 @@
   </div>
 
   <script>
-    const typeTitle = "One page. One flow. Real job links.";
-    const typeSub = "上传简历后，优先展示真实可点击岗位，再给分析与优化结果。";
+    const typeTitle = "China market first. Real links only.";
+    const typeSub = "默认只展示来自中国招聘网站的可点击岗位，不再展示海外示例岗位。";
     const titleNode = document.getElementById("typeTitle");
     const subNode = document.getElementById("typeSub");
-
     function typewriter(node, text, speed, done) {
       let i = 0;
       const timer = setInterval(() => {
@@ -139,7 +134,7 @@
         if (i >= text.length) { clearInterval(timer); if (done) done(); }
       }, speed);
     }
-    typewriter(titleNode, typeTitle, 23, () => typewriter(subNode, typeSub, 18));
+    typewriter(titleNode, typeTitle, 22, () => typewriter(subNode, typeSub, 18));
 
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
@@ -187,7 +182,7 @@
       const rows = (jobs || []).filter((j) => (j.link || j.apply_url || "").startsWith("http"));
       if (!rows.length) {
         jobsMeta.textContent = `Provider: ${provider || "-"}. No actionable links returned.`;
-        jobCards.innerHTML = '<div class="job-empty">没有可点击岗位链接，请稍后重试。</div>';
+        jobCards.innerHTML = '<div class="job-empty">未返回中国站点岗位链接，请稍后重试。</div>';
         return;
       }
       jobsMeta.textContent = `Provider: ${provider || "-"} | ${rows.length} jobs`;
@@ -198,7 +193,7 @@
         const platform = j.platform || j.provider || "-";
         const salary = j.salary || j.salary_range || "";
         const link = j.link || j.apply_url || "#";
-        return `<article class="job-card"><b>${title}</b><p>${company} | ${loc}${salary ? ` | ${salary}` : ""}</p><p>Source: ${platform}</p><a href="${link}" target="_blank" rel="noopener noreferrer">Open Link</a></article>`;
+        return `<article class="job-card"><b>${title}</b><p>${company} | ${loc}${salary ? ` | ${salary}` : ""}</p><p>来源: ${platform}</p><a href="${link}" target="_blank" rel="noopener noreferrer">打开岗位链接</a></article>`;
       }).join("");
     }
 
@@ -207,7 +202,7 @@
       const location = seed?.location || "";
       if (!kw.length) {
         jobsMeta.textContent = "No seed keywords extracted from resume.";
-        jobCards.innerHTML = '<div class="job-empty">未提取到关键词，请补充简历技能后重试。</div>';
+        jobCards.innerHTML = '<div class="job-empty">未提取到关键词，请补充技能后重试。</div>';
         return;
       }
       jobsMeta.textContent = `Searching with: ${kw.join(" / ")}...`;
@@ -269,7 +264,7 @@
       [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => { el.textContent = "-"; });
       fileMeta.textContent = "No file uploaded";
       providerMeta.textContent = "Provider: -";
-      jobsMeta.textContent = "分析完成后展示可点击岗位链接。";
+      jobsMeta.textContent = "分析完成后展示 Boss / 猎聘 / 智联 / 51job / 拉勾 链接。";
       jobCards.innerHTML = '<div class="job-empty">暂无实时岗位，请先点击“开始分析”。</div>';
       setStep(0);
       setStatus("Reset", "ok");

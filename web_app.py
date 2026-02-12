@@ -55,6 +55,7 @@ business_service = BusinessService()
 
 # 云端岗位缓存（内存）
 cloud_jobs_cache: List[Dict[str, Any]] = []
+CN_JOB_DOMAINS = ("zhipin.com", "liepin.com", "zhaopin.com", "51job.com", "lagou.com")
 cloud_jobs_meta: Dict[str, Any] = {
     "last_push_at": None,
     "last_received": 0,
@@ -136,6 +137,24 @@ def _normalize_and_filter_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> L
     return out
 
 
+def _is_cn_job_link(link: str) -> bool:
+    low = (link or "").lower()
+    return any(d in low for d in CN_JOB_DOMAINS)
+
+
+def _enforce_cn_market_jobs(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for j in (jobs or []):
+        link = str(j.get("link") or j.get("apply_url") or "")
+        platform = str(j.get("platform") or "").strip()
+        if _is_cn_job_link(link):
+            out.append(j)
+            continue
+        if platform in {"Boss直聘", "猎聘", "智联招聘", "前程无忧", "拉勾"}:
+            out.append(j)
+    return out
+
+
 def _filter_cloud_cache_by_query(
     keywords: List[str], location: Optional[str], limit: int
 ) -> List[Dict[str, Any]]:
@@ -170,6 +189,7 @@ def _search_jobs_without_browser(
         )
         mode = (real_job_service.get_statistics() or {}).get("provider_mode", "auto")
         normalized = _normalize_and_filter_jobs(jobs, limit=limit)
+        normalized = _enforce_cn_market_jobs(normalized)
         if normalized:
             return normalized, mode, None
     except Exception as e:
@@ -177,20 +197,28 @@ def _search_jobs_without_browser(
     else:
         first_error = None
 
-    # Last fallback: DuckDuckGo HTML search (no key, no browser).
-    # Stable public API fallback (no browser, no local extension).
-    remotive_jobs = _search_jobs_remotive(keywords, location, limit=limit)
-    if remotive_jobs:
-        return remotive_jobs, "remotive", None
-
+    # CN market fallback: no-browser HTML search on Chinese job sites.
     bing_html_jobs = _search_jobs_bing_html(keywords, location, limit=limit)
+    bing_html_jobs = _enforce_cn_market_jobs(bing_html_jobs)
     if bing_html_jobs:
         return bing_html_jobs, "bing_html", None
 
     # Last fallback: DuckDuckGo HTML search (no key, no browser).
     ddg_jobs = _search_jobs_duckduckgo(keywords, location, limit=limit)
+    ddg_jobs = _enforce_cn_market_jobs(ddg_jobs)
     if ddg_jobs:
         return ddg_jobs, "duckduckgo", None
+
+    # Optional global fallback. Disabled by default to keep CN market realism.
+    if os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}:
+        remotive_jobs = _search_jobs_remotive(keywords, location, limit=limit)
+        if remotive_jobs:
+            return remotive_jobs, "remotive", None
+
+    portal_jobs = _search_jobs_cn_entrypoints(keywords, location, limit=min(limit, 5))
+    if portal_jobs:
+        return portal_jobs, "cn_portal", first_error or "using cn portal fallback"
+
     return [], "cloud", first_error or "no result from no-browser providers"
 
 
@@ -204,15 +232,22 @@ def _platform_from_link(link: str) -> str:
         return "智联招聘"
     if "51job.com" in host:
         return "前程无忧"
+    if "lagou.com" in host:
+        return "拉勾"
     return host or "web"
 
 
 def _normalize_ddg_redirect(href: str) -> str:
-    href = (href or "").strip()
+    href = html_lib.unescape((href or "").strip())
     if not href:
         return ""
     if href.startswith("//"):
         href = "https:" + href
+    # Absolute DuckDuckGo redirect URL.
+    if href.startswith("http://duckduckgo.com/l/?") or href.startswith("https://duckduckgo.com/l/?"):
+        qs = parse_qs(urlparse(href).query)
+        uddg = (qs.get("uddg") or [""])[0]
+        return unquote(uddg) if uddg else ""
     if href.startswith("/l/?"):
         qs = parse_qs(urlparse("https://duckduckgo.com" + href).query)
         uddg = (qs.get("uddg") or [""])[0]
@@ -226,7 +261,7 @@ def _search_jobs_duckduckgo(
     q_parts = [k.strip() for k in (keywords or []) if k and k.strip()]
     if location:
         q_parts.append(location.strip())
-    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com")
+    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com OR site:lagou.com")
     q = " ".join(q_parts).strip() or "招聘 职位 site:zhipin.com"
 
     url = f"https://html.duckduckgo.com/html/?q={quote_plus(q)}"
@@ -254,7 +289,7 @@ def _search_jobs_duckduckgo(
         if not (link.startswith("http://") or link.startswith("https://")):
             continue
         low = link.lower()
-        if not any(d in low for d in ("zhipin.com", "liepin.com", "zhaopin.com", "51job.com")):
+        if not any(d in low for d in CN_JOB_DOMAINS):
             continue
         if low in seen:
             continue
@@ -284,7 +319,7 @@ def _search_jobs_bing_html(
     q_parts = [k.strip() for k in (keywords or []) if k and k.strip()]
     if location:
         q_parts.append(location.strip())
-    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com")
+    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com OR site:lagou.com")
     q = " ".join(q_parts).strip() or "招聘 职位 site:zhipin.com"
 
     try:
@@ -309,7 +344,7 @@ def _search_jobs_bing_html(
         if not link.startswith(("http://", "https://")):
             continue
         low = link.lower()
-        if not any(d in low for d in ("zhipin.com", "liepin.com", "zhaopin.com", "51job.com")):
+        if not any(d in low for d in CN_JOB_DOMAINS):
             continue
         if low in seen:
             continue
@@ -381,6 +416,40 @@ def _search_jobs_remotive(
             return _normalize_and_filter_jobs(narrowed, limit=limit)
     # If no location match, return best available remote jobs instead of empty.
     return _normalize_and_filter_jobs(base_rows, limit=limit)
+
+
+def _search_jobs_cn_entrypoints(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    """Guaranteed CN-market fallback: job-board search entry links."""
+    kw = [k.strip() for k in (keywords or []) if k and k.strip()]
+    query = " ".join(kw[:3]) or "Python"
+    loc = (location or "").strip()
+
+    boards = [
+        ("Boss直聘", f"https://www.zhipin.com/web/geek/job?query={quote_plus(query)}"),
+        ("猎聘", f"https://www.liepin.com/zhaopin/?key={quote_plus(query)}"),
+        ("智联招聘", f"https://sou.zhaopin.com/?kw={quote_plus(query)}" + (f"&jl={quote_plus(loc)}" if loc else "")),
+        ("前程无忧", f"https://we.51job.com/pc/search?keyword={quote_plus(query)}"),
+        ("拉勾", f"https://www.lagou.com/wn/jobs?kd={quote_plus(query)}"),
+    ]
+    out: List[Dict[str, Any]] = []
+    for i, (platform, link) in enumerate(boards, 1):
+        out.append(
+            {
+                "id": f"cn_portal_{i}_{abs(hash(link))}",
+                "title": f"{query} - {platform}搜索入口",
+                "company": "",
+                "location": loc,
+                "salary": "",
+                "platform": platform,
+                "link": link,
+                "provider": "cn_portal",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
 
 @app.get("/", response_class=HTMLResponse)
 async def home():
@@ -1170,12 +1239,12 @@ async def process_resume(request: Request):
                     '【推荐岗位】（当前暂无可用岗位）\n\n'
                     '排查建议：\n'
                     '1. 检查云端缓存：访问 /api/crawler/status 是否为 empty。\n'
-                    '2. 当前已启用无浏览器搜索回退（baidu/bing/brave/jooble）。\n'
-                    '3. 若搜索引擎触发风控，可切换 API 数据源或稍后重试。\n\n'
-                    '注意：系统不会回退到演示岗位；无真实数据时只展示该提示。\n'
+                    '2. 当前仅启用中国招聘站点搜索回退（Boss/猎聘/智联/51job/拉勾）。\n'
+                    '3. 若搜索引擎触发风控，可稍后重试或接入企业级招聘API。\n\n'
+                    '注意：系统不会回退到演示岗位或海外示例岗位；无真实数据时只展示该提示。\n'
                 )
 
-            heading = '【推荐岗位】（真实市场数据）'
+            heading = '【推荐岗位】（中国劳动力市场真实数据）'
             if mode == 'openclaw':
                 heading = '【推荐岗位】（来自 Boss 直聘实时数据，OpenClaw）'
             elif mode == 'cloud':
@@ -1183,13 +1252,15 @@ async def process_resume(request: Request):
             elif mode in ('baidu', 'bing', 'brave'):
                 heading = f'【推荐岗位】（来自搜索引擎 {mode}）'
             elif mode == 'remotive':
-                heading = '【推荐岗位】（来自 Remotive 公共招聘 API）'
+                heading = '【推荐岗位】（来自全球招聘API，仅在显式开启时使用）'
             elif mode == 'bing_html':
                 heading = '【推荐岗位】（来自 Bing 无浏览器搜索）'
             elif mode == 'duckduckgo':
                 heading = '【推荐岗位】（来自 DuckDuckGo 无浏览器搜索）'
             elif mode == 'jooble':
                 heading = '【推荐岗位】（来自 Jooble API）'
+            elif mode == 'cn_portal':
+                heading = '【推荐岗位】（中国招聘站点搜索入口，适用于风控场景）'
 
             lines = [heading, '']
             for i, job in enumerate(jobs, 1):
@@ -1416,11 +1487,12 @@ async def search_jobs(
         # Cloud mode: prefer crawler cache; fallback to cloud-safe real-time providers.
         if cfg_mode == "cloud" or cloud_jobs_cache:
             jobs = _filter_cloud_cache_by_query(kw, location, limit=n)
+            jobs = _enforce_cn_market_jobs(jobs)
             warning = None
             mode = "cloud"
             if not jobs:
                 fallback_jobs, fallback_mode, fallback_err = _search_jobs_without_browser(kw, location, limit=n)
-                jobs = fallback_jobs
+                jobs = _enforce_cn_market_jobs(fallback_jobs)
                 mode = fallback_mode or "cloud"
                 warning = (
                     f"cloud cache is empty; switched to no-browser provider: {mode}"
@@ -1469,9 +1541,11 @@ async def search_jobs(
                 progress_callback=progress_cb,
             )
             jobs = _normalize_and_filter_jobs(jobs, limit=n)
+            jobs = _enforce_cn_market_jobs(jobs)
             mode = (real_job_service.get_statistics() or {}).get("provider_mode", cfg_mode)
         except Exception as e:
             jobs, mode, _ = _search_jobs_without_browser(kw, location, limit=n)
+            jobs = _enforce_cn_market_jobs(jobs)
             if not jobs:
                 raise e
         _track_event(

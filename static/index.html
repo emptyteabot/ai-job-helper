@@ -3,59 +3,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Job Assistant</title>
+  <title>AI求职助手</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #ffffff;
       --text: #131313;
-      --muted: #66666d;
+      --muted: #64646b;
       --line: #e8e8ec;
       --soft: #f7f7f9;
-      --maxw: 940px;
+      --maxw: 920px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Manrope", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
       color: var(--text);
-      background:
-        radial-gradient(900px 500px at -10% -10%, #f4f4f8 0%, transparent 60%),
-        radial-gradient(900px 500px at 110% -20%, #f7f7fb 0%, transparent 64%),
-        var(--bg);
     }
     .page {
       width: min(var(--maxw), calc(100% - 28px));
-      margin: 18px auto 56px;
+      margin: 18px auto 58px;
     }
     .top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 0 14px;
       border-bottom: 1px solid var(--line);
+      padding: 8px 0 14px;
     }
     .brand {
       display: flex;
       align-items: center;
       gap: 9px;
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.1px;
+      font-size: 14px;
+      font-weight: 800;
     }
     .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
       background: #121212;
-      box-shadow: 0 0 0 6px rgba(18, 18, 18, 0.07);
+      box-shadow: 0 0 0 6px rgba(18, 18, 18, 0.08);
     }
     .nav {
       display: flex;
-      align-items: center;
       gap: 16px;
-      font-size: 12px;
+      font-size: 13px;
     }
     .nav a {
       color: var(--muted);
@@ -63,18 +58,18 @@
     }
     .nav a:hover { color: var(--text); }
 
-    .hero { padding: 64px 0 44px; }
+    .hero { padding: 66px 0 44px; }
     .pill {
       display: inline-flex;
       align-items: center;
       gap: 7px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 6px 10px;
+      padding: 6px 11px;
       color: var(--muted);
-      font: 500 11px/1 "IBM Plex Mono", monospace;
-      margin-bottom: 14px;
       background: #fff;
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      margin-bottom: 15px;
     }
     .pill::before {
       content: "";
@@ -84,24 +79,24 @@
       background: #121212;
     }
     h1 {
-      font-size: clamp(34px, 8.3vw, 76px);
-      letter-spacing: -1.6px;
-      line-height: 1.03;
-      max-width: 900px;
-      min-height: 152px;
+      font-size: clamp(42px, 9vw, 86px);
+      letter-spacing: -2.1px;
+      line-height: 1.02;
       margin-bottom: 14px;
+      min-height: 176px;
+      max-width: 860px;
     }
     .sub {
-      max-width: 700px;
-      font-size: 18px;
-      line-height: 1.74;
+      font-size: 23px;
       color: var(--muted);
-      min-height: 66px;
-      margin-bottom: 24px;
+      line-height: 1.66;
+      max-width: 760px;
+      min-height: 78px;
+      margin-bottom: 28px;
     }
     .cursor {
       display: inline-block;
-      width: 8px;
+      width: 10px;
       height: 1em;
       margin-left: 4px;
       background: #151515;
@@ -116,89 +111,87 @@
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
     .btn {
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 10px 14px;
+      padding: 11px 15px;
       text-decoration: none;
-      font-size: 13px;
-      font-weight: 600;
       color: var(--text);
       background: #fff;
+      font-size: 14px;
+      font-weight: 700;
     }
     .btn.main {
       background: #121212;
-      border-color: #121212;
       color: #fff;
+      border-color: #121212;
     }
     .proof {
       border: 1px dashed var(--line);
       border-radius: 12px;
-      background: #fff;
+      padding: 11px 13px;
       color: var(--muted);
-      font-size: 12px;
-      padding: 10px 12px;
-      margin-bottom: 20px;
+      font-size: 13px;
       line-height: 1.7;
-    }
-    .grid {
-      display: grid;
-      gap: 10px;
-      grid-template-columns: repeat(3, 1fr);
       margin-bottom: 20px;
+      background: #fff;
     }
-    .card {
+    .focus {
       border: 1px solid var(--line);
       border-radius: 14px;
       background: #fff;
-      padding: 13px;
+      padding: 14px;
+      margin-bottom: 22px;
     }
-    .card b {
-      font-size: 13px;
-      display: block;
-      margin-bottom: 5px;
+    .focus h2 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      letter-spacing: -0.2px;
     }
-    .card p {
-      font-size: 12px;
+    .focus ul {
+      padding-left: 18px;
+    }
+    .focus li {
+      font-size: 15px;
+      line-height: 1.8;
+      margin-bottom: 4px;
       color: var(--muted);
-      line-height: 1.72;
     }
     .capture {
       border: 1px solid var(--line);
       border-radius: 16px;
       background: #fff;
-      padding: 14px;
+      padding: 15px;
     }
     .capture h2 {
-      font-size: 15px;
-      letter-spacing: -0.2px;
-      margin-bottom: 4px;
+      font-size: 19px;
+      margin-bottom: 6px;
     }
     .capture p {
-      font-size: 12px;
       color: var(--muted);
-      line-height: 1.7;
-      margin-bottom: 10px;
+      font-size: 14px;
+      line-height: 1.72;
+      margin-bottom: 11px;
     }
     .switch {
       display: inline-flex;
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 2px;
-      margin-bottom: 10px;
       background: var(--soft);
+      margin-bottom: 11px;
     }
     .switch button {
       border: 0;
       background: transparent;
-      padding: 7px 10px;
       border-radius: 999px;
-      font-size: 12px;
+      padding: 8px 12px;
       color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
       cursor: pointer;
-      font-weight: 600;
     }
     .switch button.active {
       background: #fff;
@@ -209,52 +202,50 @@
     .pane.active { display: block; }
     .row2 {
       display: grid;
-      gap: 8px;
       grid-template-columns: 1fr 1fr;
+      gap: 8px;
       margin-bottom: 8px;
     }
     input, select, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 10px;
-      padding: 9px 10px;
-      background: #fff;
+      padding: 10px 11px;
+      font: 400 13px/1.5 "Noto Sans SC", "PingFang SC", sans-serif;
       color: var(--text);
-      font: 400 12px/1.4 "Manrope", "PingFang SC", sans-serif;
+      background: #fff;
     }
     textarea {
-      min-height: 86px;
+      min-height: 95px;
       resize: vertical;
-      margin-bottom: 8px;
+      margin-bottom: 9px;
     }
     .submit {
       border: 1px solid #121212;
       background: #121212;
       color: #fff;
       border-radius: 10px;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 9px 12px;
+      padding: 10px 13px;
+      font-size: 13px;
+      font-weight: 700;
       cursor: pointer;
     }
     .hint {
+      min-height: 20px;
       margin-top: 8px;
-      min-height: 18px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 13px;
     }
     .note {
       margin-top: 18px;
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.75;
+      font-size: 13px;
+      line-height: 1.8;
     }
-
     @media (max-width: 920px) {
-      .hero { padding: 44px 0 34px; }
-      h1 { min-height: 114px; }
-      .sub { font-size: 16px; min-height: 58px; }
-      .grid { grid-template-columns: 1fr; }
+      .hero { padding: 46px 0 32px; }
+      h1 { min-height: 126px; }
+      .sub { font-size: 19px; min-height: 62px; }
       .row2 { grid-template-columns: 1fr; }
     }
   </style>
@@ -262,105 +253,96 @@
 <body>
   <div class="page">
     <header class="top">
-      <div class="brand"><span class="dot"></span>AI Job Assistant</div>
+      <div class="brand"><span class="dot"></span>AI求职助手</div>
       <nav class="nav">
-        <a href="/app">Workspace</a>
-        <a href="/investor">Investor</a>
-        <a href="/api/ready" target="_blank" rel="noopener">Ready</a>
+        <a href="/app">工作台</a>
+        <a href="/investor">投资看板</a>
+        <a href="/api/ready" target="_blank" rel="noopener">状态</a>
       </nav>
     </header>
 
     <main class="hero">
-      <div class="pill">open style / minimal density / cn-first</div>
+      <div class="pill">cn-market / minimal / larger-type</div>
       <h1><span id="titleText"></span><span class="cursor"></span></h1>
       <p class="sub" id="subText"></p>
 
       <div class="actions">
-        <a class="btn main" href="/app">Start In Workspace</a>
-        <a class="btn" href="/investor">Open Investor View</a>
-        <a class="btn" href="/api/version" target="_blank" rel="noopener">Build Info</a>
+        <a class="btn main" href="/app">进入工作台</a>
+        <a class="btn" href="/investor">查看投资看板</a>
+        <a class="btn" href="/api/version" target="_blank" rel="noopener">版本信息</a>
       </div>
 
-      <div class="proof" id="proofBox">Loading product usage proof...</div>
+      <div class="proof" id="proofBox">正在加载使用数据...</div>
 
-      <section class="grid">
-        <article class="card">
-          <b>Real CN job links</b>
-          <p>Recommendations return real links from CN hiring sources or explicit empty state. No fake demo cards in production path.</p>
-        </article>
-        <article class="card">
-          <b>Mandatory resume output</b>
-          <p>Optimized resume is always visible in workspace output, with no hidden optional dependency.</p>
-        </article>
-        <article class="card">
-          <b>Feedback first iteration</b>
-          <p>We prioritize roadmap decisions based on actual user submissions and conversion signals.</p>
-        </article>
+      <section class="focus">
+        <h2>当前重点</h2>
+        <ul>
+          <li>中国市场真实岗位链接优先，不再展示演示卡片。</li>
+          <li>优化后简历在工作台强制展示，结果一眼可见。</li>
+        </ul>
       </section>
 
       <section class="capture">
-        <h2>Help shape this product</h2>
-        <p>Leave contact for beta onboarding, or send product feedback directly to the growth queue.</p>
+        <h2>留下你的需求</h2>
+        <p>你可以加入内测，或直接提交产品反馈，我们会按真实用户反馈迭代。</p>
 
         <div class="switch">
-          <button class="active" data-pane="lead">Join Beta</button>
-          <button data-pane="feedback">Send Feedback</button>
+          <button class="active" data-pane="lead">加入内测</button>
+          <button data-pane="feedback">提交反馈</button>
         </div>
 
         <div class="pane active" id="pane-lead">
           <div class="row2">
-            <input id="leadName" placeholder="Name (optional)" />
-            <input id="leadEmail" placeholder="Email (required)" />
+            <input id="leadName" placeholder="姓名（选填）" />
+            <input id="leadEmail" placeholder="邮箱（必填）" />
           </div>
           <div class="row2">
-            <input id="leadCompany" placeholder="Company / School" />
+            <input id="leadCompany" placeholder="公司 / 学校（选填）" />
             <select id="leadBudget">
-              <option value="">Budget</option>
-              <option value="<1000">Under 1000 CNY</option>
-              <option value="1000-5000">1000-5000 CNY</option>
-              <option value="5000-20000">5000-20000 CNY</option>
-              <option value="20000+">20000+ CNY</option>
+              <option value="">预算区间（选填）</option>
+              <option value="<1000">1000 元以下</option>
+              <option value="1000-5000">1000-5000 元</option>
+              <option value="5000-20000">5000-20000 元</option>
+              <option value="20000+">20000 元以上</option>
             </select>
           </div>
-          <textarea id="leadNote" placeholder="Tell us your current job-search bottleneck."></textarea>
-          <button class="submit" id="leadSubmit">Submit Contact</button>
+          <textarea id="leadNote" placeholder="你最想先解决的求职问题是什么？"></textarea>
+          <button class="submit" id="leadSubmit">提交联系方式</button>
           <div class="hint" id="leadHint"></div>
         </div>
 
         <div class="pane" id="pane-feedback">
           <div class="row2">
             <select id="feedbackRating">
-              <option value="">Rating (1-5)</option>
-              <option value="5">5 - Excellent</option>
-              <option value="4">4 - Good</option>
-              <option value="3">3 - OK</option>
-              <option value="2">2 - Weak</option>
-              <option value="1">1 - Bad</option>
+              <option value="">评分（1-5）</option>
+              <option value="5">5 - 非常好</option>
+              <option value="4">4 - 比较好</option>
+              <option value="3">3 - 一般</option>
+              <option value="2">2 - 较差</option>
+              <option value="1">1 - 很差</option>
             </select>
             <select id="feedbackCategory">
-              <option value="">Category</option>
-              <option value="ui">UI / UX</option>
-              <option value="job_quality">Job quality</option>
-              <option value="resume">Resume output</option>
-              <option value="performance">Performance</option>
-              <option value="other">Other</option>
+              <option value="">问题类别</option>
+              <option value="ui">界面体验</option>
+              <option value="job_quality">岗位质量</option>
+              <option value="resume">简历优化</option>
+              <option value="performance">性能速度</option>
+              <option value="other">其他</option>
             </select>
           </div>
-          <textarea id="feedbackMessage" placeholder="What should we improve next?"></textarea>
-          <button class="submit" id="feedbackSubmit">Submit Feedback</button>
+          <textarea id="feedbackMessage" placeholder="请写下你最希望我们马上改进的点。"></textarea>
+          <button class="submit" id="feedbackSubmit">提交反馈</button>
           <div class="hint" id="feedbackHint"></div>
         </div>
       </section>
 
-      <p class="note">
-        Design direction: high whitespace ratio, restrained components, and strong hierarchy for content scanning.
-      </p>
+      <p class="note">面向中文求职场景：更大字号、更少干扰、更快行动。</p>
     </main>
   </div>
 
   <script>
-    const title = "Find better work with real market signals.";
-    const sub = "Simple interface, real links, and fast resume iteration for China-focused job search.";
+    const title = "中国求职市场，先给你真实岗位。";
+    const sub = "极简界面 + 大字号 + 真实链接，让你更快投递。";
     const titleNode = document.getElementById("titleText");
     const subNode = document.getElementById("subText");
     const proofBox = document.getElementById("proofBox");
@@ -406,14 +388,14 @@
         const res = await fetch("/api/business/public-proof");
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.error || "proof failed");
-        proofBox.textContent = `Users ${data.leads_total} | Feedback ${data.feedback_total} | Uploads ${data.uploads_total} | Processed ${data.process_runs_total}`;
+        proofBox.textContent = `用户 ${data.leads_total} · 反馈 ${data.feedback_total} · 上传 ${data.uploads_total} · 分析 ${data.process_runs_total}`;
       } catch (_) {
-        proofBox.textContent = "Usage proof unavailable right now.";
+        proofBox.textContent = "使用数据暂不可用。";
       }
     }
 
     document.getElementById("leadSubmit").addEventListener("click", async () => {
-      leadHint.textContent = "Submitting...";
+      leadHint.textContent = "提交中...";
       try {
         await postJson("/api/business/lead", {
           email: document.getElementById("leadEmail").value.trim(),
@@ -421,30 +403,30 @@
           company: document.getElementById("leadCompany").value.trim(),
           budget: document.getElementById("leadBudget").value,
           note: document.getElementById("leadNote").value.trim(),
-          source: "landing_beta",
+          source: "landing_beta_cn",
           use_case: "job_search_assistant",
         });
-        leadHint.textContent = "Saved. We will contact you soon.";
+        leadHint.textContent = "已提交，我们会尽快联系你。";
         loadProof();
       } catch (err) {
-        leadHint.textContent = err.message || "Submit failed";
+        leadHint.textContent = err.message || "提交失败";
       }
     });
 
     document.getElementById("feedbackSubmit").addEventListener("click", async () => {
-      feedbackHint.textContent = "Submitting...";
+      feedbackHint.textContent = "提交中...";
       try {
         await postJson("/api/business/feedback", {
           message: document.getElementById("feedbackMessage").value.trim(),
           rating: document.getElementById("feedbackRating").value,
           category: document.getElementById("feedbackCategory").value,
-          source: "landing_feedback",
+          source: "landing_feedback_cn",
           page: "home",
         });
-        feedbackHint.textContent = "Thanks. Feedback captured.";
+        feedbackHint.textContent = "反馈已收到，感谢。";
         loadProof();
       } catch (err) {
-        feedbackHint.textContent = err.message || "Submit failed";
+        feedbackHint.textContent = err.message || "提交失败";
       }
     });
 

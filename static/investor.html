@@ -3,31 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Job Assistant | Investor</title>
+  <title>AI求职助手 | Investor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #ffffff;
       --text: #131313;
-      --muted: #67676f;
+      --muted: #64646b;
       --line: #e8e8ec;
       --soft: #f7f7f9;
-      --maxw: 940px;
+      --maxw: 920px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "Manrope", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
       color: var(--text);
-      background:
-        radial-gradient(900px 500px at -15% -10%, #f4f4f8 0%, transparent 60%),
-        radial-gradient(900px 500px at 112% -16%, #f7f7fb 0%, transparent 64%),
-        var(--bg);
     }
     .page {
-      width: min(var(--maxw), calc(100% - 26px));
-      margin: 18px auto 34px;
+      width: min(var(--maxw), calc(100% - 24px));
+      margin: 18px auto 32px;
     }
     .top {
       display: flex;
@@ -41,39 +38,36 @@
       display: flex;
       align-items: center;
       gap: 9px;
-      font-size: 13px;
-      font-weight: 700;
+      font-size: 14px;
+      font-weight: 800;
     }
     .dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #111;
-      box-shadow: 0 0 0 6px rgba(17, 17, 17, 0.07);
+      background: #121212;
+      box-shadow: 0 0 0 6px rgba(18, 18, 18, 0.08);
     }
     .nav {
       display: flex;
       gap: 16px;
-      font-size: 12px;
+      font-size: 13px;
     }
-    .nav a {
-      color: var(--muted);
-      text-decoration: none;
-    }
+    .nav a { color: var(--muted); text-decoration: none; }
     .nav a:hover { color: var(--text); }
 
-    .hero { padding: 34px 0 20px; }
+    .hero { padding: 30px 0 18px; }
     .pill {
       display: inline-flex;
       align-items: center;
       gap: 7px;
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 6px 10px;
+      background: #fff;
       color: var(--muted);
+      padding: 6px 11px;
       font: 500 11px/1 "IBM Plex Mono", monospace;
       margin-bottom: 10px;
-      background: #fff;
     }
     .pill::before {
       content: "";
@@ -83,24 +77,25 @@
       background: #121212;
     }
     h1 {
-      font-size: clamp(28px, 5.3vw, 54px);
-      letter-spacing: -1.1px;
-      line-height: 1.06;
-      min-height: 66px;
-      margin-bottom: 7px;
+      font-size: clamp(34px, 7.2vw, 62px);
+      letter-spacing: -1.6px;
+      line-height: 1.04;
+      min-height: 74px;
+      margin-bottom: 8px;
+      max-width: 820px;
     }
     .sub {
       color: var(--muted);
-      font-size: 14px;
-      line-height: 1.76;
-      max-width: 730px;
-      min-height: 46px;
+      font-size: 18px;
+      line-height: 1.72;
+      max-width: 760px;
+      min-height: 58px;
     }
     .cursor {
       display: inline-block;
       width: 8px;
       height: 1em;
-      margin-left: 3px;
+      margin-left: 4px;
       background: #151515;
       vertical-align: -2px;
       animation: blink 1s steps(1, end) infinite;
@@ -109,6 +104,7 @@
       0%, 48% { opacity: 1; }
       49%, 100% { opacity: 0; }
     }
+
     .kpi {
       display: grid;
       gap: 10px;
@@ -119,34 +115,34 @@
       border: 1px solid var(--line);
       border-radius: 14px;
       background: #fff;
-      padding: 12px;
+      padding: 13px;
     }
     .kpi-card span {
       display: block;
+      font-size: 12px;
       color: var(--muted);
-      font-size: 11px;
       margin-bottom: 4px;
     }
     .kpi-card b {
-      font-size: 24px;
+      font-size: 30px;
       letter-spacing: -0.4px;
     }
     .panel {
       border: 1px solid var(--line);
       border-radius: 14px;
       background: #fff;
-      padding: 12px;
+      padding: 13px;
       margin-bottom: 10px;
     }
     .panel h2 {
-      font-size: 13px;
+      font-size: 16px;
       margin-bottom: 8px;
       letter-spacing: -0.1px;
     }
     .grid4 {
       display: grid;
-      gap: 8px;
       grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
     }
     .item {
       border: 1px solid var(--line);
@@ -157,31 +153,33 @@
     .item span {
       display: block;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
       margin-bottom: 2px;
     }
-    .item b { font-size: 14px; }
+    .item b { font-size: 16px; }
     ul { padding-left: 18px; }
     li {
       margin-bottom: 6px;
-      line-height: 1.7;
-      font-size: 13px;
+      font-size: 14px;
+      line-height: 1.74;
     }
     pre {
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--soft);
       color: var(--muted);
-      padding: 9px;
-      font: 400 11px/1.6 "IBM Plex Mono", monospace;
+      padding: 10px;
+      font: 400 12px/1.7 "IBM Plex Mono", monospace;
       max-height: 230px;
       overflow: auto;
       white-space: pre-wrap;
       word-break: break-word;
     }
+
     @media (max-width: 920px) {
-      .hero { padding: 30px 0 18px; }
-      h1 { min-height: 56px; }
+      .hero { padding: 26px 0 16px; }
+      h1 { min-height: 64px; }
+      .sub { font-size: 16px; min-height: 50px; }
       .kpi { grid-template-columns: 1fr 1fr; }
       .grid4 { grid-template-columns: 1fr 1fr; }
     }
@@ -194,61 +192,61 @@
 <body>
   <div class="page">
     <header class="top">
-      <div class="brand"><span class="dot"></span>AI Job Assistant</div>
+      <div class="brand"><span class="dot"></span>AI求职助手</div>
       <nav class="nav">
-        <a href="/">Home</a>
-        <a href="/app">Workspace</a>
+        <a href="/">首页</a>
+        <a href="/app">工作台</a>
         <a href="/api/investor/readiness" target="_blank" rel="noopener">API</a>
       </nav>
     </header>
 
     <section class="hero">
-      <div class="pill">investor / readiness / signal</div>
+      <div class="pill">investor / cn-market / larger-type</div>
       <h1><span id="titleText"></span><span class="cursor"></span></h1>
       <p class="sub" id="subText"></p>
     </section>
 
     <section class="kpi">
-      <article class="kpi-card"><span>Overall Score</span><b id="overall">-</b></article>
-      <article class="kpi-card"><span>Status</span><b id="status">-</b></article>
-      <article class="kpi-card"><span>Provider</span><b id="provider">-</b></article>
-      <article class="kpi-card"><span>Leads Total</span><b id="leadsTotal">-</b></article>
+      <article class="kpi-card"><span>综合评分</span><b id="overall">-</b></article>
+      <article class="kpi-card"><span>阶段状态</span><b id="status">-</b></article>
+      <article class="kpi-card"><span>岗位数据源</span><b id="provider">-</b></article>
+      <article class="kpi-card"><span>累计线索</span><b id="leadsTotal">-</b></article>
     </section>
 
     <section class="panel">
-      <h2>Pillars</h2>
+      <h2>四大支柱</h2>
       <div class="grid4">
-        <div class="item"><span>Product</span><b id="pProduct">-</b></div>
-        <div class="item"><span>Traction</span><b id="pTraction">-</b></div>
-        <div class="item"><span>Reliability</span><b id="pReliability">-</b></div>
-        <div class="item"><span>Go-To-Market</span><b id="pGtm">-</b></div>
+        <div class="item"><span>产品</span><b id="pProduct">-</b></div>
+        <div class="item"><span>增长</span><b id="pTraction">-</b></div>
+        <div class="item"><span>稳定性</span><b id="pReliability">-</b></div>
+        <div class="item"><span>市场化</span><b id="pGtm">-</b></div>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Next 30 Days Targets</h2>
+      <h2>未来 30 天目标</h2>
       <div class="grid4">
-        <div class="item"><span>Uploads</span><b id="tUploads">-</b></div>
-        <div class="item"><span>Process Runs</span><b id="tProcess">-</b></div>
-        <div class="item"><span>Searches</span><b id="tSearches">-</b></div>
-        <div class="item"><span>Applies</span><b id="tApplies">-</b></div>
+        <div class="item"><span>上传量</span><b id="tUploads">-</b></div>
+        <div class="item"><span>分析次数</span><b id="tProcess">-</b></div>
+        <div class="item"><span>搜索次数</span><b id="tSearches">-</b></div>
+        <div class="item"><span>投递次数</span><b id="tApplies">-</b></div>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Narrative</h2>
-      <ul id="narrative"><li>Loading...</li></ul>
+      <h2>叙事摘要</h2>
+      <ul id="narrative"><li>加载中...</li></ul>
     </section>
 
     <section class="panel">
-      <h2>Raw Snapshot</h2>
+      <h2>原始快照</h2>
       <pre id="raw">-</pre>
     </section>
   </div>
 
   <script>
-    const title = "Investor readiness, with live product signals.";
-    const sub = "One clean dashboard for product, traction, reliability, and go-to-market momentum.";
+    const title = "融资就绪度，一页看清。";
+    const sub = "产品、增长、稳定性、市场化四条线，实时查看。";
     const titleNode = document.getElementById("titleText");
     const subNode = document.getElementById("subText");
 

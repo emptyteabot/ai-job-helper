@@ -34,3 +34,7 @@ jobs:
           import web_app
           print("import ok", bool(web_app.app))
           PY
+
+      - name: Run tests
+        run: |
+          pytest -q

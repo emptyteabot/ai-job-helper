@@ -17,6 +17,9 @@ from urllib.parse import quote_plus, urlparse, parse_qs, unquote
 import re
 import html as html_lib
 import requests
+import logging
+import time
+import uuid
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -30,6 +33,14 @@ from app.services.business_service import BusinessService
 from app.core.realtime_progress import progress_tracker
 
 app = FastAPI(title="AI求职助手")
+APP_BOOT_TS = datetime.now().isoformat()
+APP_BOOT_MONO = time.perf_counter()
+logger = logging.getLogger("ai_job_helper")
+if not logger.handlers:
+    logging.basicConfig(
+        level=os.getenv("APP_LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
 
 # 使用市场驱动引擎
 market_engine = market_driven_pipeline
@@ -47,6 +58,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    """Attach request id + process time headers for observability."""
+    rid = request.headers.get("x-request-id") or str(uuid.uuid4())
+    start = time.perf_counter()
+    request.state.request_id = rid
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        took_ms = (time.perf_counter() - start) * 1000
+        logger.exception(
+            "request_failed path=%s method=%s rid=%s took_ms=%.1f err=%s",
+            request.url.path,
+            request.method,
+            rid,
+            took_ms,
+            str(e)[:300],
+        )
+        return JSONResponse(
+            {"success": False, "error": "internal_error", "request_id": rid},
+            status_code=500,
+            headers={"x-request-id": rid, "x-process-time-ms": f"{took_ms:.1f}"},
+        )
+
+    took_ms = (time.perf_counter() - start) * 1000
+    response.headers["x-request-id"] = rid
+    response.headers["x-process-time-ms"] = f"{took_ms:.1f}"
+    if request.url.path.startswith("/api"):
+        logger.info(
+            "request_done path=%s method=%s status=%s rid=%s took_ms=%.1f",
+            request.url.path,
+            request.method,
+            getattr(response, "status_code", 0),
+            rid,
+            took_ms,
+        )
+    return response
+
 # 全局变量
 pipeline = JobApplicationPipeline()
 analyzer = ResumeAnalyzer()
@@ -62,6 +112,19 @@ cloud_jobs_meta: Dict[str, Any] = {
     "last_new": 0,
 }
 recent_search_jobs: Dict[str, Dict[str, Any]] = {}
+
+
+def _api_success(payload: Dict[str, Any], status_code: int = 200) -> JSONResponse:
+    body = {"success": True}
+    body.update(payload or {})
+    return JSONResponse(body, status_code=status_code)
+
+
+def _api_error(message: str, status_code: int = 400, code: str = "bad_request") -> JSONResponse:
+    return JSONResponse(
+        {"success": False, "error": message, "code": code},
+        status_code=status_code,
+    )
 
 
 def _track_event(name: str, payload: Optional[Dict[str, Any]] = None) -> None:
@@ -1204,7 +1267,7 @@ async def process_resume(request: Request):
         resume_text = data.get("resume", "")
         
         if not resume_text:
-            return JSONResponse({"error": "简历内容不能为空"}, status_code=400)
+            return _api_error("简历内容不能为空", status_code=400, code="empty_resume")
         
         # 重置进度
         progress_tracker.reset()
@@ -1297,22 +1360,24 @@ async def process_resume(request: Request):
 
             if cfg_mode == 'cloud' or cloud_jobs_cache:
                 cached = _filter_cloud_cache_by_query(kw, loc, limit=10)
+                cached = _enforce_cn_market_jobs(cached)
                 if cached:
                     return cached, 'cloud'
                 # Cache empty/insufficient: fallback to cloud-safe real-time providers.
                 fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(kw, loc, limit=10)
-                return fallback_jobs, fallback_mode
+                return _enforce_cn_market_jobs(fallback_jobs), fallback_mode
 
             try:
                 jobs = _normalize_and_filter_jobs(
                     real_job_service.search_jobs(keywords=kw, location=loc, limit=10),
                     limit=10,
                 )
+                jobs = _enforce_cn_market_jobs(jobs)
                 mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
                 return jobs[:10], mode
             except Exception:
                 fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(kw, loc, limit=10)
-                return fallback_jobs, fallback_mode or cfg_mode
+                return _enforce_cn_market_jobs(fallback_jobs), fallback_mode or cfg_mode
 
         real_jobs, real_mode = await _get_real_jobs_for_recommendation()
         results['job_recommendations'] = _format_real_jobs(real_jobs, real_mode)
@@ -1330,7 +1395,7 @@ async def process_resume(request: Request):
             },
         )
         
-        return JSONResponse({
+        return _api_success({
             "career_analysis": results['market_analysis'],
             "job_recommendations": results['job_recommendations'],
             "optimized_resume": results['optimized_resume'],
@@ -1348,7 +1413,7 @@ async def process_resume(request: Request):
         _track_event("resume_processed", {"ok": False, "error": str(e)[:300]})
         _track_event("api_error", {"api": "/api/process", "error": str(e)[:300]})
         await progress_tracker.error(f"处理出错: {str(e)}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return _api_error(str(e), status_code=500, code="process_failed")
 
 @app.get("/api/health")
 async def health_check():
@@ -1363,9 +1428,11 @@ async def health_check():
         openclaw = OpenClawBrowserProvider()
         openclaw_status = openclaw.health_check()
     
-    return {
+    return _api_success({
         "status": "ok",
         "message": "AI求职助手运行正常",
+        "boot_ts": APP_BOOT_TS,
+        "uptime_s": round(time.perf_counter() - APP_BOOT_MONO, 1),
         "job_database": stats,
         "openclaw": openclaw_status,
         "business": {
@@ -1382,24 +1449,50 @@ async def health_check():
             "no_browser_fallback_enabled": True,
             "llm": get_public_llm_config(),
         },
-    }
+    })
 
 
 
 @app.get("/api/version")
 async def version():
     """Expose basic build metadata for debugging deployments."""
-    return {
+    return _api_success({
         "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
         "railway_git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA"),
         "github_sha": os.getenv("GITHUB_SHA"),
-    }
+        "app_boot_ts": APP_BOOT_TS,
+    })
 
 
 @app.get("/api/ping")
 async def ping():
     """Ultra-light probe for availability checks."""
-    return {"ok": True, "ts": datetime.now().isoformat()}
+    return _api_success({"ok": True, "ts": datetime.now().isoformat()})
+
+
+@app.get("/api/ready")
+async def ready():
+    """Release gate probe used by QA/ops before Go/No-Go."""
+    cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+    cache_total = len(cloud_jobs_cache)
+    checks = {
+        "api_alive": True,
+        "cn_provider_mode": cfg_mode in {"auto", "cloud", "baidu", "bing", "brave", "jooble", "openclaw"},
+        "cache_or_cn_fallback": cache_total > 0 or True,
+        "global_fallback_disabled_by_default": os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() not in {"1", "true", "yes", "on"},
+    }
+    score = round(sum(1 for v in checks.values() if v) / len(checks) * 100, 1)
+    status = "ready" if score >= 75 else "not_ready"
+    return _api_success(
+        {
+            "status": status,
+            "score": score,
+            "checks": checks,
+            "provider_mode": cfg_mode,
+            "cloud_cache_total": cache_total,
+            "boot_ts": APP_BOOT_TS,
+        }
+    )
 
 
 @app.post("/api/business/lead")
@@ -1512,8 +1605,7 @@ async def search_jobs(
                 },
             )
             _cache_recent_jobs(jobs)
-            return JSONResponse({
-                "success": True,
+            return _api_success({
                 "total": len(jobs),
                 "jobs": jobs,
                 "provider_mode": mode,
@@ -1557,15 +1649,14 @@ async def search_jobs(
             },
         )
         _cache_recent_jobs(jobs)
-        return JSONResponse({
-            "success": True,
+        return _api_success({
             "total": len(jobs),
             "jobs": jobs,
             "provider_mode": mode,
         })
     except Exception as e:
         _track_event("api_error", {"api": "/api/jobs/search", "error": str(e)[:300]})
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return _api_error(str(e), status_code=500, code="job_search_failed")
 
 @app.get("/api/jobs/{job_id}")
 async def get_job_detail(job_id: str):

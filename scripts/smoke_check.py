@@ -1,18 +1,24 @@
 import json
 import os
 import sys
+import time
 from typing import Dict
 
 import requests
 
 
-def check(url: str, path: str, timeout: int = 20) -> Dict:
+def check(url: str, path: str, timeout: int = 20, retries: int = 2) -> Dict:
     full = url.rstrip("/") + path
-    try:
-        r = requests.get(full, timeout=timeout)
-        return {"path": path, "status": r.status_code, "ok": r.ok, "body": r.text[:240]}
-    except Exception as e:
-        return {"path": path, "status": 0, "ok": False, "error": str(e)[:240]}
+    last_err = ""
+    for i in range(max(1, retries)):
+        try:
+            r = requests.get(full, timeout=timeout)
+            return {"path": path, "status": r.status_code, "ok": r.ok, "body": r.text[:240]}
+        except Exception as e:
+            last_err = str(e)[:240]
+            if i < retries - 1:
+                time.sleep(0.8)
+    return {"path": path, "status": 0, "ok": False, "error": last_err}
 
 
 def main() -> int:

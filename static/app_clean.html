@@ -8,52 +8,87 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#fff; --text:#101010; --muted:#676767; --line:#ececec; --soft:#fafafa; --black:#111; --ok:#1f7d4a; --err:#b13a3a; }
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:"IBM Plex Sans",system-ui,sans-serif; background:var(--bg); color:var(--text); }
-    .wrap { width:min(920px,calc(100% - 28px)); margin:20px auto 34px; }
-    .top { border:1px solid var(--line); border-radius:999px; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; }
-    .brand { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; }
-    .dot { width:8px; height:8px; border-radius:50%; background:#111; box-shadow:0 0 0 5px rgba(17,17,17,.08); }
-    .nav a { text-decoration:none; color:var(--muted); border:1px solid transparent; border-radius:999px; padding:6px 10px; font-size:12px; margin-left:6px; }
-    .nav a:hover { border-color:var(--line); color:var(--text); }
-    .hero { padding:18px 0 30px; }
-    .mono { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:999px; padding:6px 10px; font:500 11px/1 "IBM Plex Mono",monospace; color:var(--muted); margin-bottom:10px; }
-    .mono:before { content:""; width:5px; height:5px; border-radius:50%; background:#111; }
-    h1 { font-size:clamp(28px,6vw,48px); line-height:1.06; letter-spacing:-1px; margin-bottom:10px; min-height:56px; }
-    .cursor { display:inline-block; width:8px; height:1em; background:#111; margin-left:3px; vertical-align:-2px; animation:blink 1s steps(1,end) infinite; }
+    :root { --bg:#fff; --text:#101010; --muted:#6a6a6a; --line:#ececec; --soft:#fafafa; --black:#111; --ok:#1f7d4a; --err:#b13a3a; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "IBM Plex Sans", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { width: min(1080px, calc(100% - 32px)); margin: 18px auto 32px; }
+    .top {
+      border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px;
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #111; box-shadow: 0 0 0 5px rgba(17,17,17,.08); }
+    .nav a {
+      text-decoration: none; color: var(--muted); border: 1px solid transparent; border-radius: 999px;
+      padding: 6px 10px; font-size: 12px; margin-left: 6px;
+    }
+    .nav a:hover { border-color: var(--line); color: var(--text); }
+    .hero { margin-bottom: 16px; padding: 6px 0 16px; }
+    .mono {
+      display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px;
+      padding: 6px 10px; font: 500 11px/1 "IBM Plex Mono", monospace; color: var(--muted); margin-bottom: 10px;
+    }
+    .mono:before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #111; }
+    h1 { font-size: clamp(28px, 6vw, 56px); line-height: 1.04; letter-spacing: -1.1px; margin-bottom: 8px; min-height: 62px; }
+    .cursor { display: inline-block; width: 8px; height: 1em; background: #111; margin-left: 3px; vertical-align: -2px; animation: blink 1s steps(1,end) infinite; }
     @keyframes blink { 0%,48%{opacity:1;}49%,100%{opacity:0;} }
-    .hero p { color:var(--muted); font-size:15px; line-height:1.75; }
-    .panel { border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:10px; }
-    .head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; gap:10px; }
-    .head h2 { font-size:15px; font-weight:600; }
-    .meta { color:var(--muted); font-size:12px; display:flex; gap:8px; flex-wrap:wrap; }
-    .upload { display:block; border:1px dashed #cfcfcf; border-radius:12px; padding:12px; text-align:center; background:var(--soft); margin-bottom:10px; cursor:pointer; }
-    .upload.drag { border-color:#666; background:#f4f4f4; }
-    .upload b { display:block; font-size:13px; margin-bottom:3px; }
-    .upload span { color:var(--muted); font-size:12px; }
-    .upload input { display:none; }
-    textarea { width:100%; min-height:230px; border:1px solid var(--line); border-radius:12px; padding:12px; font-size:13px; line-height:1.72; resize:vertical; font-family:inherit; margin-bottom:10px; }
-    .actions { display:flex; flex-wrap:wrap; gap:8px; }
-    button { border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--text); padding:10px 12px; font-size:13px; font-weight:600; cursor:pointer; }
-    button:disabled { opacity:.6; cursor:not-allowed; }
-    .main-btn { background:#111; border-color:#111; color:#fff; }
-    .status { margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:9px 10px; display:flex; justify-content:space-between; color:var(--muted); font-size:12px; background:var(--soft); }
-    .flag-ok { color:var(--ok); }
-    .flag-err { color:var(--err); }
-    .steps { display:none; }
-    .jobs-meta { color:var(--muted); font-size:12px; margin-bottom:8px; }
-    .job-cards { display:grid; grid-template-columns:1fr; gap:8px; }
-    .job-card { border:1px solid var(--line); border-radius:10px; padding:10px; background:var(--soft); }
-    .job-card b { display:block; font-size:13px; margin-bottom:4px; line-height:1.45; }
-    .job-card p { color:var(--muted); font-size:12px; line-height:1.6; margin-bottom:5px; }
-    .job-card a { color:var(--text); text-decoration:underline; font-size:12px; word-break:break-all; }
-    .job-empty { border:1px dashed var(--line); border-radius:10px; padding:10px; color:var(--muted); font-size:12px; background:var(--soft); }
-    details { border:1px solid var(--line); border-radius:10px; margin-bottom:8px; overflow:hidden; }
-    summary { list-style:none; cursor:pointer; padding:9px 11px; font-size:13px; font-weight:600; background:#fcfcfc; }
-    summary::-webkit-details-marker { display:none; }
-    pre { padding:11px; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.72; min-height:90px; max-height:320px; overflow:auto; font-family:inherit; }
-    @media (max-width:640px) { .wrap { width:min(920px,calc(100% - 20px)); } .hero p { font-size:14px; } }
+    .hero p { color: var(--muted); font-size: 15px; line-height: 1.72; max-width: 760px; }
+
+    .top-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; margin-bottom: 10px; }
+    .panel { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 14px; }
+    .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+    .head h2 { font-size: 14px; font-weight: 600; }
+    .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .upload {
+      display: block; border: 1px dashed #cdcdcd; border-radius: 12px; padding: 11px;
+      text-align: center; background: var(--soft); margin-bottom: 8px; cursor: pointer;
+    }
+    .upload.drag { border-color: #666; background: #f2f2f2; }
+    .upload b { display: block; font-size: 13px; margin-bottom: 2px; }
+    .upload span { color: var(--muted); font-size: 12px; }
+    .upload input { display: none; }
+    textarea {
+      width: 100%; min-height: 190px; border: 1px solid var(--line); border-radius: 12px; padding: 11px;
+      font: 400 13px/1.68 "IBM Plex Sans", sans-serif; resize: vertical; margin-bottom: 8px;
+    }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button {
+      border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--text);
+      padding: 9px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .main-btn { background: var(--black); border-color: var(--black); color: #fff; }
+    .status {
+      margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft);
+      padding: 8px 10px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px;
+    }
+    .flag-ok { color: var(--ok); }
+    .flag-err { color: var(--err); }
+    .steps { display: none; }
+
+    .jobs-meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+    .job-cards { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 365px; overflow: auto; }
+    .job-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--soft); }
+    .job-card b { display: block; font-size: 13px; margin-bottom: 4px; line-height: 1.45; }
+    .job-card p { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 5px; }
+    .job-card a { color: var(--text); text-decoration: underline; font-size: 12px; word-break: break-all; }
+    .job-empty { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; color: var(--muted); font-size: 12px; background: var(--soft); }
+
+    .result-shell { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    summary {
+      list-style: none; cursor: pointer; padding: 10px 12px; font-size: 13px; font-weight: 600;
+      background: #fcfcfc; border-bottom: 1px solid var(--line);
+    }
+    summary::-webkit-details-marker { display: none; }
+    .result-body { padding: 10px; display: grid; gap: 8px; }
+    .result-item { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .result-item h3 { font-size: 12px; font-weight: 600; padding: 8px 10px; background: #fdfdfd; border-bottom: 1px solid var(--line); }
+    pre {
+      padding: 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px;
+      line-height: 1.7; max-height: 280px; overflow: auto; font-family: inherit;
+    }
+
+    @media (max-width: 980px) { .top-grid { grid-template-columns: 1fr; } .wrap { width: min(1080px, calc(100% - 20px)); } }
   </style>
 </head>
 <body>
@@ -62,68 +97,75 @@
       <div class="brand"><span class="dot"></span>AI Job Assistant</div>
       <nav class="nav">
         <a href="/">Home</a>
-        <a href="/api/health" target="_blank" rel="noopener">Health</a>
+        <a href="/api/ready" target="_blank" rel="noopener">Ready</a>
       </nav>
     </header>
 
     <section class="hero">
-      <div class="mono">openai-style / cn-market only</div>
+      <div class="mono">minimal / cn-market only / one-flow</div>
       <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
       <p id="typeSub"></p>
     </section>
 
-    <section class="panel">
-      <div class="head">
-        <h2>简历输入</h2>
-        <div class="meta">
-          <span id="fileMeta">No file uploaded</span>
-          <span id="providerMeta">Provider: -</span>
+    <section class="top-grid">
+      <section class="panel">
+        <div class="head">
+          <h2>简历输入</h2>
+          <div class="meta">
+            <span id="fileMeta">No file uploaded</span>
+            <span id="providerMeta">Provider: -</span>
+          </div>
         </div>
-      </div>
-      <label class="upload" id="dropZone">
-        <b>上传简历</b>
-        <span>PDF / DOCX / TXT / 图片</span>
-        <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
-      </label>
-      <textarea id="resumeText" placeholder="粘贴简历正文，或上传文件自动解析..."></textarea>
-      <div class="actions">
-        <button class="main-btn" id="runBtn">开始分析</button>
-        <button id="sampleBtn">填充示例</button>
-        <button id="resetBtn">重置</button>
-        <button id="downloadBtn">下载结果</button>
-      </div>
-      <div class="status">
-        <span id="statusText">Ready</span>
-        <span id="statusFlag">IDLE</span>
-      </div>
-      <div class="steps">
-        <div class="step" data-step="1">1</div>
-        <div class="step" data-step="2">2</div>
-        <div class="step" data-step="3">3</div>
-        <div class="step" data-step="4">4</div>
-      </div>
+        <label class="upload" id="dropZone">
+          <b>上传简历</b>
+          <span>PDF / DOCX / TXT / 图片</span>
+          <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
+        </label>
+        <textarea id="resumeText" placeholder="粘贴简历正文，或上传文件自动解析..."></textarea>
+        <div class="actions">
+          <button class="main-btn" id="runBtn">开始分析</button>
+          <button id="sampleBtn">填充示例</button>
+          <button id="resetBtn">重置</button>
+          <button id="downloadBtn">下载结果</button>
+        </div>
+        <div class="status">
+          <span id="statusText">Ready</span>
+          <span id="statusFlag">IDLE</span>
+        </div>
+        <div class="steps">
+          <div class="step" data-step="1">1</div>
+          <div class="step" data-step="2">2</div>
+          <div class="step" data-step="3">3</div>
+          <div class="step" data-step="4">4</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="head"><h2>推荐岗位（优先中国真实链接）</h2></div>
+        <div class="jobs-meta" id="jobsMeta">分析后展示 Boss / 猎聘 / 智联 / 51job / 拉勾 / 企业API 数据。</div>
+        <div class="job-cards" id="jobCards">
+          <div class="job-empty">暂无岗位，请点击“开始分析”。</div>
+        </div>
+      </section>
     </section>
 
-    <section class="panel">
-      <div class="head"><h2>推荐岗位（中国市场真实链接）</h2></div>
-      <div class="jobs-meta" id="jobsMeta">分析完成后展示 Boss / 猎聘 / 智联 / 51job / 拉勾 链接。</div>
-      <div class="job-cards" id="jobCards">
-        <div class="job-empty">暂无实时岗位，请先点击“开始分析”。</div>
-      </div>
-    </section>
-
-    <section class="panel">
-      <details open><summary>职业分析</summary><pre id="careerAnalysis">-</pre></details>
-      <details><summary>推荐岗位文本</summary><pre id="jobRecommendations">-</pre></details>
-      <details><summary>优化后的简历</summary><pre id="optimizedResume">-</pre></details>
-      <details><summary>面试准备</summary><pre id="interviewPrep">-</pre></details>
-      <details><summary>模拟面试与薪资</summary><pre id="mockInterview">-</pre></details>
+    <section class="result-shell">
+      <details>
+        <summary>查看完整分析（可选）</summary>
+        <div class="result-body">
+          <section class="result-item"><h3>职业分析</h3><pre id="careerAnalysis">-</pre></section>
+          <section class="result-item"><h3>推荐岗位文本</h3><pre id="jobRecommendations">-</pre></section>
+          <section class="result-item"><h3>优化后的简历</h3><pre id="optimizedResume">-</pre></section>
+          <section class="result-item"><h3>面试准备</h3><pre id="interviewPrep">-</pre></section>
+          <section class="result-item"><h3>模拟面试与薪资</h3><pre id="mockInterview">-</pre></section>
+        </div>
+      </details>
     </section>
   </div>
 
   <script>
-    const typeTitle = "China market first. Real links only.";
-    const typeSub = "默认只展示来自中国招聘网站的可点击岗位，不再展示海外示例岗位。";
+    const typeTitle = "One page. Input first. Jobs first.";
+    const typeSub = "先拿到可投递岗位，再看深度分析。";
     const titleNode = document.getElementById("typeTitle");
     const subNode = document.getElementById("typeSub");
     function typewriter(node, text, speed, done) {
@@ -182,7 +224,7 @@
       const rows = (jobs || []).filter((j) => (j.link || j.apply_url || "").startsWith("http"));
       if (!rows.length) {
         jobsMeta.textContent = `Provider: ${provider || "-"}. No actionable links returned.`;
-        jobCards.innerHTML = '<div class="job-empty">未返回中国站点岗位链接，请稍后重试。</div>';
+        jobCards.innerHTML = '<div class="job-empty">未返回可点击岗位，请稍后重试。</div>';
         return;
       }
       jobsMeta.textContent = `Provider: ${provider || "-"} | ${rows.length} jobs`;
@@ -264,8 +306,8 @@
       [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => { el.textContent = "-"; });
       fileMeta.textContent = "No file uploaded";
       providerMeta.textContent = "Provider: -";
-      jobsMeta.textContent = "分析完成后展示 Boss / 猎聘 / 智联 / 51job / 拉勾 链接。";
-      jobCards.innerHTML = '<div class="job-empty">暂无实时岗位，请先点击“开始分析”。</div>';
+      jobsMeta.textContent = "分析后展示可点击岗位链接。";
+      jobCards.innerHTML = '<div class="job-empty">暂无岗位，请先点击“开始分析”。</div>';
       setStep(0);
       setStatus("Reset", "ok");
     });
@@ -283,7 +325,7 @@
           body: JSON.stringify({ resume: text }),
         });
         const data = await parseJsonSafe(res);
-        if (!res.ok) throw new Error(data.error || "analysis failed");
+        if (!res.ok || !data.success) throw new Error(data.error || "analysis failed");
         setStep(4);
         careerAnalysis.textContent = data.career_analysis || "-";
         jobRecommendations.textContent = data.job_recommendations || "-";

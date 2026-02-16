@@ -260,6 +260,11 @@ def _search_jobs_without_browser(
     else:
         first_error = None
 
+    enterprise_jobs = _search_jobs_enterprise_api(keywords, location, limit=limit)
+    enterprise_jobs = _enforce_cn_market_jobs(enterprise_jobs)
+    if enterprise_jobs:
+        return enterprise_jobs, "enterprise_api", None
+
     # CN market fallback: no-browser HTML search on Chinese job sites.
     bing_html_jobs = _search_jobs_bing_html(keywords, location, limit=limit)
     bing_html_jobs = _enforce_cn_market_jobs(bing_html_jobs)
@@ -298,6 +303,103 @@ def _platform_from_link(link: str) -> str:
     if "lagou.com" in host:
         return "拉勾"
     return host or "web"
+
+
+def _first_non_empty(row: Dict[str, Any], keys: List[str]) -> str:
+    for k in keys:
+        v = row.get(k)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            return s
+    return ""
+
+
+def _search_jobs_enterprise_api(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Enterprise-grade provider hook (config-driven).
+    Intended for stable cloud use when search engines hit anti-bot limits.
+    """
+    url = os.getenv("ENTERPRISE_JOB_API_URL", "").strip()
+    if not url:
+        return []
+
+    method = os.getenv("ENTERPRISE_JOB_API_METHOD", "GET").strip().upper()
+    timeout_s = int(os.getenv("ENTERPRISE_JOB_API_TIMEOUT_S", "15") or "15")
+    auth_header = os.getenv("ENTERPRISE_JOB_API_AUTH_HEADER", "Authorization").strip() or "Authorization"
+    auth_scheme = os.getenv("ENTERPRISE_JOB_API_AUTH_SCHEME", "Bearer").strip()
+    api_key = os.getenv("ENTERPRISE_JOB_API_KEY", "").strip()
+
+    kw = [k.strip() for k in (keywords or []) if k and k.strip()]
+    query = " ".join(kw[:5]) or "Python"
+    payload = {
+        "query": query,
+        "keywords": kw,
+        "location": (location or "").strip(),
+        "limit": max(1, min(int(limit or 10), 50)),
+    }
+    headers = {"User-Agent": "ai-job-helper/1.0"}
+    if api_key:
+        headers[auth_header] = f"{auth_scheme} {api_key}".strip() if auth_scheme else api_key
+
+    try:
+        if method == "POST":
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout_s)
+        else:
+            resp = requests.get(url, params=payload, headers=headers, timeout=timeout_s)
+        if resp.status_code >= 400:
+            return []
+        data = resp.json() if resp.content else {}
+    except Exception:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    if isinstance(data, list):
+        rows = [x for x in data if isinstance(x, dict)]
+    elif isinstance(data, dict):
+        for k in ("jobs", "results", "items", "list", "data"):
+            v = data.get(k)
+            if isinstance(v, list):
+                rows = [x for x in v if isinstance(x, dict)]
+                break
+            if isinstance(v, dict):
+                for kk in ("jobs", "results", "items", "list"):
+                    vv = v.get(kk)
+                    if isinstance(vv, list):
+                        rows = [x for x in vv if isinstance(x, dict)]
+                        break
+                if rows:
+                    break
+
+    out: List[Dict[str, Any]] = []
+    for i, row in enumerate(rows, 1):
+        link = _first_non_empty(row, ["link", "url", "job_url", "detail_url", "apply_url", "jobLink", "jobUrl"])
+        if not link:
+            continue
+        title = _first_non_empty(row, ["title", "job_title", "name", "position", "jobName"]) or "招聘岗位"
+        company = _first_non_empty(row, ["company", "company_name", "employer", "brandName"])
+        loc = _first_non_empty(row, ["location", "city", "region", "work_city"]) or (location or "")
+        salary = _first_non_empty(row, ["salary", "salary_range", "pay", "salaryRange"])
+        platform = _first_non_empty(row, ["platform", "source", "site", "origin"]) or _platform_from_link(link)
+        out.append(
+            {
+                "id": f"enterprise_{i}_{abs(hash(link.lower()))}",
+                "title": title,
+                "company": company,
+                "location": loc,
+                "salary": salary,
+                "platform": platform,
+                "link": link,
+                "provider": "enterprise_api",
+                "updated": _first_non_empty(row, ["updated", "updated_at", "publish_time", "published_at"]),
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
 
 
 def _normalize_ddg_redirect(href: str) -> str:
@@ -1324,6 +1426,8 @@ async def process_resume(request: Request):
                 heading = '【推荐岗位】（来自 Jooble API）'
             elif mode == 'cn_portal':
                 heading = '【推荐岗位】（中国招聘站点搜索入口，适用于风控场景）'
+            elif mode == 'enterprise_api':
+                heading = '【推荐岗位】（企业级中国招聘API实时数据）'
 
             lines = [heading, '']
             for i, job in enumerate(jobs, 1):
@@ -1447,6 +1551,7 @@ async def health_check():
             "cloud_cache_total": len(cloud_jobs_cache),
             "cloud_last_push_at": cloud_jobs_meta.get("last_push_at"),
             "no_browser_fallback_enabled": True,
+            "enterprise_job_api_configured": bool(os.getenv("ENTERPRISE_JOB_API_URL", "").strip()),
             "llm": get_public_llm_config(),
         },
     })
@@ -1477,9 +1582,10 @@ async def ready():
     cache_total = len(cloud_jobs_cache)
     checks = {
         "api_alive": True,
-        "cn_provider_mode": cfg_mode in {"auto", "cloud", "baidu", "bing", "brave", "jooble", "openclaw"},
+        "cn_provider_mode": cfg_mode in {"auto", "cloud", "baidu", "bing", "brave", "jooble", "openclaw", "enterprise_api"},
         "cache_or_cn_fallback": cache_total > 0 or True,
         "global_fallback_disabled_by_default": os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() not in {"1", "true", "yes", "on"},
+        "enterprise_api_configured": bool(os.getenv("ENTERPRISE_JOB_API_URL", "").strip()),
     }
     score = round(sum(1 for v in checks.values() if v) / len(checks) * 100, 1)
     status = "ready" if score >= 75 else "not_ready"

@@ -135,6 +135,7 @@ def _build_investor_readiness_snapshot() -> Dict[str, Any]:
     metrics = business_service.metrics()
     funnel = metrics.get("funnel", {})
     leads = metrics.get("leads", {})
+    feedback = metrics.get("feedback", {})
     stability = metrics.get("stability", {})
 
     cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
@@ -181,6 +182,7 @@ def _build_investor_readiness_snapshot() -> Dict[str, Any]:
     gtm_score = 0.0
     gtm_score += min(45.0, int(leads.get("total", 0) or 0) * 12.0)
     gtm_score += min(25.0, int(leads.get("last_7d", 0) or 0) * 8.0)
+    gtm_score += min(10.0, int(feedback.get("last_7d", 0) or 0) * 2.5)
     gtm_score += min(15.0, search_to_apply_pct * 0.8)
     gtm_score += 10.0 if searches > 0 else 0.0
     gtm_score += 5.0 if applies > 0 else 0.0
@@ -210,6 +212,7 @@ def _build_investor_readiness_snapshot() -> Dict[str, Any]:
             "enterprise_api_configured": enterprise_on,
             "global_fallback_enabled": global_fallback_on,
             "cloud_cache_total": len(cloud_jobs_cache),
+            "feedback_total": int(feedback.get("total", 0) or 0),
         },
         "metrics": metrics,
         "next_30d_targets": {
@@ -1732,6 +1735,62 @@ async def capture_business_lead(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/api/business/feedback")
+async def capture_user_feedback(request: Request):
+    """Capture user feedback from product and landing pages."""
+    try:
+        data = await request.json()
+        message = (data.get("message") or "").strip()
+        if len(message) < 5:
+            return JSONResponse({"error": "反馈内容太短，请至少输入5个字符"}, status_code=400)
+        rating_raw = data.get("rating")
+        rating = int(rating_raw) if str(rating_raw).strip() else None
+        payload = business_service.add_feedback(
+            message=message,
+            rating=rating,
+            category=(data.get("category") or "").strip(),
+            email=(data.get("email") or "").strip(),
+            source=(data.get("source") or "product").strip(),
+            page=(data.get("page") or "").strip(),
+        )
+        return JSONResponse({"success": True, "data": payload})
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/business/feedback", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/feedback/summary")
+async def feedback_summary(request: Request, days: int = 7, limit: int = 20):
+    """Feedback summary for ops dashboards and growth automation."""
+    token = os.getenv("ADMIN_METRICS_TOKEN", "").strip()
+    supplied = request.headers.get("x-admin-token", "").strip()
+    if token and supplied != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        return JSONResponse({"success": True, "data": business_service.feedback_summary(days=days, limit=limit)})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/public-proof")
+async def business_public_proof():
+    """Public-safe proof counters used on landing page."""
+    try:
+        m = business_service.metrics()
+        return _api_success(
+            {
+                "leads_total": int(m.get("leads", {}).get("total", 0) or 0),
+                "feedback_total": int(m.get("feedback", {}).get("total", 0) or 0),
+                "uploads_total": int(m.get("funnel", {}).get("uploads", 0) or 0),
+                "process_runs_total": int(m.get("funnel", {}).get("process_runs", 0) or 0),
+            }
+        )
+    except Exception as e:
+        return _api_error(str(e), status_code=500, code="business_public_proof_failed")
+
+
 @app.get("/api/business/metrics")
 async def business_metrics(request: Request):
     """Operational funnel metrics for fundraising / monetization tracking."""
@@ -1756,8 +1815,10 @@ async def business_readiness(request: Request):
         m = business_service.metrics()
         funnel = m.get("funnel", {})
         leads = m.get("leads", {})
+        feedback = m.get("feedback", {})
         checks = {
             "lead_capture_ready": leads.get("total", 0) >= 1,
+            "feedback_loop_ready": feedback.get("last_7d", 0) >= 1,
             "activation_flow_ready": funnel.get("upload_to_process_pct", 0) > 0,
             "job_match_flow_ready": funnel.get("process_to_search_pct", 0) > 0,
             "monetization_signal_ready": funnel.get("search_to_apply_pct", 0) > 0,
@@ -1806,7 +1867,8 @@ async def investor_summary(request: Request):
             f"Current financing readiness status: {snap.get('status')} (score {snap.get('overall_score')}).",
             f"Product pillar score: {p.get('product')}, reliability: {p.get('reliability')}.",
             f"Traction pillar score: {p.get('traction')}, GTM pillar score: {p.get('go_to_market')}.",
-            "Next 30 days focus: increase uploads, process runs, and qualified leads while keeping CN-real job links stable.",
+            f"Feedback captured so far: {(snap.get('metrics') or {}).get('feedback', {}).get('total', 0)}.",
+            "Next 30 days focus: increase uploads, process runs, qualified leads, and actionable user feedback while keeping CN-real job links stable.",
         ]
         return _api_success(
             {

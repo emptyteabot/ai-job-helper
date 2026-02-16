@@ -51,8 +51,23 @@ class BusinessService:
                     )
                     """
                 )
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS feedback (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        rating INTEGER,
+                        category TEXT,
+                        message TEXT NOT NULL,
+                        email TEXT,
+                        source TEXT,
+                        page TEXT,
+                        created_at TEXT NOT NULL
+                    )
+                    """
+                )
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_events_name_time ON events(event_name, created_at)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_events_time ON events(created_at)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_feedback_time ON feedback(created_at)")
                 conn.commit()
             finally:
                 conn.close()
@@ -99,6 +114,85 @@ class BusinessService:
             finally:
                 conn.close()
 
+    def add_feedback(
+        self,
+        message: str,
+        rating: Optional[int] = None,
+        category: str = "",
+        email: str = "",
+        source: str = "product",
+        page: str = "",
+    ) -> Dict[str, Any]:
+        msg = (message or "").strip()
+        if not msg:
+            raise ValueError("feedback message cannot be empty")
+        rate = None
+        if isinstance(rating, int):
+            rate = max(1, min(5, int(rating)))
+
+        now = datetime.now(UTC).isoformat()
+        with self._lock:
+            conn = self._conn()
+            try:
+                cur = conn.execute(
+                    """
+                    INSERT INTO feedback(rating, category, message, email, source, page, created_at)
+                    VALUES(?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        rate,
+                        (category or "").strip(),
+                        msg,
+                        (email or "").strip().lower(),
+                        (source or "").strip(),
+                        (page or "").strip(),
+                        now,
+                    ),
+                )
+                conn.commit()
+                fid = cur.lastrowid
+            finally:
+                conn.close()
+
+        self.track_event(
+            "user_feedback",
+            {"feedback_id": fid, "rating": rate, "category": category, "source": source},
+        )
+        return {"feedback_id": fid, "created_at": now}
+
+    def feedback_summary(self, days: int = 7, limit: int = 50) -> Dict[str, Any]:
+        d = max(1, min(int(days or 7), 30))
+        n = max(1, min(int(limit or 50), 200))
+        since = (datetime.now(UTC) - timedelta(days=d)).isoformat()
+        with self._lock:
+            conn = self._conn()
+            try:
+                total = self._count(conn, "SELECT COUNT(*) FROM feedback")
+                total_d = self._count(conn, "SELECT COUNT(*) FROM feedback WHERE created_at >= ?", (since,))
+                row = conn.execute(
+                    "SELECT AVG(rating) AS avg_rating FROM feedback WHERE rating IS NOT NULL AND created_at >= ?",
+                    (since,),
+                ).fetchone()
+                avg_rating = float(row["avg_rating"]) if row and row["avg_rating"] is not None else None
+                rows = conn.execute(
+                    """
+                    SELECT id, rating, category, message, email, source, page, created_at
+                    FROM feedback
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (n,),
+                ).fetchall()
+            finally:
+                conn.close()
+        return {
+            "total": total,
+            "last_days": d,
+            "last_days_count": total_d,
+            "avg_rating_last_days": round(avg_rating, 2) if avg_rating is not None else None,
+            "recent": [dict(r) for r in rows],
+        }
+
     def _count(self, conn: sqlite3.Connection, sql: str, params: tuple = ()) -> int:
         row = conn.execute(sql, params).fetchone()
         return int(row[0] if row and row[0] is not None else 0)
@@ -118,6 +212,12 @@ class BusinessService:
                 process_runs = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='resume_processed'")
                 searches = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='job_search'")
                 applies = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='job_apply'")
+                feedback_total = self._count(conn, "SELECT COUNT(*) FROM feedback")
+                feedback_7d = self._count(
+                    conn,
+                    "SELECT COUNT(*) FROM feedback WHERE created_at >= ?",
+                    ((datetime.now(UTC) - timedelta(days=7)).isoformat(),),
+                )
 
                 processed_success = self._count(
                     conn,
@@ -136,6 +236,10 @@ class BusinessService:
             "leads": {
                 "total": total_leads,
                 "last_7d": leads_7d,
+            },
+            "feedback": {
+                "total": feedback_total,
+                "last_7d": feedback_7d,
             },
             "funnel": {
                 "uploads": uploads,

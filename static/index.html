@@ -166,6 +166,67 @@
       line-height: 1.7;
       background: var(--soft);
     }
+    .growth {
+      margin-top: 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .form-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 12px;
+    }
+    .form-card b {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .form-card input,
+    .form-card select,
+    .form-card textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font: 400 12px/1.5 "IBM Plex Sans", sans-serif;
+      background: #fff;
+      color: var(--text);
+    }
+    .form-card textarea { min-height: 88px; resize: vertical; }
+    .form-card button {
+      border: 1px solid var(--black);
+      background: var(--black);
+      color: #fff;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 9px 12px;
+      cursor: pointer;
+    }
+    .hint {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 18px;
+    }
+    .proof {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.7;
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: var(--soft);
+    }
 
     @media (max-width: 920px) {
       .page { width: min(1040px, calc(100% - 24px)); }
@@ -173,6 +234,8 @@
       h1 { min-height: 126px; }
       .sub { font-size: 16px; min-height: 62px; }
       .grid { grid-template-columns: 1fr; }
+      .growth { grid-template-columns: 1fr; }
+      .form-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -211,6 +274,53 @@
           <p>Investor dashboard and readiness APIs stay online for growth tracking, reliability checks, and fundraising demos.</p>
         </article>
       </section>
+      <section class="growth">
+        <article class="form-card">
+          <b>Join beta / leave contact</b>
+          <div class="form-row">
+            <input id="leadName" placeholder="Name (optional)" />
+            <input id="leadEmail" placeholder="Email (required)" />
+          </div>
+          <div class="form-row">
+            <input id="leadCompany" placeholder="Company / School" />
+            <select id="leadBudget">
+              <option value="">Budget</option>
+              <option value="<1000">< 1000 CNY</option>
+              <option value="1000-5000">1000-5000 CNY</option>
+              <option value="5000-20000">5000-20000 CNY</option>
+              <option value="20000+">20000+ CNY</option>
+            </select>
+          </div>
+          <textarea id="leadNote" placeholder="What outcome do you want most?"></textarea>
+          <button id="leadSubmit">Submit Contact</button>
+          <div class="hint" id="leadHint"></div>
+        </article>
+        <article class="form-card">
+          <b>Send product feedback</b>
+          <div class="form-row">
+            <select id="feedbackRating">
+              <option value="">Rating (1-5)</option>
+              <option value="5">5 - Excellent</option>
+              <option value="4">4 - Good</option>
+              <option value="3">3 - OK</option>
+              <option value="2">2 - Weak</option>
+              <option value="1">1 - Bad</option>
+            </select>
+            <select id="feedbackCategory">
+              <option value="">Category</option>
+              <option value="ui">UI/UX</option>
+              <option value="job_quality">Job quality</option>
+              <option value="resume">Resume output</option>
+              <option value="performance">Performance</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <textarea id="feedbackMessage" placeholder="Tell us what should be improved."></textarea>
+          <button id="feedbackSubmit">Submit Feedback</button>
+          <div class="hint" id="feedbackHint"></div>
+        </article>
+      </section>
+      <div class="proof" id="proofBox">Loading usage proof...</div>
       <p class="note">Built for China market prioritization: Boss, Liepin, Zhaopin, 51job, Lagou, and enterprise CN job APIs.</p>
     </main>
   </div>
@@ -220,6 +330,9 @@
     const sub = "Minimal UI, real links, and a mandatory optimized resume output.";
     const titleNode = document.getElementById("titleText");
     const subNode = document.getElementById("subText");
+    const proofBox = document.getElementById("proofBox");
+    const leadHint = document.getElementById("leadHint");
+    const feedbackHint = document.getElementById("feedbackHint");
 
     function typewriter(node, text, speed, done) {
       let i = 0;
@@ -234,6 +347,66 @@
     }
 
     typewriter(titleNode, title, 24, () => typewriter(subNode, sub, 16));
+
+    async function postJson(url, payload) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "request failed");
+      return data;
+    }
+
+    async function loadProof() {
+      try {
+        const res = await fetch("/api/business/public-proof");
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "proof failed");
+        proofBox.textContent = `Users: ${data.leads_total} | Feedback: ${data.feedback_total} | Uploads: ${data.uploads_total} | Process runs: ${data.process_runs_total}`;
+      } catch (_) {
+        proofBox.textContent = "Usage proof unavailable right now.";
+      }
+    }
+
+    document.getElementById("leadSubmit").addEventListener("click", async () => {
+      leadHint.textContent = "Submitting...";
+      try {
+        await postJson("/api/business/lead", {
+          email: document.getElementById("leadEmail").value.trim(),
+          name: document.getElementById("leadName").value.trim(),
+          company: document.getElementById("leadCompany").value.trim(),
+          budget: document.getElementById("leadBudget").value,
+          note: document.getElementById("leadNote").value.trim(),
+          source: "landing_beta",
+          use_case: "job_search_assistant",
+        });
+        leadHint.textContent = "Saved. We will contact you soon.";
+        loadProof();
+      } catch (err) {
+        leadHint.textContent = err.message || "Submit failed";
+      }
+    });
+
+    document.getElementById("feedbackSubmit").addEventListener("click", async () => {
+      feedbackHint.textContent = "Submitting...";
+      try {
+        await postJson("/api/business/feedback", {
+          message: document.getElementById("feedbackMessage").value.trim(),
+          rating: document.getElementById("feedbackRating").value,
+          category: document.getElementById("feedbackCategory").value,
+          source: "landing_feedback",
+          page: "home",
+        });
+        feedbackHint.textContent = "Thanks. Feedback captured.";
+        loadProof();
+      } catch (err) {
+        feedbackHint.textContent = err.message || "Submit failed";
+      }
+    });
+
+    loadProof();
   </script>
 </body>
 </html>

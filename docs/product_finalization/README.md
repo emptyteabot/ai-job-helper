@@ -36,3 +36,14 @@
 - 运营闭环：线索追踪、转化归因、实验节奏需要制度化
 
 下一步执行方式：按本目录文档并行推进，每个角色按周交付并做跨团队评审。
+
+## 2026-02-16 Additions
+
+- `20_Multi_Agent_Command_Center.md`: 多角色并行指挥台（角色、交付物、节奏、DoD）
+- `21_Vibe_Marketing_GTM_Playbook.md`: Vibe Marketing 进入市场剧本（渠道、内容、KPI、实验）
+- `22_Investment_Readiness_Go_NoGo.md`: 融资前最终 Go/No-Go 闸门（证据包与停止条件）
+
+推荐执行顺序：
+1. 先按 `20` 做角色对齐与并行分工。
+2. 再按 `22` 做每周闸门验收，避免带病冲市场。
+3. 达到 `GO` 后，按 `21` 进入 Marketing Vibe 阶段。

@@ -8,8 +8,11 @@ import requests
 
 def check(url: str, path: str, timeout: int = 20) -> Dict:
     full = url.rstrip("/") + path
-    r = requests.get(full, timeout=timeout)
-    return {"path": path, "status": r.status_code, "ok": r.ok, "body": r.text[:240]}
+    try:
+        r = requests.get(full, timeout=timeout)
+        return {"path": path, "status": r.status_code, "ok": r.ok, "body": r.text[:240]}
+    except Exception as e:
+        return {"path": path, "status": 0, "ok": False, "error": str(e)[:240]}
 
 
 def main() -> int:

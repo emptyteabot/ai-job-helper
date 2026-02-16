@@ -6,40 +6,42 @@
   <title>AI Job Assistant | Investor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #ffffff;
-      --text: #0f0f0f;
-      --muted: #6b6b6b;
-      --line: #e8e8e8;
-      --soft: #fafafa;
-      --black: #101010;
+      --text: #131313;
+      --muted: #67676f;
+      --line: #e8e8ec;
+      --soft: #f7f7f9;
+      --maxw: 940px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "IBM Plex Sans", system-ui, sans-serif;
-      background: var(--bg);
+      font-family: "Manrope", "PingFang SC", "Noto Sans SC", sans-serif;
       color: var(--text);
+      background:
+        radial-gradient(900px 500px at -15% -10%, #f4f4f8 0%, transparent 60%),
+        radial-gradient(900px 500px at 112% -16%, #f7f7fb 0%, transparent 64%),
+        var(--bg);
     }
     .page {
-      width: min(1080px, calc(100% - 28px));
-      margin: 16px auto 30px;
+      width: min(var(--maxw), calc(100% - 26px));
+      margin: 18px auto 34px;
     }
     .top {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 10px 14px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0 14px;
+      margin-bottom: 6px;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 14px;
+      gap: 9px;
+      font-size: 13px;
       font-weight: 700;
     }
     .dot {
@@ -47,62 +49,59 @@
       height: 8px;
       border-radius: 50%;
       background: #111;
-      box-shadow: 0 0 0 5px rgba(17, 17, 17, 0.08);
+      box-shadow: 0 0 0 6px rgba(17, 17, 17, 0.07);
     }
-    .nav { display: flex; gap: 6px; }
-    .nav a {
-      text-decoration: none;
-      color: var(--muted);
-      border: 1px solid transparent;
-      border-radius: 999px;
-      padding: 6px 10px;
+    .nav {
+      display: flex;
+      gap: 16px;
       font-size: 12px;
-      white-space: nowrap;
     }
-    .nav a:hover { border-color: var(--line); color: var(--text); }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .nav a:hover { color: var(--text); }
 
-    .hero {
-      margin-bottom: 14px;
-      padding: 6px 0 14px;
-    }
-    .tag {
+    .hero { padding: 34px 0 20px; }
+    .pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 6px 10px;
       color: var(--muted);
       font: 500 11px/1 "IBM Plex Mono", monospace;
       margin-bottom: 10px;
+      background: #fff;
     }
-    .tag::before {
+    .pill::before {
       content: "";
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: #111;
+      background: #121212;
     }
     h1 {
-      font-size: clamp(30px, 6vw, 54px);
-      line-height: 1.05;
+      font-size: clamp(28px, 5.3vw, 54px);
       letter-spacing: -1.1px;
-      margin-bottom: 8px;
+      line-height: 1.06;
       min-height: 66px;
+      margin-bottom: 7px;
     }
     .sub {
       color: var(--muted);
       font-size: 14px;
-      line-height: 1.75;
-      max-width: 760px;
-      min-height: 52px;
+      line-height: 1.76;
+      max-width: 730px;
+      min-height: 46px;
     }
     .cursor {
       display: inline-block;
       width: 8px;
       height: 1em;
-      background: #111;
       margin-left: 3px;
+      background: #151515;
       vertical-align: -2px;
       animation: blink 1s steps(1, end) infinite;
     }
@@ -110,31 +109,28 @@
       0%, 48% { opacity: 1; }
       49%, 100% { opacity: 0; }
     }
-
-    .kpis {
+    .kpi {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
       gap: 10px;
-      margin-bottom: 10px;
+      grid-template-columns: repeat(4, 1fr);
+      margin-bottom: 12px;
     }
-    .card {
+    .kpi-card {
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 14px;
       background: #fff;
-      padding: 10px;
+      padding: 12px;
     }
-    .card span {
+    .kpi-card span {
       display: block;
-      font-size: 11px;
       color: var(--muted);
+      font-size: 11px;
       margin-bottom: 4px;
     }
-    .big {
+    .kpi-card b {
       font-size: 24px;
-      font-weight: 700;
       letter-spacing: -0.4px;
     }
-
     .panel {
       border: 1px solid var(--line);
       border-radius: 14px;
@@ -145,12 +141,12 @@
     .panel h2 {
       font-size: 13px;
       margin-bottom: 8px;
-      font-weight: 600;
+      letter-spacing: -0.1px;
     }
-    .kv {
+    .grid4 {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
       gap: 8px;
+      grid-template-columns: repeat(4, 1fr);
     }
     .item {
       border: 1px solid var(--line);
@@ -160,39 +156,38 @@
     }
     .item span {
       display: block;
-      font-size: 11px;
       color: var(--muted);
+      font-size: 11px;
       margin-bottom: 2px;
     }
-    .item b {
-      font-size: 14px;
-    }
+    .item b { font-size: 14px; }
     ul { padding-left: 18px; }
     li {
-      font-size: 13px;
-      line-height: 1.7;
       margin-bottom: 6px;
+      line-height: 1.7;
+      font-size: 13px;
     }
     pre {
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--soft);
+      color: var(--muted);
       padding: 9px;
       font: 400 11px/1.6 "IBM Plex Mono", monospace;
-      color: var(--muted);
-      max-height: 240px;
+      max-height: 230px;
       overflow: auto;
       white-space: pre-wrap;
       word-break: break-word;
     }
-
     @media (max-width: 920px) {
-      .kpis { grid-template-columns: repeat(2, 1fr); }
-      .kv { grid-template-columns: 1fr 1fr; }
+      .hero { padding: 30px 0 18px; }
+      h1 { min-height: 56px; }
+      .kpi { grid-template-columns: 1fr 1fr; }
+      .grid4 { grid-template-columns: 1fr 1fr; }
     }
-    @media (max-width: 640px) {
-      .page { width: min(1080px, calc(100% - 20px)); }
-      .kpis, .kv { grid-template-columns: 1fr; }
+    @media (max-width: 620px) {
+      .kpi { grid-template-columns: 1fr; }
+      .grid4 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -208,31 +203,31 @@
     </header>
 
     <section class="hero">
-      <div class="tag">investor / readiness / metrics</div>
-      <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
-      <p class="sub" id="typeSub"></p>
+      <div class="pill">investor / readiness / signal</div>
+      <h1><span id="titleText"></span><span class="cursor"></span></h1>
+      <p class="sub" id="subText"></p>
     </section>
 
-    <section class="kpis">
-      <article class="card"><span>Overall Score</span><div class="big" id="overall">-</div></article>
-      <article class="card"><span>Status</span><div class="big" id="status">-</div></article>
-      <article class="card"><span>Provider</span><div class="big" id="provider">-</div></article>
-      <article class="card"><span>Leads Total</span><div class="big" id="leadsTotal">-</div></article>
+    <section class="kpi">
+      <article class="kpi-card"><span>Overall Score</span><b id="overall">-</b></article>
+      <article class="kpi-card"><span>Status</span><b id="status">-</b></article>
+      <article class="kpi-card"><span>Provider</span><b id="provider">-</b></article>
+      <article class="kpi-card"><span>Leads Total</span><b id="leadsTotal">-</b></article>
     </section>
 
     <section class="panel">
       <h2>Pillars</h2>
-      <div class="kv">
+      <div class="grid4">
         <div class="item"><span>Product</span><b id="pProduct">-</b></div>
         <div class="item"><span>Traction</span><b id="pTraction">-</b></div>
         <div class="item"><span>Reliability</span><b id="pReliability">-</b></div>
-        <div class="item"><span>GTM</span><b id="pGtm">-</b></div>
+        <div class="item"><span>Go-To-Market</span><b id="pGtm">-</b></div>
       </div>
     </section>
 
     <section class="panel">
       <h2>Next 30 Days Targets</h2>
-      <div class="kv">
+      <div class="grid4">
         <div class="item"><span>Uploads</span><b id="tUploads">-</b></div>
         <div class="item"><span>Process Runs</span><b id="tProcess">-</b></div>
         <div class="item"><span>Searches</span><b id="tSearches">-</b></div>
@@ -252,10 +247,10 @@
   </div>
 
   <script>
-    const typeTitle = "Financing readiness, in one clean page.";
-    const typeSub = "Track product, growth, reliability, and GTM with direct API-backed metrics.";
-    const titleNode = document.getElementById("typeTitle");
-    const subNode = document.getElementById("typeSub");
+    const title = "Investor readiness, with live product signals.";
+    const sub = "One clean dashboard for product, traction, reliability, and go-to-market momentum.";
+    const titleNode = document.getElementById("titleText");
+    const subNode = document.getElementById("subText");
 
     function typewriter(node, text, speed, done) {
       let i = 0;
@@ -268,7 +263,7 @@
         }
       }, speed);
     }
-    typewriter(titleNode, typeTitle, 20, () => typewriter(subNode, typeSub, 12));
+    typewriter(titleNode, title, 18, () => typewriter(subNode, sub, 12));
 
     function setText(id, value) {
       const el = document.getElementById(id);

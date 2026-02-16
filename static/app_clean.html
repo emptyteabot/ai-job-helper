@@ -6,42 +6,44 @@
   <title>AI Job Assistant | Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg: #ffffff;
-      --text: #0f0f0f;
-      --muted: #6b6b6b;
-      --line: #e8e8e8;
-      --soft: #fafafa;
-      --black: #101010;
-      --ok: #207946;
-      --err: #b34141;
+      --text: #131313;
+      --muted: #67676f;
+      --line: #e8e8ec;
+      --soft: #f7f7f9;
+      --ok: #1f7c49;
+      --err: #b54040;
+      --maxw: 940px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: "IBM Plex Sans", system-ui, sans-serif;
-      background: var(--bg);
+      font-family: "Manrope", "PingFang SC", "Noto Sans SC", sans-serif;
       color: var(--text);
+      background:
+        radial-gradient(900px 500px at -15% -10%, #f4f4f8 0%, transparent 60%),
+        radial-gradient(900px 500px at 112% -16%, #f7f7fb 0%, transparent 64%),
+        var(--bg);
     }
     .page {
-      width: min(1120px, calc(100% - 34px));
-      margin: 18px auto 36px;
+      width: min(var(--maxw), calc(100% - 26px));
+      margin: 18px auto 34px;
     }
     .top {
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 10px 14px;
       display: flex;
-      justify-content: space-between;
       align-items: center;
-      margin-bottom: 18px;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0 14px;
+      margin-bottom: 6px;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
-      font-size: 14px;
+      gap: 9px;
+      font-size: 13px;
       font-weight: 700;
     }
     .dot {
@@ -49,62 +51,60 @@
       height: 8px;
       border-radius: 50%;
       background: #111;
-      box-shadow: 0 0 0 5px rgba(17, 17, 17, 0.08);
+      box-shadow: 0 0 0 6px rgba(17, 17, 17, 0.07);
     }
-    .nav { display: flex; gap: 6px; }
-    .nav a {
-      text-decoration: none;
-      color: var(--muted);
-      border: 1px solid transparent;
-      border-radius: 999px;
-      padding: 6px 10px;
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 16px;
       font-size: 12px;
-      white-space: nowrap;
     }
-    .nav a:hover { border-color: var(--line); color: var(--text); }
+    .nav a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .nav a:hover { color: var(--text); }
 
-    .hero {
-      margin-bottom: 16px;
-      padding: 8px 0 20px;
-    }
-    .tag {
+    .hero { padding: 34px 0 20px; }
+    .pill {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 6px 10px;
       color: var(--muted);
       font: 500 11px/1 "IBM Plex Mono", monospace;
       margin-bottom: 10px;
+      background: #fff;
     }
-    .tag::before {
+    .pill::before {
       content: "";
       width: 5px;
       height: 5px;
       border-radius: 50%;
-      background: #111;
+      background: #121212;
     }
     h1 {
-      font-size: clamp(30px, 6vw, 56px);
-      line-height: 1.05;
-      letter-spacing: -1.2px;
-      margin-bottom: 8px;
+      font-size: clamp(28px, 5.3vw, 54px);
+      letter-spacing: -1.1px;
+      line-height: 1.06;
       min-height: 66px;
+      margin-bottom: 7px;
     }
     .sub {
       color: var(--muted);
-      font-size: 15px;
-      line-height: 1.8;
-      max-width: 780px;
-      min-height: 54px;
+      font-size: 14px;
+      line-height: 1.76;
+      max-width: 730px;
+      min-height: 46px;
     }
     .cursor {
       display: inline-block;
       width: 8px;
       height: 1em;
-      background: #111;
       margin-left: 3px;
+      background: #151515;
       vertical-align: -2px;
       animation: blink 1s steps(1, end) infinite;
     }
@@ -113,64 +113,61 @@
       49%, 100% { opacity: 0; }
     }
 
-    .grid-top {
-      display: grid;
-      grid-template-columns: 1.05fr 0.95fr;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
     .panel {
       border: 1px solid var(--line);
       border-radius: 16px;
       background: #fff;
       padding: 14px;
+      margin-bottom: 12px;
     }
-    .head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-    .head h2 {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: -0.1px;
+    .panel h2 {
+      font-size: 15px;
+      letter-spacing: -0.2px;
+      margin-bottom: 9px;
     }
     .meta {
-      font-size: 12px;
-      color: var(--muted);
       display: flex;
-      gap: 8px;
       flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
     }
 
     .upload {
       display: block;
-      border: 1px dashed #cfcfcf;
+      border: 1px dashed #cbced3;
       border-radius: 12px;
+      background: var(--soft);
       padding: 12px;
       text-align: center;
-      background: var(--soft);
       cursor: pointer;
-      margin-bottom: 10px;
+      margin-bottom: 9px;
     }
     .upload.drag {
-      border-color: #6b6b6b;
-      background: #f3f3f3;
+      background: #f1f3f5;
+      border-color: #9ea2a8;
     }
-    .upload b { display: block; font-size: 13px; margin-bottom: 4px; }
-    .upload span { font-size: 12px; color: var(--muted); }
+    .upload b {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    .upload span {
+      color: var(--muted);
+      font-size: 12px;
+    }
     .upload input { display: none; }
-
     textarea {
       width: 100%;
-      min-height: 200px;
       border: 1px solid var(--line);
       border-radius: 12px;
-      padding: 12px;
+      background: #fff;
+      color: var(--text);
+      min-height: 190px;
       resize: vertical;
-      font: 400 13px/1.72 "IBM Plex Sans", sans-serif;
+      padding: 12px;
+      font: 400 13px/1.7 "Manrope", "PingFang SC", sans-serif;
       margin-bottom: 10px;
     }
     .actions {
@@ -183,48 +180,51 @@
       border: 1px solid var(--line);
       border-radius: 10px;
       padding: 9px 11px;
-      font-size: 12px;
-      font-weight: 600;
       background: #fff;
       color: var(--text);
+      font-size: 12px;
+      font-weight: 600;
       cursor: pointer;
     }
-    button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .main-btn {
-      background: var(--black);
-      border-color: var(--black);
+    button.main {
+      border-color: #121212;
+      background: #121212;
       color: #fff;
+    }
+    button:disabled {
+      opacity: 0.58;
+      cursor: not-allowed;
     }
     .status {
       border: 1px solid var(--line);
       border-radius: 10px;
       background: var(--soft);
-      padding: 9px 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
       color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 10px;
     }
     .ok { color: var(--ok); }
     .err { color: var(--err); }
 
-    .jobs-meta {
+    .jobsMeta {
       color: var(--muted);
       font-size: 12px;
       margin-bottom: 8px;
+      line-height: 1.7;
     }
-    .job-list {
+    .jobList {
       display: grid;
       gap: 8px;
-      max-height: 398px;
+      max-height: 360px;
       overflow: auto;
       padding-right: 2px;
     }
     .job {
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 12px;
       background: var(--soft);
       padding: 10px;
     }
@@ -235,79 +235,63 @@
       line-height: 1.5;
     }
     .job p {
-      margin-bottom: 5px;
       color: var(--muted);
       font-size: 12px;
-      line-height: 1.6;
+      line-height: 1.64;
+      margin-bottom: 5px;
     }
     .job a {
-      color: var(--text);
       font-size: 12px;
-      word-break: break-all;
+      color: var(--text);
       text-decoration: underline;
+      word-break: break-all;
     }
     .empty {
       border: 1px dashed var(--line);
-      border-radius: 10px;
-      padding: 10px;
-      font-size: 12px;
-      color: var(--muted);
+      border-radius: 12px;
       background: var(--soft);
-    }
-
-    .mandatory {
-      margin-bottom: 12px;
-      border: 1px solid var(--line);
-      border-radius: 16px;
-      overflow: hidden;
-      background: #fff;
-    }
-    .mandatory h2 {
-      font-size: 14px;
-      font-weight: 600;
-      padding: 11px 12px;
-      border-bottom: 1px solid var(--line);
-      background: #fcfcfc;
-    }
-
-    .analysis-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
     }
     .result {
       border: 1px solid var(--line);
-      border-radius: 14px;
-      overflow: hidden;
+      border-radius: 16px;
       background: #fff;
+      margin-bottom: 12px;
+      overflow: hidden;
     }
-    .result h3 {
-      font-size: 12px;
-      font-weight: 600;
-      padding: 9px 10px;
+    .result h2, .result h3 {
+      font-size: 14px;
+      letter-spacing: -0.1px;
+      padding: 11px 12px;
       border-bottom: 1px solid var(--line);
-      background: #fcfcfc;
+      background: #fcfcfd;
     }
     pre {
-      padding: 10px;
+      padding: 12px;
       white-space: pre-wrap;
       word-break: break-word;
-      font-family: inherit;
       font-size: 12px;
-      line-height: 1.74;
+      line-height: 1.78;
       max-height: 320px;
       overflow: auto;
+      font-family: inherit;
     }
     #optimizedResume {
-      max-height: 540px;
       font-size: 13px;
-      line-height: 1.82;
+      line-height: 1.84;
+      max-height: 560px;
     }
-
-    @media (max-width: 980px) {
-      .page { width: min(1120px, calc(100% - 20px)); }
-      .grid-top, .analysis-grid { grid-template-columns: 1fr; }
-      h1 { min-height: 58px; }
+    .grid2 {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr 1fr;
+    }
+    @media (max-width: 920px) {
+      .hero { padding: 30px 0 18px; }
+      h1 { min-height: 56px; }
+      .grid2 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -323,79 +307,75 @@
     </header>
 
     <section class="hero">
-      <div class="tag">workspace / cn-market / one flow</div>
-      <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
-      <p class="sub" id="typeSub"></p>
+      <div class="pill">workspace / minimal layout / real links first</div>
+      <h1><span id="titleText"></span><span class="cursor"></span></h1>
+      <p class="sub" id="subText"></p>
     </section>
 
-    <section class="grid-top">
-      <section class="panel">
-        <div class="head">
-          <h2>Resume Input</h2>
-          <div class="meta">
-            <span id="fileMeta">No file uploaded</span>
-            <span id="providerMeta">Provider: -</span>
-          </div>
-        </div>
-        <label class="upload" id="dropZone">
-          <b>Upload resume or drop file</b>
-          <span>PDF / DOCX / TXT / Image</span>
-          <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
-        </label>
-        <textarea id="resumeText" placeholder="Paste resume text here, or upload a file for automatic parsing."></textarea>
-        <div class="actions">
-          <button class="main-btn" id="runBtn">Run Analysis</button>
-          <button id="sampleBtn">Load Sample</button>
-          <button id="resetBtn">Reset</button>
-          <button id="downloadBtn">Download</button>
-        </div>
-        <div class="status">
-          <span id="statusText">Ready</span>
-          <span id="statusFlag">IDLE</span>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="head">
-          <h2>Recommended Jobs (China real links)</h2>
-        </div>
-        <div class="jobs-meta" id="jobsMeta">After analysis, this area shows actionable links from CN hiring sources.</div>
-        <div class="job-list" id="jobCards">
-          <div class="empty">No jobs yet. Click "Run Analysis" first.</div>
-        </div>
-      </section>
+    <section class="panel">
+      <h2>Resume Input</h2>
+      <div class="meta">
+        <span id="fileMeta">No file uploaded</span>
+        <span id="providerMeta">Provider: -</span>
+      </div>
+      <label class="upload" id="dropZone">
+        <b>Upload resume file</b>
+        <span>PDF / DOCX / TXT / Image</span>
+        <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
+      </label>
+      <textarea id="resumeText" placeholder="Paste resume text here, or upload and parse automatically."></textarea>
+      <div class="actions">
+        <button class="main" id="runBtn">Run Analysis</button>
+        <button id="sampleBtn">Load Sample</button>
+        <button id="resetBtn">Reset</button>
+        <button id="downloadBtn">Download</button>
+      </div>
+      <div class="status">
+        <span id="statusText">Ready</span>
+        <span id="statusFlag">IDLE</span>
+      </div>
     </section>
 
-    <section class="mandatory">
+    <section class="panel">
+      <h2>Recommended Jobs (China Real Links)</h2>
+      <div class="jobsMeta" id="jobsMeta">
+        We only show actionable links from China job-market sources or explicit no-data state.
+      </div>
+      <div class="jobList" id="jobCards">
+        <div class="empty">No jobs yet. Run analysis first.</div>
+      </div>
+    </section>
+
+    <section class="result">
       <h2>Optimized Resume (Mandatory Output)</h2>
       <pre id="optimizedResume">-</pre>
     </section>
 
-    <section class="analysis-grid">
-      <section class="result">
+    <section class="grid2">
+      <article class="result">
         <h3>Career Analysis</h3>
         <pre id="careerAnalysis">-</pre>
-      </section>
-      <section class="result">
+      </article>
+      <article class="result">
         <h3>Job Recommendation Text</h3>
         <pre id="jobRecommendations">-</pre>
-      </section>
-      <section class="result">
+      </article>
+      <article class="result">
         <h3>Interview Preparation</h3>
         <pre id="interviewPrep">-</pre>
-      </section>
-      <section class="result">
+      </article>
+      <article class="result">
         <h3>Mock Interview & Salary</h3>
         <pre id="mockInterview">-</pre>
-      </section>
+      </article>
     </section>
   </div>
 
   <script>
-    const typeTitle = "Upload resume. Get real links. Apply faster.";
-    const typeSub = "Optimized resume is always visible. No optional hidden output.";
-    const titleNode = document.getElementById("typeTitle");
-    const subNode = document.getElementById("typeSub");
+    const title = "Analyze once. Apply faster.";
+    const sub = "Real links first. Resume optimization always visible. No clutter.";
+    const titleNode = document.getElementById("titleText");
+    const subNode = document.getElementById("subText");
 
     function typewriter(node, text, speed, done) {
       let i = 0;
@@ -408,7 +388,7 @@
         }
       }, speed);
     }
-    typewriter(titleNode, typeTitle, 20, () => typewriter(subNode, typeSub, 14));
+    typewriter(titleNode, title, 18, () => typewriter(subNode, sub, 12));
 
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
@@ -443,6 +423,15 @@
       }
     }
 
+    function resetOutputs() {
+      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => {
+        el.textContent = "-";
+      });
+      providerMeta.textContent = "Provider: -";
+      jobsMeta.textContent = "We only show actionable links from China job-market sources or explicit no-data state.";
+      jobCards.innerHTML = '<div class="empty">No jobs yet. Run analysis first.</div>';
+    }
+
     async function parseJsonSafe(response) {
       const raw = await response.text();
       try {
@@ -452,33 +441,24 @@
       }
     }
 
-    function resetOutputs() {
-      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => {
-        el.textContent = "-";
-      });
-      providerMeta.textContent = "Provider: -";
-      jobsMeta.textContent = "After analysis, this area shows actionable links from CN hiring sources.";
-      jobCards.innerHTML = '<div class="empty">No jobs yet. Click "Run Analysis" first.</div>';
-    }
-
     function renderJobCards(jobs, provider) {
       const rows = (jobs || []).filter((j) => (j.link || j.apply_url || "").startsWith("http"));
       if (!rows.length) {
         jobsMeta.textContent = `Provider: ${provider || "-"} | No actionable links returned.`;
-        jobCards.innerHTML = '<div class="empty">No clickable jobs returned. Try again later.</div>';
+        jobCards.innerHTML = '<div class="empty">No clickable jobs returned. Retry later.</div>';
         return;
       }
       jobsMeta.textContent = `Provider: ${provider || "-"} | ${rows.length} jobs`;
       jobCards.innerHTML = rows.map((j) => {
-        const title = j.title || j.job_title || "Unknown Role";
-        const company = j.company || "Unknown Company";
+        const titleRow = j.title || j.job_title || "Unknown role";
+        const company = j.company || "Unknown company";
         const location = j.location || "-";
         const salary = j.salary || j.salary_range || "";
         const platform = j.platform || j.provider || "-";
         const link = j.link || j.apply_url || "#";
         return [
           "<article class=\"job\">",
-          `<b>${title}</b>`,
+          `<b>${titleRow}</b>`,
           `<p>${company} | ${location}${salary ? ` | ${salary}` : ""}</p>`,
           `<p>Source: ${platform}</p>`,
           `<a href="${link}" target="_blank" rel="noopener noreferrer">Open job link</a>`,

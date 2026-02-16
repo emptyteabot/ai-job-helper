@@ -26,6 +26,10 @@ class RealJobService:
         # - If JOOBLE_API_KEY is set, use real-time Jooble API results.
         # - Otherwise fall back to the bundled local dataset generator.
         self.provider_name = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+        # Keep local synthetic dataset strictly opt-in in production paths.
+        self.allow_local_fallback = os.getenv("ALLOW_LOCAL_JOB_FALLBACK", "").strip().lower() in {
+            "1", "true", "yes", "on"
+        }
         self.jooble = JoobleProvider()
         self.bing = BingWebSearchProvider()
         self.baidu = BaiduSearchProvider()
@@ -273,6 +277,10 @@ class RealJobService:
             return False
         # auto fallback: if no API-based provider is enabled, use Baidu.
         return (not self._use_jooble()) and (not self._use_brave()) and (not self._use_bing())
+
+    def _use_local_dataset(self) -> bool:
+        # Local synthetic jobs are allowed only when explicitly requested.
+        return self.provider_name in ("local", "offline") or self.allow_local_fallback
     
     def search_jobs(self, 
                    keywords: List[str] = None,
@@ -349,6 +357,9 @@ class RealJobService:
                 limit=limit,
             )
             return self.baidu.search_jobs(params)
+
+        if not self._use_local_dataset():
+            return []
 
         matched_jobs: List[Dict[str, Any]] = []
         
@@ -498,7 +509,11 @@ class RealJobService:
                     else (
                     "brave"
                     if self._use_brave()
-                    else ("bing" if self._use_bing() else ("baidu" if self._use_baidu() else "local"))
+                    else (
+                        "bing"
+                        if self._use_bing()
+                        else ("baidu" if self._use_baidu() else ("local" if self._use_local_dataset() else "none"))
+                    )
                     )
                 )
             ),

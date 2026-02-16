@@ -8,175 +8,407 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#fff; --text:#101010; --muted:#6a6a6a; --line:#ececec; --soft:#fafafa; --black:#111; --ok:#1f7d4a; --err:#b13a3a; }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "IBM Plex Sans", system-ui, sans-serif; background: var(--bg); color: var(--text); }
-    .wrap { width: min(1080px, calc(100% - 32px)); margin: 18px auto 32px; }
-    .top {
-      border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px;
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;
+    :root {
+      --bg: #ffffff;
+      --text: #0f0f0f;
+      --muted: #6b6b6b;
+      --line: #e8e8e8;
+      --soft: #fafafa;
+      --black: #101010;
+      --ok: #207946;
+      --err: #b34141;
     }
-    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #111; box-shadow: 0 0 0 5px rgba(17,17,17,.08); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .page {
+      width: min(1120px, calc(100% - 34px));
+      margin: 18px auto 36px;
+    }
+    .top {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #111;
+      box-shadow: 0 0 0 5px rgba(17, 17, 17, 0.08);
+    }
+    .nav { display: flex; gap: 6px; }
     .nav a {
-      text-decoration: none; color: var(--muted); border: 1px solid transparent; border-radius: 999px;
-      padding: 6px 10px; font-size: 12px; margin-left: 6px;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      white-space: nowrap;
     }
     .nav a:hover { border-color: var(--line); color: var(--text); }
-    .hero { margin-bottom: 16px; padding: 6px 0 16px; }
-    .mono {
-      display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px;
-      padding: 6px 10px; font: 500 11px/1 "IBM Plex Mono", monospace; color: var(--muted); margin-bottom: 10px;
-    }
-    .mono:before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #111; }
-    h1 { font-size: clamp(28px, 6vw, 56px); line-height: 1.04; letter-spacing: -1.1px; margin-bottom: 8px; min-height: 62px; }
-    .cursor { display: inline-block; width: 8px; height: 1em; background: #111; margin-left: 3px; vertical-align: -2px; animation: blink 1s steps(1,end) infinite; }
-    @keyframes blink { 0%,48%{opacity:1;}49%,100%{opacity:0;} }
-    .hero p { color: var(--muted); font-size: 15px; line-height: 1.72; max-width: 760px; }
 
-    .top-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 12px; margin-bottom: 10px; }
-    .panel { border: 1px solid var(--line); border-radius: 16px; background: #fff; padding: 14px; }
-    .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-    .head h2 { font-size: 14px; font-weight: 600; }
-    .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero {
+      margin-bottom: 16px;
+      padding: 8px 0 20px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      margin-bottom: 10px;
+    }
+    .tag::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #111;
+    }
+    h1 {
+      font-size: clamp(30px, 6vw, 56px);
+      line-height: 1.05;
+      letter-spacing: -1.2px;
+      margin-bottom: 8px;
+      min-height: 66px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+      max-width: 780px;
+      min-height: 54px;
+    }
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 1em;
+      background: #111;
+      margin-left: 3px;
+      vertical-align: -2px;
+      animation: blink 1s steps(1, end) infinite;
+    }
+    @keyframes blink {
+      0%, 48% { opacity: 1; }
+      49%, 100% { opacity: 0; }
+    }
+
+    .grid-top {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      padding: 14px;
+    }
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .head h2 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.1px;
+    }
+    .meta {
+      font-size: 12px;
+      color: var(--muted);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
     .upload {
-      display: block; border: 1px dashed #cdcdcd; border-radius: 12px; padding: 11px;
-      text-align: center; background: var(--soft); margin-bottom: 8px; cursor: pointer;
+      display: block;
+      border: 1px dashed #cfcfcf;
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      background: var(--soft);
+      cursor: pointer;
+      margin-bottom: 10px;
     }
-    .upload.drag { border-color: #666; background: #f2f2f2; }
-    .upload b { display: block; font-size: 13px; margin-bottom: 2px; }
-    .upload span { color: var(--muted); font-size: 12px; }
+    .upload.drag {
+      border-color: #6b6b6b;
+      background: #f3f3f3;
+    }
+    .upload b { display: block; font-size: 13px; margin-bottom: 4px; }
+    .upload span { font-size: 12px; color: var(--muted); }
     .upload input { display: none; }
+
     textarea {
-      width: 100%; min-height: 190px; border: 1px solid var(--line); border-radius: 12px; padding: 11px;
-      font: 400 13px/1.68 "IBM Plex Sans", sans-serif; resize: vertical; margin-bottom: 8px;
+      width: 100%;
+      min-height: 200px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      resize: vertical;
+      font: 400 13px/1.72 "IBM Plex Sans", sans-serif;
+      margin-bottom: 10px;
     }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
     button {
-      border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--text);
-      padding: 9px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 11px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #fff;
+      color: var(--text);
+      cursor: pointer;
     }
-    button:disabled { opacity: .6; cursor: not-allowed; }
-    .main-btn { background: var(--black); border-color: var(--black); color: #fff; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .main-btn {
+      background: var(--black);
+      border-color: var(--black);
+      color: #fff;
+    }
     .status {
-      margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft);
-      padding: 8px 10px; display: flex; justify-content: space-between; color: var(--muted); font-size: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--soft);
+      padding: 9px 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
     }
-    .flag-ok { color: var(--ok); }
-    .flag-err { color: var(--err); }
-    .steps { display: none; }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
 
-    .jobs-meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
-    .job-cards { display: grid; grid-template-columns: 1fr; gap: 8px; max-height: 365px; overflow: auto; }
-    .job-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--soft); }
-    .job-card b { display: block; font-size: 13px; margin-bottom: 4px; line-height: 1.45; }
-    .job-card p { color: var(--muted); font-size: 12px; line-height: 1.6; margin-bottom: 5px; }
-    .job-card a { color: var(--text); text-decoration: underline; font-size: 12px; word-break: break-all; }
-    .job-empty { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; color: var(--muted); font-size: 12px; background: var(--soft); }
-
-    .result-shell { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-    summary {
-      list-style: none; cursor: pointer; padding: 10px 12px; font-size: 13px; font-weight: 600;
-      background: #fcfcfc; border-bottom: 1px solid var(--line);
+    .jobs-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
     }
-    summary::-webkit-details-marker { display: none; }
-    .result-body { padding: 10px; display: grid; gap: 8px; }
-    .result-item { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-    .result-item h3 { font-size: 12px; font-weight: 600; padding: 8px 10px; background: #fdfdfd; border-bottom: 1px solid var(--line); }
+    .job-list {
+      display: grid;
+      gap: 8px;
+      max-height: 398px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .job {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--soft);
+      padding: 10px;
+    }
+    .job b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .job p {
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .job a {
+      color: var(--text);
+      font-size: 12px;
+      word-break: break-all;
+      text-decoration: underline;
+    }
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--soft);
+    }
+
+    .mandatory {
+      margin-bottom: 12px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .mandatory h2 {
+      font-size: 14px;
+      font-weight: 600;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #fcfcfc;
+    }
+
+    .analysis-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .result {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .result h3 {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      background: #fcfcfc;
+    }
     pre {
-      padding: 10px; white-space: pre-wrap; word-break: break-word; font-size: 12px;
-      line-height: 1.7; max-height: 280px; overflow: auto; font-family: inherit;
+      padding: 10px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: inherit;
+      font-size: 12px;
+      line-height: 1.74;
+      max-height: 320px;
+      overflow: auto;
+    }
+    #optimizedResume {
+      max-height: 540px;
+      font-size: 13px;
+      line-height: 1.82;
     }
 
-    @media (max-width: 980px) { .top-grid { grid-template-columns: 1fr; } .wrap { width: min(1080px, calc(100% - 20px)); } }
+    @media (max-width: 980px) {
+      .page { width: min(1120px, calc(100% - 20px)); }
+      .grid-top, .analysis-grid { grid-template-columns: 1fr; }
+      h1 { min-height: 58px; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="page">
     <header class="top">
       <div class="brand"><span class="dot"></span>AI Job Assistant</div>
       <nav class="nav">
         <a href="/">Home</a>
+        <a href="/investor">Investor</a>
         <a href="/api/ready" target="_blank" rel="noopener">Ready</a>
       </nav>
     </header>
 
     <section class="hero">
-      <div class="mono">minimal / cn-market only / one-flow</div>
+      <div class="tag">workspace / cn-market / one flow</div>
       <h1><span id="typeTitle"></span><span class="cursor"></span></h1>
-      <p id="typeSub"></p>
+      <p class="sub" id="typeSub"></p>
     </section>
 
-    <section class="top-grid">
+    <section class="grid-top">
       <section class="panel">
         <div class="head">
-          <h2>简历输入</h2>
+          <h2>Resume Input</h2>
           <div class="meta">
             <span id="fileMeta">No file uploaded</span>
             <span id="providerMeta">Provider: -</span>
           </div>
         </div>
         <label class="upload" id="dropZone">
-          <b>上传简历</b>
-          <span>PDF / DOCX / TXT / 图片</span>
+          <b>Upload resume or drop file</b>
+          <span>PDF / DOCX / TXT / Image</span>
           <input id="fileInput" type="file" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.bmp,.gif" />
         </label>
-        <textarea id="resumeText" placeholder="粘贴简历正文，或上传文件自动解析..."></textarea>
+        <textarea id="resumeText" placeholder="Paste resume text here, or upload a file for automatic parsing."></textarea>
         <div class="actions">
-          <button class="main-btn" id="runBtn">开始分析</button>
-          <button id="sampleBtn">填充示例</button>
-          <button id="resetBtn">重置</button>
-          <button id="downloadBtn">下载结果</button>
+          <button class="main-btn" id="runBtn">Run Analysis</button>
+          <button id="sampleBtn">Load Sample</button>
+          <button id="resetBtn">Reset</button>
+          <button id="downloadBtn">Download</button>
         </div>
         <div class="status">
           <span id="statusText">Ready</span>
           <span id="statusFlag">IDLE</span>
         </div>
-        <div class="steps">
-          <div class="step" data-step="1">1</div>
-          <div class="step" data-step="2">2</div>
-          <div class="step" data-step="3">3</div>
-          <div class="step" data-step="4">4</div>
-        </div>
       </section>
 
       <section class="panel">
-        <div class="head"><h2>推荐岗位（优先中国真实链接）</h2></div>
-        <div class="jobs-meta" id="jobsMeta">分析后展示 Boss / 猎聘 / 智联 / 51job / 拉勾 / 企业API 数据。</div>
-        <div class="job-cards" id="jobCards">
-          <div class="job-empty">暂无岗位，请点击“开始分析”。</div>
+        <div class="head">
+          <h2>Recommended Jobs (China real links)</h2>
+        </div>
+        <div class="jobs-meta" id="jobsMeta">After analysis, this area shows actionable links from CN hiring sources.</div>
+        <div class="job-list" id="jobCards">
+          <div class="empty">No jobs yet. Click "Run Analysis" first.</div>
         </div>
       </section>
     </section>
 
-    <section class="result-shell">
-      <details>
-        <summary>查看完整分析（可选）</summary>
-        <div class="result-body">
-          <section class="result-item"><h3>职业分析</h3><pre id="careerAnalysis">-</pre></section>
-          <section class="result-item"><h3>推荐岗位文本</h3><pre id="jobRecommendations">-</pre></section>
-          <section class="result-item"><h3>优化后的简历</h3><pre id="optimizedResume">-</pre></section>
-          <section class="result-item"><h3>面试准备</h3><pre id="interviewPrep">-</pre></section>
-          <section class="result-item"><h3>模拟面试与薪资</h3><pre id="mockInterview">-</pre></section>
-        </div>
-      </details>
+    <section class="mandatory">
+      <h2>Optimized Resume (Mandatory Output)</h2>
+      <pre id="optimizedResume">-</pre>
+    </section>
+
+    <section class="analysis-grid">
+      <section class="result">
+        <h3>Career Analysis</h3>
+        <pre id="careerAnalysis">-</pre>
+      </section>
+      <section class="result">
+        <h3>Job Recommendation Text</h3>
+        <pre id="jobRecommendations">-</pre>
+      </section>
+      <section class="result">
+        <h3>Interview Preparation</h3>
+        <pre id="interviewPrep">-</pre>
+      </section>
+      <section class="result">
+        <h3>Mock Interview & Salary</h3>
+        <pre id="mockInterview">-</pre>
+      </section>
     </section>
   </div>
 
   <script>
-    const typeTitle = "One page. Input first. Jobs first.";
-    const typeSub = "先拿到可投递岗位，再看深度分析。";
+    const typeTitle = "Upload resume. Get real links. Apply faster.";
+    const typeSub = "Optimized resume is always visible. No optional hidden output.";
     const titleNode = document.getElementById("typeTitle");
     const subNode = document.getElementById("typeSub");
+
     function typewriter(node, text, speed, done) {
       let i = 0;
       const timer = setInterval(() => {
         i += 1;
         node.textContent = text.slice(0, i);
-        if (i >= text.length) { clearInterval(timer); if (done) done(); }
+        if (i >= text.length) {
+          clearInterval(timer);
+          if (done) done();
+        }
       }, speed);
     }
-    typewriter(titleNode, typeTitle, 22, () => typewriter(subNode, typeSub, 18));
+    typewriter(titleNode, typeTitle, 20, () => typewriter(subNode, typeSub, 14));
 
     const fileInput = document.getElementById("fileInput");
     const dropZone = document.getElementById("dropZone");
@@ -196,59 +428,75 @@
     const mockInterview = document.getElementById("mockInterview");
     const jobCards = document.getElementById("jobCards");
     const jobsMeta = document.getElementById("jobsMeta");
-    const steps = [...document.querySelectorAll(".step")];
-
-    function setStep(active) {
-      steps.forEach((s) => {
-        const n = Number(s.dataset.step);
-        s.classList.remove("active", "done");
-        if (n < active) s.classList.add("done");
-        else if (n === active) s.classList.add("active");
-      });
-    }
 
     function setStatus(text, state = "run") {
       statusText.textContent = text;
       statusFlag.className = "";
-      if (state === "ok") { statusFlag.textContent = "OK"; statusFlag.classList.add("flag-ok"); }
-      else if (state === "err") { statusFlag.textContent = "ERROR"; statusFlag.classList.add("flag-err"); }
-      else { statusFlag.textContent = "RUNNING"; }
+      if (state === "ok") {
+        statusFlag.textContent = "OK";
+        statusFlag.classList.add("ok");
+      } else if (state === "err") {
+        statusFlag.textContent = "ERROR";
+        statusFlag.classList.add("err");
+      } else {
+        statusFlag.textContent = "RUNNING";
+      }
     }
 
     async function parseJsonSafe(response) {
       const raw = await response.text();
-      try { return JSON.parse(raw); } catch (_) { throw new Error(`Non-JSON response: ${raw.slice(0, 180)}`); }
+      try {
+        return JSON.parse(raw);
+      } catch (_) {
+        throw new Error(`Non-JSON response: ${raw.slice(0, 180)}`);
+      }
+    }
+
+    function resetOutputs() {
+      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => {
+        el.textContent = "-";
+      });
+      providerMeta.textContent = "Provider: -";
+      jobsMeta.textContent = "After analysis, this area shows actionable links from CN hiring sources.";
+      jobCards.innerHTML = '<div class="empty">No jobs yet. Click "Run Analysis" first.</div>';
     }
 
     function renderJobCards(jobs, provider) {
       const rows = (jobs || []).filter((j) => (j.link || j.apply_url || "").startsWith("http"));
       if (!rows.length) {
-        jobsMeta.textContent = `Provider: ${provider || "-"}. No actionable links returned.`;
-        jobCards.innerHTML = '<div class="job-empty">未返回可点击岗位，请稍后重试。</div>';
+        jobsMeta.textContent = `Provider: ${provider || "-"} | No actionable links returned.`;
+        jobCards.innerHTML = '<div class="empty">No clickable jobs returned. Try again later.</div>';
         return;
       }
       jobsMeta.textContent = `Provider: ${provider || "-"} | ${rows.length} jobs`;
       jobCards.innerHTML = rows.map((j) => {
         const title = j.title || j.job_title || "Unknown Role";
         const company = j.company || "Unknown Company";
-        const loc = j.location || "-";
-        const platform = j.platform || j.provider || "-";
+        const location = j.location || "-";
         const salary = j.salary || j.salary_range || "";
+        const platform = j.platform || j.provider || "-";
         const link = j.link || j.apply_url || "#";
-        return `<article class="job-card"><b>${title}</b><p>${company} | ${loc}${salary ? ` | ${salary}` : ""}</p><p>来源: ${platform}</p><a href="${link}" target="_blank" rel="noopener noreferrer">打开岗位链接</a></article>`;
+        return [
+          "<article class=\"job\">",
+          `<b>${title}</b>`,
+          `<p>${company} | ${location}${salary ? ` | ${salary}` : ""}</p>`,
+          `<p>Source: ${platform}</p>`,
+          `<a href="${link}" target="_blank" rel="noopener noreferrer">Open job link</a>`,
+          "</article>",
+        ].join("");
       }).join("");
     }
 
     async function refreshRealtimeJobs(seed, providerMode) {
-      const kw = (seed?.keywords || []).filter(Boolean);
+      const keywords = (seed?.keywords || []).filter(Boolean);
       const location = seed?.location || "";
-      if (!kw.length) {
+      if (!keywords.length) {
         jobsMeta.textContent = "No seed keywords extracted from resume.";
-        jobCards.innerHTML = '<div class="job-empty">未提取到关键词，请补充技能后重试。</div>';
+        jobCards.innerHTML = '<div class="empty">No keywords extracted. Add more skills and retry.</div>';
         return;
       }
-      jobsMeta.textContent = `Searching with: ${kw.join(" / ")}...`;
-      const params = new URLSearchParams({ keywords: kw.join(","), location, limit: "8" });
+      jobsMeta.textContent = `Searching with: ${keywords.join(" / ")}...`;
+      const params = new URLSearchParams({ keywords: keywords.join(","), location, limit: "8" });
       try {
         const res = await fetch(`/api/jobs/search?${params.toString()}`);
         const data = await parseJsonSafe(res);
@@ -256,14 +504,13 @@
         renderJobCards(data.jobs || [], data.provider_mode || providerMode);
       } catch (err) {
         jobsMeta.textContent = `Search failed: ${err.message || "unknown error"}`;
-        jobCards.innerHTML = '<div class="job-empty">岗位搜索失败，请重试。</div>';
+        jobCards.innerHTML = '<div class="empty">Job search failed. Please retry.</div>';
       }
     }
 
     async function uploadFile(file) {
       const fd = new FormData();
       fd.append("file", file);
-      setStep(1);
       setStatus("Uploading and parsing file...");
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       const data = await parseJsonSafe(res);
@@ -276,19 +523,33 @@
     fileInput.addEventListener("change", async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      try { await uploadFile(file); } catch (err) { setStatus(err.message || "upload failed", "err"); }
+      try {
+        await uploadFile(file);
+      } catch (err) {
+        setStatus(err.message || "upload failed", "err");
+      }
     });
 
     ["dragenter", "dragover"].forEach((ev) => {
-      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.add("drag"); });
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.add("drag");
+      });
     });
     ["dragleave", "drop"].forEach((ev) => {
-      dropZone.addEventListener(ev, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); });
+      dropZone.addEventListener(ev, (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag");
+      });
     });
     dropZone.addEventListener("drop", async (e) => {
       const file = e.dataTransfer?.files?.[0];
       if (!file) return;
-      try { await uploadFile(file); } catch (err) { setStatus(err.message || "upload failed", "err"); }
+      try {
+        await uploadFile(file);
+      } catch (err) {
+        setStatus(err.message || "upload failed", "err");
+      }
     });
 
     sampleBtn.addEventListener("click", () => {
@@ -296,27 +557,25 @@
         "Yinghua Chen",
         "AI-Native Application Engineer",
         "Skills: Python, FastAPI, SQL, Docker, RAG, React",
-        "Experience: quant data pipeline, AI workflow, model QA gates",
+        "Experience: Data pipelines, AI workflow, quality gates",
       ].join("\n");
       setStatus("Sample loaded", "ok");
     });
 
     resetBtn.addEventListener("click", () => {
       resumeText.value = "";
-      [careerAnalysis, jobRecommendations, optimizedResume, interviewPrep, mockInterview].forEach((el) => { el.textContent = "-"; });
       fileMeta.textContent = "No file uploaded";
-      providerMeta.textContent = "Provider: -";
-      jobsMeta.textContent = "分析后展示可点击岗位链接。";
-      jobCards.innerHTML = '<div class="job-empty">暂无岗位，请先点击“开始分析”。</div>';
-      setStep(0);
+      resetOutputs();
       setStatus("Reset", "ok");
     });
 
     runBtn.addEventListener("click", async () => {
       const text = resumeText.value.trim();
-      if (!text) { setStatus("Please upload or paste a resume first.", "err"); return; }
+      if (!text) {
+        setStatus("Please upload or paste a resume first.", "err");
+        return;
+      }
       runBtn.disabled = true;
-      setStep(2);
       setStatus("AI is analyzing...");
       try {
         const res = await fetch("/api/process", {
@@ -326,7 +585,7 @@
         });
         const data = await parseJsonSafe(res);
         if (!res.ok || !data.success) throw new Error(data.error || "analysis failed");
-        setStep(4);
+
         careerAnalysis.textContent = data.career_analysis || "-";
         jobRecommendations.textContent = data.job_recommendations || "-";
         optimizedResume.textContent = data.optimized_resume || "-";
@@ -345,13 +604,17 @@
     downloadBtn.addEventListener("click", () => {
       const payload = {
         "Career Analysis": careerAnalysis.textContent,
-        "Job Summary Text": jobRecommendations.textContent,
+        "Job Recommendation Text": jobRecommendations.textContent,
         "Optimized Resume": optimizedResume.textContent,
-        "Interview Prep": interviewPrep.textContent,
-        "Mock & Salary": mockInterview.textContent,
+        "Interview Preparation": interviewPrep.textContent,
+        "Mock Interview & Salary": mockInterview.textContent,
       };
+
       let text = "";
-      Object.entries(payload).forEach(([k, v]) => { text += `\n${"=".repeat(20)} ${k} ${"=".repeat(20)}\n\n${v}\n`; });
+      Object.entries(payload).forEach(([k, v]) => {
+        text += `\n${"=".repeat(20)} ${k} ${"=".repeat(20)}\n\n${v}\n`;
+      });
+
       const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

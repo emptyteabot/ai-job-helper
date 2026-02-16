@@ -1533,6 +1533,8 @@ async def process_resume(request: Request):
                 heading = '【推荐岗位】（中国招聘站点搜索入口，适用于风控场景）'
             elif mode == 'enterprise_api':
                 heading = '【推荐岗位】（企业级中国招聘API实时数据）'
+            elif mode == 'none':
+                heading = '【推荐岗位】（未启用可用招聘源，当前仅展示空结果提示）'
 
             lines = [heading, '']
             for i, job in enumerate(jobs, 1):

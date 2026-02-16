@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Job Assistant | Investor Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#fff; --text:#101010; --muted:#6a6a6a; --line:#ececec; --soft:#fafafa; --black:#111; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "IBM Plex Sans", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+    .wrap { width: min(1080px, calc(100% - 26px)); margin: 16px auto 30px; }
+    .top { border: 1px solid var(--line); border-radius: 999px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 14px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #111; box-shadow: 0 0 0 5px rgba(17,17,17,.08); }
+    .nav a { text-decoration: none; color: var(--muted); border: 1px solid transparent; border-radius: 999px; padding: 6px 10px; font-size: 12px; margin-left: 6px; }
+    .nav a:hover { border-color: var(--line); color: var(--text); }
+    .hero { margin-bottom: 14px; }
+    .mono { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font: 500 11px/1 "IBM Plex Mono", monospace; color: var(--muted); margin-bottom: 8px; }
+    .mono:before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: #111; }
+    h1 { font-size: clamp(28px, 6vw, 52px); line-height: 1.05; letter-spacing: -1px; margin-bottom: 8px; }
+    .sub { color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; margin-bottom: 12px; }
+    .card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 10px; }
+    .card b { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .big { font-size: 23px; font-weight: 700; letter-spacing: -0.4px; }
+    .panel { border: 1px solid var(--line); border-radius: 14px; background: #fff; padding: 12px; margin-bottom: 10px; }
+    .panel h2 { font-size: 13px; margin-bottom: 8px; }
+    .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .item { border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--soft); }
+    .item span { color: var(--muted); font-size: 11px; display: block; margin-bottom: 2px; }
+    .item b { font-size: 14px; }
+    ul { padding-left: 18px; color: var(--text); }
+    li { margin-bottom: 6px; font-size: 13px; line-height: 1.6; }
+    pre { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--muted); background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px; overflow: auto; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } .kv { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand"><span class="dot"></span>AI Job Assistant</div>
+      <nav class="nav">
+        <a href="/">Home</a>
+        <a href="/app">Workspace</a>
+        <a href="/api/investor/readiness" target="_blank" rel="noopener">API</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="mono">investor / readiness / execution</div>
+      <h1 id="title">Financing Readiness Dashboard</h1>
+      <p class="sub">统一查看产品、增长、稳定性和 GTM 四条线状态，作为融资阶段周会基准面板。</p>
+    </section>
+
+    <section class="grid">
+      <article class="card"><b>Overall Score</b><div class="big" id="overall">-</div></article>
+      <article class="card"><b>Status</b><div class="big" id="status">-</div></article>
+      <article class="card"><b>Provider</b><div class="big" id="provider">-</div></article>
+      <article class="card"><b>Leads Total</b><div class="big" id="leadsTotal">-</div></article>
+    </section>
+
+    <section class="panel">
+      <h2>Pillars</h2>
+      <div class="kv">
+        <div class="item"><span>Product</span><b id="pProduct">-</b></div>
+        <div class="item"><span>Traction</span><b id="pTraction">-</b></div>
+        <div class="item"><span>Reliability</span><b id="pReliability">-</b></div>
+        <div class="item"><span>Go-To-Market</span><b id="pGtm">-</b></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Next 30 Days Targets</h2>
+      <div class="kv">
+        <div class="item"><span>Uploads</span><b id="tUploads">-</b></div>
+        <div class="item"><span>Process Runs</span><b id="tProcess">-</b></div>
+        <div class="item"><span>Searches</span><b id="tSearches">-</b></div>
+        <div class="item"><span>Applies</span><b id="tApplies">-</b></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Narrative</h2>
+      <ul id="narrative">
+        <li>Loading...</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Raw Snapshot</h2>
+      <pre id="raw">-</pre>
+    </section>
+  </div>
+
+  <script>
+    function setText(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value ?? "-";
+    }
+
+    async function loadInvestorData() {
+      try {
+        const [r1, r2] = await Promise.all([
+          fetch("/api/investor/readiness"),
+          fetch("/api/investor/summary"),
+        ]);
+        const d1 = await r1.json();
+        const d2 = await r2.json();
+        if (!r1.ok || !d1.success) throw new Error(d1.error || "readiness failed");
+        if (!r2.ok || !d2.success) throw new Error(d2.error || "summary failed");
+
+        setText("overall", d1.overall_score);
+        setText("status", d1.status);
+        setText("provider", d1.highlights?.provider_mode || "-");
+        setText("leadsTotal", d1.metrics?.leads?.total ?? "-");
+
+        setText("pProduct", d1.pillars?.product ?? "-");
+        setText("pTraction", d1.pillars?.traction ?? "-");
+        setText("pReliability", d1.pillars?.reliability ?? "-");
+        setText("pGtm", d1.pillars?.go_to_market ?? "-");
+
+        setText("tUploads", d1.next_30d_targets?.uploads ?? "-");
+        setText("tProcess", d1.next_30d_targets?.process_runs ?? "-");
+        setText("tSearches", d1.next_30d_targets?.searches ?? "-");
+        setText("tApplies", d1.next_30d_targets?.applies ?? "-");
+
+        const ul = document.getElementById("narrative");
+        ul.innerHTML = "";
+        (d2.narrative || []).forEach((line) => {
+          const li = document.createElement("li");
+          li.textContent = line;
+          ul.appendChild(li);
+        });
+
+        document.getElementById("raw").textContent = JSON.stringify(d1, null, 2);
+      } catch (err) {
+        document.getElementById("raw").textContent = String(err?.message || err || "unknown error");
+      }
+    }
+
+    loadInvestorData();
+  </script>
+</body>
+</html>

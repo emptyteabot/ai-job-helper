@@ -4,7 +4,7 @@ import json
 import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, Optional
 
 
@@ -67,7 +67,7 @@ class BusinessService:
         source: str = "landing",
         note: str = "",
     ) -> Dict[str, Any]:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         with self._lock:
             conn = self._conn()
             try:
@@ -86,7 +86,7 @@ class BusinessService:
         return {"lead_id": lead_id, "created_at": now}
 
     def track_event(self, event_name: str, payload: Optional[Dict[str, Any]] = None) -> None:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC).isoformat()
         payload_json = json.dumps(payload or {}, ensure_ascii=False)
         with self._lock:
             conn = self._conn()
@@ -111,7 +111,7 @@ class BusinessService:
                 leads_7d = self._count(
                     conn,
                     "SELECT COUNT(*) FROM leads WHERE created_at >= ?",
-                    ((datetime.utcnow() - timedelta(days=7)).isoformat(),),
+                    ((datetime.now(UTC) - timedelta(days=7)).isoformat(),),
                 )
 
                 uploads = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='resume_uploaded'")
@@ -150,5 +150,5 @@ class BusinessService:
             "stability": {
                 "api_errors": errors,
             },
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }

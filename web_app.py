@@ -127,6 +127,101 @@ def _api_error(message: str, status_code: int = 400, code: str = "bad_request") 
     )
 
 
+def _build_investor_readiness_snapshot() -> Dict[str, Any]:
+    """
+    Financing-oriented readiness snapshot.
+    Provides one consolidated view for product, traction, reliability and GTM.
+    """
+    metrics = business_service.metrics()
+    funnel = metrics.get("funnel", {})
+    leads = metrics.get("leads", {})
+    stability = metrics.get("stability", {})
+
+    cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+    enterprise_on = bool(os.getenv("ENTERPRISE_JOB_API_URL", "").strip())
+    global_fallback_on = os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    uploads = int(funnel.get("uploads", 0) or 0)
+    process_runs = int(funnel.get("process_runs", 0) or 0)
+    searches = int(funnel.get("searches", 0) or 0)
+    applies = int(funnel.get("applies", 0) or 0)
+    api_errors = int(stability.get("api_errors", 0) or 0)
+
+    process_success_pct = float(funnel.get("process_success_pct", 0) or 0)
+    search_to_apply_pct = float(funnel.get("search_to_apply_pct", 0) or 0)
+
+    product_score = 100.0
+    if cfg_mode not in {"auto", "cloud", "baidu", "bing", "brave", "jooble", "openclaw", "enterprise_api"}:
+        product_score -= 25.0
+    if global_fallback_on:
+        product_score -= 15.0
+    if process_success_pct < 90:
+        product_score -= 15.0
+    if process_success_pct < 75:
+        product_score -= 15.0
+    if enterprise_on:
+        product_score += 5.0
+    product_score = max(0.0, min(100.0, product_score))
+
+    traction_score = 0.0
+    traction_score += min(35.0, uploads * 1.2)
+    traction_score += min(35.0, process_runs * 1.5)
+    traction_score += min(20.0, searches * 0.9)
+    traction_score += min(10.0, applies * 2.0)
+    traction_score = max(0.0, min(100.0, traction_score))
+
+    reliability_score = 100.0
+    if process_runs > 0:
+        err_ratio = api_errors / max(process_runs, 1)
+        reliability_score -= min(60.0, err_ratio * 100.0)
+    if api_errors >= 20:
+        reliability_score -= 10.0
+    reliability_score = max(0.0, min(100.0, reliability_score))
+
+    gtm_score = 0.0
+    gtm_score += min(45.0, int(leads.get("total", 0) or 0) * 12.0)
+    gtm_score += min(25.0, int(leads.get("last_7d", 0) or 0) * 8.0)
+    gtm_score += min(15.0, search_to_apply_pct * 0.8)
+    gtm_score += 10.0 if searches > 0 else 0.0
+    gtm_score += 5.0 if applies > 0 else 0.0
+    gtm_score = max(0.0, min(100.0, gtm_score))
+
+    weighted = (
+        product_score * 0.35
+        + traction_score * 0.25
+        + reliability_score * 0.25
+        + gtm_score * 0.15
+    )
+    overall = round(max(0.0, min(100.0, weighted)), 1)
+
+    status = "seed_ready" if overall >= 75 else ("pre_seed_ready" if overall >= 60 else "build_stage")
+
+    return {
+        "status": status,
+        "overall_score": overall,
+        "pillars": {
+            "product": round(product_score, 1),
+            "traction": round(traction_score, 1),
+            "reliability": round(reliability_score, 1),
+            "go_to_market": round(gtm_score, 1),
+        },
+        "highlights": {
+            "provider_mode": cfg_mode,
+            "enterprise_api_configured": enterprise_on,
+            "global_fallback_enabled": global_fallback_on,
+            "cloud_cache_total": len(cloud_jobs_cache),
+        },
+        "metrics": metrics,
+        "next_30d_targets": {
+            "uploads": max(uploads + 80, 120),
+            "process_runs": max(process_runs + 60, 100),
+            "searches": max(searches + 100, 180),
+            "applies": max(applies + 30, 40),
+            "leads_total": max(int(leads.get("total", 0) or 0) + 20, 30),
+        },
+    }
+
+
 def _track_event(name: str, payload: Optional[Dict[str, Any]] = None) -> None:
     try:
         business_service.track_event(name, payload or {})
@@ -1224,7 +1319,17 @@ async def app_page():
     </script>
 </body>
 </html>
-    """
+"""
+
+
+@app.get("/investor", response_class=HTMLResponse)
+async def investor_page():
+    """Investor-facing readiness dashboard page."""
+    investor_html = "static/investor.html"
+    if os.path.exists(investor_html):
+        with open(investor_html, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Investor Dashboard</h1><p>/api/investor/readiness</p>")
 
 @app.post("/api/upload")
 async def upload_resume(file: UploadFile = File(...)):
@@ -1666,6 +1771,54 @@ async def business_readiness(request: Request):
         )
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/investor/readiness")
+async def investor_readiness(request: Request):
+    """
+    Investor-facing readiness API.
+    Optional auth via INVESTOR_READ_TOKEN header x-investor-token.
+    """
+    token = os.getenv("INVESTOR_READ_TOKEN", "").strip()
+    supplied = request.headers.get("x-investor-token", "").strip()
+    if token and supplied != token:
+        return _api_error("forbidden", status_code=403, code="forbidden")
+    try:
+        return _api_success(_build_investor_readiness_snapshot())
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/investor/readiness", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="investor_readiness_failed")
+
+
+@app.get("/api/investor/summary")
+async def investor_summary(request: Request):
+    """Compact summary payload for pitch materials."""
+    token = os.getenv("INVESTOR_READ_TOKEN", "").strip()
+    supplied = request.headers.get("x-investor-token", "").strip()
+    if token and supplied != token:
+        return _api_error("forbidden", status_code=403, code="forbidden")
+    try:
+        snap = _build_investor_readiness_snapshot()
+        p = snap.get("pillars", {})
+        narrative = [
+            f"Current financing readiness status: {snap.get('status')} (score {snap.get('overall_score')}).",
+            f"Product pillar score: {p.get('product')}, reliability: {p.get('reliability')}.",
+            f"Traction pillar score: {p.get('traction')}, GTM pillar score: {p.get('go_to_market')}.",
+            "Next 30 days focus: increase uploads, process runs, and qualified leads while keeping CN-real job links stable.",
+        ]
+        return _api_success(
+            {
+                "status": snap.get("status"),
+                "overall_score": snap.get("overall_score"),
+                "pillars": p,
+                "highlights": snap.get("highlights", {}),
+                "next_30d_targets": snap.get("next_30d_targets", {}),
+                "narrative": narrative,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/investor/summary", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="investor_summary_failed")
 
 @app.get("/api/jobs/search")
 async def search_jobs(

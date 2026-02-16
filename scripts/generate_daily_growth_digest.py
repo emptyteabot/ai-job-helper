@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 import sys
@@ -11,11 +12,51 @@ if str(ROOT) not in sys.path:
 
 from app.services.business_service import BusinessService
 
+try:
+    import requests
+except Exception:  # pragma: no cover
+    requests = None
+
 
 def main() -> int:
-    svc = BusinessService()
-    metrics = svc.metrics()
-    feedback = svc.feedback_summary(days=7, limit=20)
+    base_url = os.getenv("DIGEST_BASE_URL", "").strip().rstrip("/")
+
+    if base_url and requests is not None:
+        metrics = {}
+        feedback = {}
+        try:
+            proof = requests.get(base_url + "/api/business/public-proof", timeout=30).json()
+            ready = requests.get(base_url + "/api/ready", timeout=30).json()
+            inv = requests.get(base_url + "/api/investor/readiness", timeout=30).json()
+            metrics = {
+                "leads": {"total": proof.get("leads_total", 0), "last_7d": None},
+                "feedback": {"total": proof.get("feedback_total", 0), "last_7d": None},
+                "funnel": {
+                    "uploads": proof.get("uploads_total", 0),
+                    "process_runs": proof.get("process_runs_total", 0),
+                    "searches": None,
+                    "applies": None,
+                    "upload_to_process_pct": None,
+                    "process_to_search_pct": None,
+                    "search_to_apply_pct": None,
+                },
+                "ready": ready,
+                "investor_readiness": inv,
+            }
+            feedback = {
+                "total": proof.get("feedback_total", 0),
+                "last_days": 7,
+                "last_days_count": None,
+                "avg_rating_last_days": None,
+                "recent": [],
+            }
+        except Exception as e:
+            metrics = {"error": f"remote digest fetch failed: {e}"}
+            feedback = {}
+    else:
+        svc = BusinessService()
+        metrics = svc.metrics()
+        feedback = svc.feedback_summary(days=7, limit=20)
     now = datetime.now(UTC)
     day = now.strftime("%Y-%m-%d")
 
@@ -29,6 +70,9 @@ def main() -> int:
 
     lines = [
         f"# Daily Growth Digest - {day}",
+        "",
+        f"- Data source: {'remote' if base_url else 'local'}",
+        f"- Base URL: {base_url or '(local db)'}",
         "",
         "## Core Metrics",
         f"- Leads total: {leads.get('total', 0)}",
@@ -68,6 +112,8 @@ def main() -> int:
         json.dumps(
             {
                 "generated_at": now.isoformat(),
+                "source": "remote" if base_url else "local",
+                "base_url": base_url or None,
                 "metrics": metrics,
                 "feedback_summary": feedback,
             },

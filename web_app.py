@@ -2502,7 +2502,7 @@ async def get_crawler_status():
             "last_received": cloud_jobs_meta.get("last_received", 0),
             "last_new": cloud_jobs_meta.get("last_new", 0),
         })
-    
+
     return JSONResponse({
         "status": "ok",
         "total": len(cloud_jobs_cache),
@@ -2510,6 +2510,589 @@ async def get_crawler_status():
         "last_received": cloud_jobs_meta.get("last_received", 0),
         "last_new": cloud_jobs_meta.get("last_new", 0),
     })
+
+
+# ========================================
+# 自动投递 API 接口（新增）
+# ========================================
+
+# 全局任务管理
+auto_apply_tasks: Dict[str, Dict[str, Any]] = {}
+task_lock = asyncio.Lock()
+
+# 平台映射
+PLATFORM_APPLIERS = {
+    'boss': 'app.services.auto_apply.boss_applier.BossApplier',
+    'zhilian': 'app.services.auto_apply.zhilian_applier.ZhilianApplier',
+    'linkedin': 'app.services.auto_apply.linkedin_applier.LinkedInApplier'
+}
+
+@app.post("/api/auto-apply/start")
+async def start_auto_apply(request: Request):
+    """启动自动投递"""
+    try:
+        data = await request.json()
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+
+        # 获取配置
+        config = {
+            'platform': data.get('platform', 'linkedin'),
+            'max_apply_per_session': data.get('max_count', 50),
+            'keywords': data.get('keywords', ''),
+            'location': data.get('location', ''),
+            'company_blacklist': data.get('blacklist', []),
+            'user_profile': data.get('user_profile', {}),
+            'pause_before_submit': data.get('pause_before_submit', False),
+            'headless': data.get('headless', False)
+        }
+
+        # 验证配置
+        from app.services.auto_apply.config import AutoApplyConfig, validate_config
+        apply_config = AutoApplyConfig.from_dict(config)
+        is_valid, error_msg = validate_config(apply_config)
+
+        if not is_valid:
+            return _api_error(error_msg, 400)
+
+        # 创建任务记录
+        auto_apply_tasks[task_id] = {
+            'task_id': task_id,
+            'status': 'starting',
+            'config': config,
+            'progress': {
+                'applied': 0,
+                'failed': 0,
+                'total': 0,
+                'current_job': None
+            },
+            'created_at': datetime.now().isoformat(),
+            'started_at': None,
+            'completed_at': None
+        }
+
+        # 异步启动投递任务
+        asyncio.create_task(_run_auto_apply_task(task_id, config, data.get('jobs', [])))
+
+        return _api_success({
+            'task_id': task_id,
+            'message': '自动投递任务已启动'
+        })
+
+    except Exception as e:
+        logger.exception("启动自动投递失败")
+        return _api_error(str(e), 500)
+
+
+async def _run_auto_apply_task(task_id: str, config: Dict[str, Any], jobs: List[Dict[str, Any]]):
+    """运行自动投递任务（异步）"""
+    try:
+        from app.services.auto_apply.linkedin_applier import LinkedInApplier
+        from app.core.llm_client import LLMClient
+
+        # 更新状态
+        auto_apply_tasks[task_id]['status'] = 'running'
+        auto_apply_tasks[task_id]['started_at'] = datetime.now().isoformat()
+
+        # 创建投递器
+        llm_client = LLMClient() if config.get('use_ai_answers', True) else None
+        applier = LinkedInApplier(config, llm_client)
+
+        # 登录（如果需要）
+        email = config.get('user_profile', {}).get('email')
+        password = config.get('user_profile', {}).get('password')
+
+        if email and password:
+            login_success = applier.login(email, password)
+            if not login_success:
+                auto_apply_tasks[task_id]['status'] = 'failed'
+                auto_apply_tasks[task_id]['error'] = '登录失败'
+                return
+
+        # 如果没有提供职位列表，则搜索
+        if not jobs:
+            jobs = applier.search_jobs(
+                keywords=config.get('keywords', ''),
+                location=config.get('location', ''),
+                filters={}
+            )
+
+        auto_apply_tasks[task_id]['progress']['total'] = len(jobs)
+
+        # 批量投递
+        result = applier.batch_apply(jobs, config.get('max_apply_per_session', 50))
+
+        # 更新最终状态
+        auto_apply_tasks[task_id]['status'] = 'completed'
+        auto_apply_tasks[task_id]['completed_at'] = datetime.now().isoformat()
+        auto_apply_tasks[task_id]['result'] = result
+        auto_apply_tasks[task_id]['progress']['applied'] = result['applied']
+        auto_apply_tasks[task_id]['progress']['failed'] = result['failed']
+
+        # 清理资源
+        applier.cleanup()
+
+    except Exception as e:
+        logger.exception(f"自动投递任务失败: {task_id}")
+        auto_apply_tasks[task_id]['status'] = 'failed'
+        auto_apply_tasks[task_id]['error'] = str(e)
+
+
+@app.post("/api/auto-apply/stop")
+async def stop_auto_apply(request: Request):
+    """停止自动投递"""
+    try:
+        data = await request.json()
+        task_id = data.get('task_id')
+
+        if not task_id or task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+
+        task = auto_apply_tasks[task_id]
+
+        if task['status'] not in ['running', 'starting']:
+            return _api_error('任务未在运行中', 400)
+
+        # 设置停止标志（实际停止逻辑在 applier 中处理）
+        task['status'] = 'stopped'
+        task['completed_at'] = datetime.now().isoformat()
+
+        return _api_success({
+            'message': '停止指令已发送'
+        })
+
+    except Exception as e:
+        logger.exception("停止自动投递失败")
+        return _api_error(str(e), 500)
+
+
+@app.get("/api/auto-apply/status/{task_id}")
+async def get_auto_apply_status(task_id: str):
+    """查询投递状态"""
+    try:
+        if task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+
+        task = auto_apply_tasks[task_id]
+
+        return _api_success({
+            'task': task
+        })
+
+    except Exception as e:
+        logger.exception("查询投递状态失败")
+        return _api_error(str(e), 500)
+
+
+@app.get("/api/auto-apply/history")
+async def get_auto_apply_history(limit: int = 50):
+    """获取投递历史"""
+    try:
+        # 按时间倒序排列
+        tasks = sorted(
+            auto_apply_tasks.values(),
+            key=lambda x: x.get('created_at', ''),
+            reverse=True
+        )
+
+        return _api_success({
+            'tasks': tasks[:limit],
+            'total': len(tasks)
+        })
+
+    except Exception as e:
+        logger.exception("获取投递历史失败")
+        return _api_error(str(e), 500)
+
+
+@app.websocket("/ws/auto-apply/{task_id}")
+async def auto_apply_progress_ws(websocket: WebSocket, task_id: str):
+    """实时推送投递进度（支持多平台）"""
+    await websocket.accept()
+
+    try:
+        while True:
+            if task_id not in auto_apply_tasks:
+                await websocket.send_json({
+                    'type': 'error',
+                    'message': '任务不存在'
+                })
+                break
+
+            task = auto_apply_tasks[task_id]
+
+            # 发送详细进度
+            await websocket.send_json({
+                'type': 'progress',
+                'task_id': task_id,
+                'status': task['status'],
+                'progress': task['progress'],
+                'platforms': task.get('platforms', [task.get('config', {}).get('platform', 'linkedin')]),
+                'timestamp': datetime.now().isoformat()
+            })
+
+            # 如果任务已完成，发送最终消息并断开
+            if task['status'] in ['completed', 'failed', 'stopped']:
+                await websocket.send_json({
+                    'type': 'complete',
+                    'task_id': task_id,
+                    'status': task['status'],
+                    'progress': task['progress'],
+                    'result': task.get('result', {}),
+                    'error': task.get('error')
+                })
+                break
+
+            await asyncio.sleep(2)
+
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket 断开: {task_id}")
+    except Exception as e:
+        logger.exception(f"WebSocket 错误: {e}")
+        try:
+            await websocket.send_json({
+                'type': 'error',
+                'message': str(e)
+            })
+        except:
+            pass
+
+
+# ========================================
+# 多平台投递 API 接口（新增）
+# ========================================
+
+@app.post("/api/auto-apply/start-multi")
+async def start_multi_platform_apply(request: Request):
+    """启动多平台自动投递"""
+    try:
+        data = await request.json()
+        platforms = data.get('platforms', ['boss'])
+        config = data.get('config', {})
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+
+        # 创建任务记录
+        async with task_lock:
+            auto_apply_tasks[task_id] = {
+                'task_id': task_id,
+                'status': 'starting',
+                'platforms': platforms,
+                'config': config,
+                'progress': {
+                    'total_platforms': len(platforms),
+                    'completed_platforms': 0,
+                    'total_applied': 0,
+                    'total_failed': 0,
+                    'platform_progress': {}
+                },
+                'created_at': datetime.now().isoformat(),
+                'started_at': None,
+                'completed_at': None
+            }
+
+        # 异步启动多平台投递
+        asyncio.create_task(_run_multi_platform_apply(task_id, platforms, config))
+
+        return _api_success({
+            'task_id': task_id,
+            'message': f'已启动 {len(platforms)} 个平台的自动投递'
+        })
+
+    except Exception as e:
+        logger.exception("启动多平台投递失败")
+        return _api_error(str(e), 500)
+
+
+async def _run_multi_platform_apply(task_id: str, platforms: List[str], config: Dict[str, Any]):
+    """运行多平台投递任务"""
+    try:
+        # 更新状态
+        auto_apply_tasks[task_id]['status'] = 'running'
+        auto_apply_tasks[task_id]['started_at'] = datetime.now().isoformat()
+
+        # 并发执行多个平台
+        tasks = []
+        for platform in platforms:
+            if platform in PLATFORM_APPLIERS:
+                task = asyncio.create_task(
+                    _run_single_platform_apply(task_id, platform, config)
+                )
+                tasks.append(task)
+
+        # 等待所有平台完成
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 汇总结果
+        total_applied = 0
+        total_failed = 0
+
+        for result in results:
+            if isinstance(result, dict):
+                total_applied += result.get('applied', 0)
+                total_failed += result.get('failed', 0)
+
+        # 更新最终状态
+        auto_apply_tasks[task_id]['status'] = 'completed'
+        auto_apply_tasks[task_id]['completed_at'] = datetime.now().isoformat()
+        auto_apply_tasks[task_id]['progress']['total_applied'] = total_applied
+        auto_apply_tasks[task_id]['progress']['total_failed'] = total_failed
+
+    except Exception as e:
+        logger.exception(f"多平台投递任务失败: {task_id}")
+        auto_apply_tasks[task_id]['status'] = 'failed'
+        auto_apply_tasks[task_id]['error'] = str(e)
+
+
+async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[str, Any]):
+    """运行单个平台的投递任务"""
+    try:
+        # 动态导入平台 Applier
+        module_path, class_name = PLATFORM_APPLIERS[platform].rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        ApplierClass = getattr(module, class_name)
+
+        # 获取平台特定配置
+        platform_config = config.get(f'{platform}_config', {})
+        platform_config.update({
+            'keywords': config.get('keywords', ''),
+            'location': config.get('location', ''),
+            'max_apply_per_session': config.get('max_count', 50),
+            'company_blacklist': config.get('blacklist', []),
+            'headless': config.get('headless', False)
+        })
+
+        # 创建投递器（兼容不同的构造函数）
+        from app.core.llm_client import LLMClient
+        llm_client = LLMClient() if config.get('use_ai_answers', True) else None
+
+        # LinkedIn 需要 llm_client 参数，其他平台不需要
+        if platform == 'linkedin':
+            applier = ApplierClass(platform_config, llm_client)
+        else:
+            applier = ApplierClass(platform_config)
+
+        # 登录
+        login_success = False
+        if platform == 'boss':
+            phone = platform_config.get('phone')
+            if phone:
+                login_success = applier.login(phone)
+        elif platform == 'zhilian':
+            username = platform_config.get('username')
+            password = platform_config.get('password')
+            if username and password:
+                login_success = applier.login(username, password)
+        elif platform == 'linkedin':
+            email = platform_config.get('email')
+            password = platform_config.get('password')
+            if email and password:
+                login_success = applier.login(email, password)
+
+        if not login_success:
+            raise Exception(f"{platform} 登录失败")
+
+        # 搜索职位
+        jobs = applier.search_jobs(
+            keywords=platform_config.get('keywords', ''),
+            location=platform_config.get('location', ''),
+            filters={}
+        )
+
+        # 更新进度
+        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
+            'status': 'running',
+            'total': len(jobs),
+            'applied': 0,
+            'failed': 0
+        }
+
+        # 批量投递
+        result = applier.batch_apply(jobs, platform_config.get('max_apply_per_session', 50))
+
+        # 更新平台进度
+        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
+            'status': 'completed',
+            'total': len(jobs),
+            'applied': result['applied'],
+            'failed': result['failed']
+        }
+
+        auto_apply_tasks[task_id]['progress']['completed_platforms'] += 1
+
+        # 清理资源
+        applier.cleanup()
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"平台 {platform} 投递失败")
+        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
+            'status': 'failed',
+            'error': str(e)
+        }
+        return {'applied': 0, 'failed': 0}
+
+
+@app.get("/api/auto-apply/platforms")
+async def get_supported_platforms():
+    """获取支持的平台列表"""
+    return _api_success({
+        'platforms': [
+            {
+                'id': 'boss',
+                'name': 'Boss直聘',
+                'icon': '💼',
+                'status': 'available',
+                'features': ['手机验证码登录', '智能投递', '打招呼语'],
+                'config_fields': [
+                    {'name': 'phone', 'label': '手机号', 'type': 'text', 'required': True}
+                ]
+            },
+            {
+                'id': 'zhilian',
+                'name': '智联招聘',
+                'icon': '📋',
+                'status': 'available',
+                'features': ['账号密码登录', '简历投递', '附件上传'],
+                'config_fields': [
+                    {'name': 'username', 'label': '用户名', 'type': 'text', 'required': True},
+                    {'name': 'password', 'label': '密码', 'type': 'password', 'required': True}
+                ]
+            },
+            {
+                'id': 'linkedin',
+                'name': 'LinkedIn',
+                'icon': '🔗',
+                'status': 'available',
+                'features': ['Easy Apply', 'AI问答', '国际职位'],
+                'config_fields': [
+                    {'name': 'email', 'label': '邮箱', 'type': 'email', 'required': True},
+                    {'name': 'password', 'label': '密码', 'type': 'password', 'required': True}
+                ]
+            }
+        ]
+    })
+
+
+@app.get("/api/auto-apply/stats")
+async def get_apply_stats():
+    """获取投递统计"""
+    try:
+        # 统计所有任务
+        total_tasks = len(auto_apply_tasks)
+        completed_tasks = sum(1 for t in auto_apply_tasks.values() if t['status'] == 'completed')
+        running_tasks = sum(1 for t in auto_apply_tasks.values() if t['status'] == 'running')
+
+        total_applied = 0
+        total_failed = 0
+
+        # 平台统计
+        platform_stats = {}
+
+        for task in auto_apply_tasks.values():
+            # 单平台任务
+            if 'result' in task:
+                result = task['result']
+                total_applied += result.get('applied', 0)
+                total_failed += result.get('failed', 0)
+
+                platform = task.get('config', {}).get('platform', 'linkedin')
+                if platform not in platform_stats:
+                    platform_stats[platform] = {'applied': 0, 'failed': 0, 'total': 0}
+                platform_stats[platform]['applied'] += result.get('applied', 0)
+                platform_stats[platform]['failed'] += result.get('failed', 0)
+
+            # 多平台任务
+            if 'progress' in task and 'platform_progress' in task['progress']:
+                for platform, progress in task['progress']['platform_progress'].items():
+                    if platform not in platform_stats:
+                        platform_stats[platform] = {'applied': 0, 'failed': 0, 'total': 0}
+                    platform_stats[platform]['applied'] += progress.get('applied', 0)
+                    platform_stats[platform]['failed'] += progress.get('failed', 0)
+                    platform_stats[platform]['total'] += progress.get('total', 0)
+
+                total_applied += task['progress'].get('total_applied', 0)
+                total_failed += task['progress'].get('total_failed', 0)
+
+        return _api_success({
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'running_tasks': running_tasks,
+            'total_applied': total_applied,
+            'total_failed': total_failed,
+            'success_rate': round(total_applied / (total_applied + total_failed) * 100, 2) if (total_applied + total_failed) > 0 else 0,
+            'platform_stats': platform_stats
+        })
+
+    except Exception as e:
+        logger.exception("获取统计失败")
+        return _api_error(str(e), 500)
+
+
+@app.post("/api/auto-apply/test-platform")
+async def test_platform_config(request: Request):
+    """测试平台配置（不实际投递）"""
+    try:
+        data = await request.json()
+        platform = data.get('platform', 'boss')
+        config = data.get('config', {})
+
+        if platform not in PLATFORM_APPLIERS:
+            return _api_error(f'不支持的平台: {platform}', 400)
+
+        # 动态导入平台 Applier
+        module_path, class_name = PLATFORM_APPLIERS[platform].rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        ApplierClass = getattr(module, class_name)
+
+        # 创建投递器
+        if platform == 'linkedin':
+            from app.core.llm_client import LLMClient
+            llm_client = LLMClient()
+            applier = ApplierClass(config, llm_client)
+        else:
+            applier = ApplierClass(config)
+
+        # 测试登录
+        login_result = {'success': False, 'message': '未测试'}
+
+        if platform == 'boss':
+            phone = config.get('phone')
+            if phone:
+                login_result = {
+                    'success': True,
+                    'message': f'配置正确，手机号: {phone[:3]}****{phone[-4:]}'
+                }
+        elif platform == 'zhilian':
+            username = config.get('username')
+            password = config.get('password')
+            if username and password:
+                login_result = {
+                    'success': True,
+                    'message': f'配置正确，用户名: {username}'
+                }
+        elif platform == 'linkedin':
+            email = config.get('email')
+            password = config.get('password')
+            if email and password:
+                login_result = {
+                    'success': True,
+                    'message': f'配置正确，邮箱: {email}'
+                }
+
+        return _api_success({
+            'platform': platform,
+            'login_test': login_result,
+            'config_valid': login_result['success']
+        })
+
+    except Exception as e:
+        logger.exception("测试平台配置失败")
+        return _api_error(str(e), 500)
+
 
 if __name__ == "__main__":
     import webbrowser

@@ -1,0 +1,95 @@
+{
+  "generated_at": "2026-02-16T12:52:33.328051+00:00",
+  "source": "remote",
+  "base_url": "https://ai-job-hunter-production-2730.up.railway.app",
+  "metrics": {
+    "leads": {
+      "total": 0,
+      "last_7d": null
+    },
+    "feedback": {
+      "total": 1,
+      "last_7d": null
+    },
+    "funnel": {
+      "uploads": 0,
+      "process_runs": 0,
+      "searches": null,
+      "applies": null,
+      "upload_to_process_pct": null,
+      "process_to_search_pct": null,
+      "search_to_apply_pct": null
+    },
+    "ready": {
+      "success": true,
+      "status": "ready",
+      "score": 80.0,
+      "checks": {
+        "api_alive": true,
+        "cn_provider_mode": true,
+        "cache_or_cn_fallback": true,
+        "global_fallback_disabled_by_default": true,
+        "enterprise_api_configured": false
+      },
+      "provider_mode": "cloud",
+      "cloud_cache_total": 0,
+      "boot_ts": "2026-02-16T12:48:08.716332"
+    },
+    "investor_readiness": {
+      "success": true,
+      "status": "build_stage",
+      "overall_score": 49.9,
+      "pillars": {
+        "product": 70.0,
+        "traction": 0.0,
+        "reliability": 100.0,
+        "go_to_market": 2.5
+      },
+      "highlights": {
+        "provider_mode": "cloud",
+        "enterprise_api_configured": false,
+        "global_fallback_enabled": false,
+        "cloud_cache_total": 0,
+        "feedback_total": 1
+      },
+      "metrics": {
+        "leads": {
+          "total": 0,
+          "last_7d": 0
+        },
+        "feedback": {
+          "total": 1,
+          "last_7d": 1
+        },
+        "funnel": {
+          "uploads": 0,
+          "process_runs": 0,
+          "searches": 0,
+          "applies": 0,
+          "upload_to_process_pct": 0.0,
+          "process_to_search_pct": 0.0,
+          "search_to_apply_pct": 0.0,
+          "process_success_pct": 0.0
+        },
+        "stability": {
+          "api_errors": 0
+        },
+        "generated_at": "2026-02-16T12:52:33.178601+00:00"
+      },
+      "next_30d_targets": {
+        "uploads": 120,
+        "process_runs": 100,
+        "searches": 180,
+        "applies": 40,
+        "leads_total": 30
+      }
+    }
+  },
+  "feedback_summary": {
+    "total": 1,
+    "last_days": 7,
+    "last_days_count": null,
+    "avg_rating_last_days": null,
+    "recent": []
+  }
+}

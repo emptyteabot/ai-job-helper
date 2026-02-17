@@ -14,3 +14,5 @@ echo https://ai-job-hunter-production-2730.up.railway.app/app
 echo.
 pause
 
+
+

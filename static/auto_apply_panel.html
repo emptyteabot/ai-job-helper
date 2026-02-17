@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>自动投递控制台 | AI求职助手</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <!-- Alpine.js 和 Chart.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.x.x/dist/chart.umd.js"></script>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #131313;
+      --muted: #64646b;
+      --line: #e8e8ec;
+      --soft: #f7f7f9;
+      --ok: #1f7c49;
+      --err: #b54040;
+      --warn: #d97706;
+      --primary: #2563eb;
+      --maxw: 980px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .page {
+      width: min(var(--maxw), calc(100% - 34px));
+      margin: 22px auto 48px;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 0 16px;
+      margin-bottom: 8px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #121212;
+      box-shadow: 0 0 0 6px rgba(18, 18, 18, 0.08);
+    }
+    .nav { display: flex; gap: 16px; font-size: 13px; }
+    .nav a { color: var(--muted); text-decoration: none; }
+    .nav a:hover { color: var(--text); }
+
+    .hero { padding: 42px 0 28px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--muted);
+      padding: 6px 11px;
+      font: 500 11px/1 "IBM Plex Mono", monospace;
+      margin-bottom: 10px;
+    }
+    .pill::before {
+      content: "";
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: #121212;
+    }
+    h1 {
+      font-size: clamp(38px, 7vw, 64px);
+      letter-spacing: -1.4px;
+      line-height: 1.1;
+      margin-bottom: 12px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 19px;
+      line-height: 1.65;
+      max-width: 680px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+    .panel h2 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      letter-spacing: -0.2px;
+    }
+
+    .form-row {
+      margin-bottom: 16px;
+    }
+    .form-row label {
+      display: block;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+    .form-row input[type="text"],
+    .form-row select,
+    .form-row textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--text);
+      padding: 12px 14px;
+      font: 400 15px/1.5 "Noto Sans SC", sans-serif;
+    }
+    .form-row textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .form-row input:focus,
+    .form-row select:focus,
+    .form-row textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .slider-container input[type="range"] {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--soft);
+      outline: none;
+      -webkit-appearance: none;
+    }
+    .slider-container input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #121212;
+      cursor: pointer;
+    }
+    .slider-container input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #121212;
+      cursor: pointer;
+      border: none;
+    }
+    .slider-value {
+      font-size: 18px;
+      font-weight: 700;
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px 22px;
+      background: #fff;
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-start {
+      border-color: var(--ok);
+      background: var(--ok);
+      color: #fff;
+      flex: 1;
+      min-width: 160px;
+    }
+    .btn-start:hover:not(:disabled) {
+      background: #166534;
+    }
+    .btn-stop {
+      border-color: var(--err);
+      background: var(--err);
+      color: #fff;
+    }
+    .btn-stop:hover:not(:disabled) {
+      background: #991b1b;
+    }
+    .btn-pause {
+      border-color: var(--warn);
+      background: var(--warn);
+      color: #fff;
+    }
+    .btn-pause:hover:not(:disabled) {
+      background: #b45309;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .stat-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--soft);
+      padding: 14px;
+      text-align: center;
+    }
+    .stat-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .stat-card b {
+      font-size: 28px;
+      letter-spacing: -0.5px;
+    }
+    .stat-card.ok b { color: var(--ok); }
+    .stat-card.err b { color: var(--err); }
+
+    .progress-bar {
+      width: 100%;
+      height: 12px;
+      border-radius: 6px;
+      background: var(--soft);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--ok), #22c55e);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .current-job {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--soft);
+      padding: 14px;
+      margin-bottom: 16px;
+      min-height: 60px;
+    }
+    .current-job b {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 6px;
+    }
+    .current-job p {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .log-container {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fafafa;
+      padding: 14px;
+      max-height: 320px;
+      overflow-y: auto;
+      font: 400 13px/1.7 "IBM Plex Mono", monospace;
+      color: var(--muted);
+    }
+    .log-entry {
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+    .log-entry.success { color: var(--ok); }
+    .log-entry.error { color: var(--err); }
+    .log-entry.info { color: var(--primary); }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .history-table th,
+    .history-table td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .history-table th {
+      background: var(--soft);
+      font-weight: 700;
+      color: var(--text);
+    }
+    .history-table td {
+      color: var(--muted);
+    }
+    .history-table tr:hover {
+      background: var(--soft);
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .status-badge.success {
+      background: #dcfce7;
+      color: var(--ok);
+    }
+    .status-badge.failed {
+      background: #fee2e2;
+      color: var(--err);
+    }
+    .status-badge.pending {
+      background: #fef3c7;
+      color: var(--warn);
+    }
+
+    .ws-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+    .ws-status::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .ws-status.connected::before {
+      background: var(--ok);
+      box-shadow: 0 0 0 3px rgba(31, 124, 73, 0.2);
+    }
+
+    /* 多平台选择卡片 */
+    .platform-selector {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .platform-card {
+      border: 2px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 18px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      position: relative;
+    }
+    .platform-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+    }
+    .platform-card.selected {
+      border-color: var(--primary);
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    }
+    .platform-card .icon {
+      font-size: 32px;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .platform-card .name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .platform-card .check {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+    .platform-card.selected .check {
+      display: flex;
+    }
+
+    /* 平台配置区域 */
+    .platform-config {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--soft);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .platform-config h3 {
+      font-size: 16px;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    .platform-config input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px 12px;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    .platform-config input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    /* 多平台进度展示 */
+    .platform-progress-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .platform-progress-item {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--soft);
+      padding: 16px;
+    }
+    .platform-progress-item h4 {
+      font-size: 16px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .platform-progress-item .progress-bar {
+      height: 32px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      position: relative;
+    }
+    .platform-progress-item .progress-fill {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .platform-progress-item .status-text {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* 图表容器 */
+    .chart-container {
+      max-width: 400px;
+      margin: 0 auto;
+      padding: 20px 0;
+    }
+
+    @media (max-width: 720px) {
+      .hero { padding: 28px 0 20px; }
+      h1 { font-size: 32px; }
+      .sub { font-size: 16px; }
+      .controls { flex-direction: column; }
+      .btn { width: 100%; }
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .platform-selector { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="top">
+      <div class="brand"><span class="dot"></span>AI求职助手</div>
+      <nav class="nav">
+        <a href="/">首页</a>
+        <a href="/app_clean.html">简历分析</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="pill">自动化投递</div>
+      <h1>批量投递，解放双手</h1>
+      <p class="sub">设置关键词和数量，一键启动自动投递任务，实时查看进度和结果。</p>
+    </section>
+
+    <!-- 配置区域 -->
+    <section class="panel" x-data="autoApplyApp()">
+      <h2>投递配置</h2>
+
+      <!-- 平台选择 -->
+      <div class="form-row">
+        <label>选择平台（可多选）</label>
+        <div class="platform-selector">
+          <template x-for="platform in platforms" :key="platform.id">
+            <div class="platform-card"
+                 :class="{ 'selected': selectedPlatforms.includes(platform.id) }"
+                 @click="togglePlatform(platform.id)">
+              <span class="check">✓</span>
+              <span class="icon" x-text="platform.icon"></span>
+              <span class="name" x-text="platform.name"></span>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 平台特定配置 -->
+      <template x-if="selectedPlatforms.includes('boss')">
+        <div class="platform-config">
+          <h3>💼 Boss直聘配置</h3>
+          <input type="tel" x-model="config.boss.phone" placeholder="手机号（用于登录）">
+          <input type="text" x-model="config.boss.code" placeholder="验证码（如需要）">
+        </div>
+      </template>
+
+      <template x-if="selectedPlatforms.includes('zhilian')">
+        <div class="platform-config">
+          <h3>📋 智联招聘配置</h3>
+          <input type="email" x-model="config.zhilian.username" placeholder="邮箱或用户名">
+          <input type="password" x-model="config.zhilian.password" placeholder="密码">
+        </div>
+      </template>
+
+      <template x-if="selectedPlatforms.includes('linkedin')">
+        <div class="platform-config">
+          <h3>🔗 LinkedIn 配置</h3>
+          <input type="email" x-model="config.linkedin.email" placeholder="邮箱">
+          <input type="password" x-model="config.linkedin.password" placeholder="密码">
+        </div>
+      </template>
+
+      <!-- 通用配置 -->
+      <div class="form-row">
+        <label>投递数量（每个平台）</label>
+        <div class="slider-container">
+          <input type="range" x-model="config.max_count" min="1" max="200" />
+          <span class="slider-value" x-text="config.max_count"></span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>职位关键词</label>
+        <input type="text" x-model="config.keywords" placeholder="例如：前端工程师、React、Vue" />
+      </div>
+      <div class="form-row">
+        <label>工作地点</label>
+        <input type="text" x-model="config.location" placeholder="例如：北京、上海、深圳" />
+      </div>
+      <div class="form-row">
+        <label>公司黑名单（每行一个）</label>
+        <textarea x-model="config.blacklist_text" placeholder="不想投递的公司名称，每行一个"></textarea>
+      </div>
+
+      <!-- 控制按钮 -->
+      <div style="margin-top: 20px;">
+        <div class="ws-status" :class="{ 'connected': wsConnected }" x-text="wsStatus"></div>
+        <div class="controls">
+          <button class="btn btn-start"
+                  @click="startApply()"
+                  :disabled="isRunning || selectedPlatforms.length === 0">
+            <span x-show="!isRunning">启动投递</span>
+            <span x-show="isRunning">投递中...</span>
+          </button>
+          <button class="btn btn-pause"
+                  @click="togglePause()"
+                  :disabled="!isRunning"
+                  x-text="isPaused ? '继续' : '暂停'">
+          </button>
+          <button class="btn btn-stop"
+                  @click="stopTask()"
+                  :disabled="!isRunning">
+            停止
+          </button>
+        </div>
+      </div>
+
+      <!-- 多平台进度展示 -->
+      <div x-show="isRunning" style="margin-top: 24px;">
+        <h2 style="margin-bottom: 16px;">各平台进度</h2>
+        <div class="platform-progress-list">
+          <template x-for="platformId in selectedPlatforms" :key="platformId">
+            <div class="platform-progress-item">
+              <h4>
+                <span x-text="getPlatformIcon(platformId)"></span>
+                <span x-text="getPlatformName(platformId)"></span>
+              </h4>
+              <div class="progress-bar">
+                <div class="progress-fill"
+                     :style="`width: ${getProgress(platformId)}%`"
+                     x-text="`${getApplied(platformId)}/${getTotal(platformId)}`">
+                </div>
+              </div>
+              <p class="status-text" x-text="getStatus(platformId)"></p>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 总体统计 -->
+      <div x-show="isRunning" style="margin-top: 24px;">
+        <h2 style="margin-bottom: 16px;">总体统计</h2>
+        <div class="stats-grid">
+          <div class="stat-card ok">
+            <span>成功投递</span>
+            <b x-text="totalStats.success"></b>
+          </div>
+          <div class="stat-card err">
+            <span>失败次数</span>
+            <b x-text="totalStats.failed"></b>
+          </div>
+          <div class="stat-card">
+            <span>总计</span>
+            <b x-text="totalStats.total"></b>
+          </div>
+          <div class="stat-card">
+            <span>成功率</span>
+            <b x-text="totalStats.rate + '%'"></b>
+          </div>
+        </div>
+      </div>
+
+      <!-- 图表展示 -->
+      <div x-show="isRunning && totalStats.total > 0" style="margin-top: 24px;">
+        <h2 style="margin-bottom: 16px;">平台分布</h2>
+        <div class="chart-container">
+          <canvas id="platformChart"></canvas>
+        </div>
+      </div>
+
+      <!-- 实时日志 -->
+      <div x-show="isRunning" style="margin-top: 24px;">
+        <h2 style="margin-bottom: 16px;">实时日志</h2>
+        <div class="current-job">
+          <b x-text="currentJob.title || '等待中...'"></b>
+          <p x-text="currentJob.company || '正在获取职位信息...'"></p>
+        </div>
+        <div class="log-container" id="logContainer">
+          <template x-for="(log, index) in logs" :key="index">
+            <div class="log-entry" :class="log.type" x-text="log.message"></div>
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <!-- 历史记录 -->
+    <section class="panel">
+      <h2>投递历史</h2>
+      <div style="overflow-x: auto;">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>职位</th>
+              <th>公司</th>
+              <th>平台</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--muted);">暂无历史记录</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // Alpine.js 应用
+    function autoApplyApp() {
+      return {
+        // 可用平台
+        platforms: [
+          { id: 'boss', name: 'Boss直聘', icon: '💼' },
+          { id: 'zhilian', name: '智联招聘', icon: '📋' },
+          { id: 'linkedin', name: 'LinkedIn', icon: '🔗' }
+        ],
+
+        // 选中的平台
+        selectedPlatforms: [],
+
+        // 配置
+        config: {
+          keywords: '',
+          location: '',
+          max_count: 50,
+          blacklist_text: '',
+          boss: { phone: '', code: '' },
+          zhilian: { username: '', password: '' },
+          linkedin: { email: '', password: '' }
+        },
+
+        // 状态
+        isRunning: false,
+        isPaused: false,
+        currentTaskId: null,
+        wsConnected: false,
+        wsStatus: 'WebSocket 未连接',
+        ws: null,
+
+        // 进度数据
+        progress: {},
+        currentJob: { title: '', company: '' },
+        logs: [],
+
+        // 图表实例
+        chart: null,
+
+        // 切换平台选择
+        togglePlatform(platformId) {
+          const index = this.selectedPlatforms.indexOf(platformId);
+          if (index > -1) {
+            this.selectedPlatforms.splice(index, 1);
+          } else {
+            this.selectedPlatforms.push(platformId);
+          }
+        },
+
+        // 启动投递
+        async startApply() {
+          if (!this.config.keywords.trim()) {
+            alert('请输入职位关键词');
+            return;
+          }
+
+          if (this.selectedPlatforms.length === 0) {
+            alert('请至少选择一个平台');
+            return;
+          }
+
+          try {
+            this.isRunning = true;
+            this.addLog('正在启动任务...', 'info');
+
+            const blacklist = this.config.blacklist_text
+              .split('\n')
+              .map(x => x.trim())
+              .filter(x => x);
+
+            const response = await fetch('/api/auto-apply/start-multi', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                platforms: this.selectedPlatforms,
+                config: {
+                  keywords: this.config.keywords,
+                  location: this.config.location,
+                  max_count: parseInt(this.config.max_count),
+                  blacklist: blacklist,
+                  boss_config: this.config.boss,
+                  zhilian_config: this.config.zhilian,
+                  linkedin_config: this.config.linkedin
+                }
+              })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              this.currentTaskId = data.task_id;
+              this.connectWebSocket(data.task_id);
+              this.addLog(`任务已启动，ID: ${data.task_id}`, 'success');
+            } else {
+              throw new Error(data.error || '启动失败');
+            }
+          } catch (error) {
+            this.addLog(`启动失败: ${error.message}`, 'error');
+            this.isRunning = false;
+          }
+        },
+
+        // WebSocket 连接
+        connectWebSocket(taskId) {
+          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/auto-apply/${taskId}`);
+
+          this.ws.onopen = () => {
+            this.wsConnected = true;
+            this.wsStatus = 'WebSocket 已连接';
+            this.addLog('WebSocket 连接成功', 'success');
+          };
+
+          this.ws.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              this.handleWebSocketMessage(data);
+            } catch (err) {
+              this.addLog(`消息解析失败: ${err.message}`, 'error');
+            }
+          };
+
+          this.ws.onerror = () => {
+            this.wsConnected = false;
+            this.addLog('WebSocket 连接错误', 'error');
+          };
+
+          this.ws.onclose = () => {
+            this.wsConnected = false;
+            this.wsStatus = 'WebSocket 已断开';
+            this.addLog('WebSocket 连接关闭', 'info');
+
+            // 断线重连
+            if (this.isRunning && !this.isPaused) {
+              setTimeout(() => {
+                this.addLog('尝试重新连接...', 'info');
+                this.connectWebSocket(taskId);
+              }, 3000);
+            }
+          };
+        },
+
+        // 处理 WebSocket 消息
+        handleWebSocketMessage(data) {
+          switch (data.type) {
+            case 'progress':
+              this.progress = data.progress || {};
+              if (data.current_job) {
+                this.currentJob = data.current_job;
+              }
+              this.updateChart();
+              break;
+
+            case 'job_applied':
+              this.addLog(`✓ 投递成功: ${data.job.title} - ${data.job.company}`, 'success');
+              break;
+
+            case 'job_failed':
+              this.addLog(`✗ 投递失败: ${data.job.title} - ${data.reason}`, 'error');
+              break;
+
+            case 'completed':
+              this.addLog('任务完成！', 'success');
+              this.currentJob = {
+                title: '任务完成',
+                company: `成功 ${data.success || 0}，失败 ${data.failed || 0}`
+              };
+              this.stopTask();
+              break;
+
+            case 'error':
+              this.addLog(`错误: ${data.message}`, 'error');
+              break;
+
+            default:
+              this.addLog(`收到消息: ${JSON.stringify(data)}`, 'info');
+          }
+        },
+
+        // 暂停/继续任务
+        async togglePause() {
+          if (!this.currentTaskId) return;
+
+          try {
+            const action = this.isPaused ? 'resume' : 'pause';
+            const response = await fetch(`/api/auto-apply/${action}/${this.currentTaskId}`, {
+              method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+              throw new Error(result.error || '操作失败');
+            }
+
+            this.isPaused = !this.isPaused;
+            this.addLog(this.isPaused ? '任务已暂停' : '任务已继续', 'info');
+          } catch (err) {
+            this.addLog(`操作失败: ${err.message}`, 'error');
+          }
+        },
+
+        // 停止任务
+        async stopTask() {
+          if (!this.currentTaskId) return;
+
+          try {
+            const response = await fetch(`/api/auto-apply/stop/${this.currentTaskId}`, {
+              method: 'POST'
+            });
+
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+              throw new Error(result.error || '停止失败');
+            }
+
+            this.isRunning = false;
+            this.isPaused = false;
+            this.currentTaskId = null;
+
+            if (this.ws) {
+              this.ws.close();
+              this.ws = null;
+            }
+
+            this.addLog('任务已停止', 'info');
+          } catch (err) {
+            this.addLog(`停止失败: ${err.message}`, 'error');
+          }
+        },
+
+        // 添加日志
+        addLog(message, type = 'info') {
+          const time = new Date().toLocaleTimeString('zh-CN');
+          this.logs.push({
+            message: `[${time}] ${message}`,
+            type: type
+          });
+
+          // 限制日志数量
+          if (this.logs.length > 100) {
+            this.logs.shift();
+          }
+
+          // 自动滚动到底部
+          this.$nextTick(() => {
+            const container = document.getElementById('logContainer');
+            if (container) {
+              container.scrollTop = container.scrollHeight;
+            }
+          });
+        },
+
+        // 获取平台图标
+        getPlatformIcon(platformId) {
+          const platform = this.platforms.find(p => p.id === platformId);
+          return platform ? platform.icon : '';
+        },
+
+        // 获取平台名称
+        getPlatformName(platformId) {
+          const platform = this.platforms.find(p => p.id === platformId);
+          return platform ? platform.name : platformId;
+        },
+
+        // 获取进度百分比
+        getProgress(platformId) {
+          const platformProgress = this.progress.platform_progress?.[platformId];
+          if (!platformProgress) return 0;
+          const total = platformProgress.total || 1;
+          const applied = platformProgress.applied || 0;
+          const failed = platformProgress.failed || 0;
+          return Math.round((applied + failed) / total * 100);
+        },
+
+        // 获取已投递数量
+        getApplied(platformId) {
+          return this.progress.platform_progress?.[platformId]?.applied || 0;
+        },
+
+        // 获取总数
+        getTotal(platformId) {
+          return this.progress.platform_progress?.[platformId]?.total || 0;
+        },
+
+        // 获取状态文本
+        getStatus(platformId) {
+          const status = this.progress.platform_progress?.[platformId]?.status;
+          const statusMap = {
+            'running': '运行中...',
+            'completed': '已完成',
+            'failed': '失败',
+            'paused': '已暂停'
+          };
+          return statusMap[status] || '等待中...';
+        },
+
+        // 计算总体统计
+        get totalStats() {
+          let success = 0;
+          let failed = 0;
+          let total = 0;
+
+          if (this.progress.platform_progress) {
+            Object.values(this.progress.platform_progress).forEach(p => {
+              success += p.applied || 0;
+              failed += p.failed || 0;
+              total += (p.applied || 0) + (p.failed || 0);
+            });
+          }
+
+          const rate = total > 0 ? Math.round((success / total) * 100) : 0;
+
+          return { success, failed, total, rate };
+        },
+
+        // 更新图表
+        updateChart() {
+          if (!this.isRunning || this.totalStats.total === 0) return;
+
+          this.$nextTick(() => {
+            const canvas = document.getElementById('platformChart');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+
+            // 准备数据
+            const labels = [];
+            const data = [];
+            const colors = ['#667eea', '#764ba2', '#f093fb', '#4facfe', '#00f2fe'];
+
+            this.selectedPlatforms.forEach((platformId, index) => {
+              const platformProgress = this.progress.platform_progress?.[platformId];
+              if (platformProgress) {
+                labels.push(this.getPlatformName(platformId));
+                data.push((platformProgress.applied || 0) + (platformProgress.failed || 0));
+              }
+            });
+
+            // 销毁旧图表
+            if (this.chart) {
+              this.chart.destroy();
+            }
+
+            // 创建新图表
+            this.chart = new Chart(ctx, {
+              type: 'doughnut',
+              data: {
+                labels: labels,
+                datasets: [{
+                  data: data,
+                  backgroundColor: colors.slice(0, labels.length),
+                  borderWidth: 2,
+                  borderColor: '#fff'
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                  legend: {
+                    position: 'bottom',
+                    labels: {
+                      font: {
+                        family: "'Noto Sans SC', sans-serif",
+                        size: 13
+                      },
+                      padding: 12
+                    }
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function(context) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                        return `${label}: ${value} (${percentage}%)`;
+                      }
+                    }
+                  }
+                }
+              }
+            });
+          });
+        }
+      };
+    }
+
+    // 页面加载完成
+    document.addEventListener('alpine:init', () => {
+      console.log('Alpine.js 已初始化');
+    });
+  </script>
+</body>
+</html>

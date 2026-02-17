@@ -212,6 +212,8 @@ class BusinessService:
                 process_runs = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='resume_processed'")
                 searches = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='job_search'")
                 applies = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='job_apply'")
+                job_link_clicks = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='job_link_click'")
+                result_downloads = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='result_download'")
                 feedback_total = self._count(conn, "SELECT COUNT(*) FROM feedback")
                 feedback_7d = self._count(
                     conn,
@@ -223,6 +225,14 @@ class BusinessService:
                     conn,
                     "SELECT COUNT(*) FROM events WHERE event_name='resume_processed' AND json_extract(payload_json, '$.ok') = 1",
                 )
+                quality_gate_failures = self._count(
+                    conn,
+                    """
+                    SELECT COUNT(*) FROM events
+                    WHERE event_name='process_quality_gate'
+                      AND CAST(json_extract(payload_json, '$.passed') AS TEXT) IN ('0', 'false', 'False')
+                    """,
+                )
                 errors = self._count(conn, "SELECT COUNT(*) FROM events WHERE event_name='api_error'")
             finally:
                 conn.close()
@@ -231,6 +241,8 @@ class BusinessService:
         process_to_search = round((searches / process_runs) * 100, 2) if process_runs else 0.0
         search_to_apply = round((applies / searches) * 100, 2) if searches else 0.0
         process_success_rate = round((processed_success / process_runs) * 100, 2) if process_runs else 0.0
+        click_to_apply = round((applies / job_link_clicks) * 100, 2) if job_link_clicks else 0.0
+        quality_fail_rate = round((quality_gate_failures / process_runs) * 100, 2) if process_runs else 0.0
 
         return {
             "leads": {
@@ -250,6 +262,15 @@ class BusinessService:
                 "process_to_search_pct": process_to_search,
                 "search_to_apply_pct": search_to_apply,
                 "process_success_pct": process_success_rate,
+            },
+            "engagement": {
+                "job_link_clicks": job_link_clicks,
+                "result_downloads": result_downloads,
+                "click_to_apply_pct": click_to_apply,
+            },
+            "quality": {
+                "gate_failures": quality_gate_failures,
+                "gate_fail_rate_pct": quality_fail_rate,
             },
             "stability": {
                 "api_errors": errors,

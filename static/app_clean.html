@@ -123,6 +123,27 @@
       font-size: 16px;
       margin-bottom: 12px;
     }
+    .kpiGrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .kpiCard {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--soft);
+      padding: 12px;
+    }
+    .kpiCard span {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    .kpiCard b {
+      font-size: 24px;
+      letter-spacing: -0.4px;
+    }
 
     .upload {
       display: block;
@@ -322,6 +343,10 @@
       .hero { padding: 36px 0 24px; }
       h1 { min-height: 82px; }
       .sub { font-size: 20px; min-height: 62px; }
+      .kpiGrid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 620px) {
+      .kpiGrid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -338,6 +363,16 @@
       <div class="pill">中国市场优先</div>
       <h1><span id="titleText"></span><span class="cursor"></span></h1>
       <p class="sub" id="subText"></p>
+    </section>
+
+    <section class="panel">
+      <h2>增长看板</h2>
+      <div class="kpiGrid">
+        <article class="kpiCard"><span>累计分析</span><b id="kpiRuns">-</b></article>
+        <article class="kpiCard"><span>岗位点击</span><b id="kpiClicks">-</b></article>
+        <article class="kpiCard"><span>投递次数</span><b id="kpiApplies">-</b></article>
+        <article class="kpiCard"><span>搜索→投递转化</span><b id="kpiApplyRate">-</b></article>
+      </div>
     </section>
 
     <section class="panel">
@@ -444,6 +479,10 @@
     const mockInterview = document.getElementById("mockInterview");
     const jobCards = document.getElementById("jobCards");
     const jobsMeta = document.getElementById("jobsMeta");
+    const kpiRuns = document.getElementById("kpiRuns");
+    const kpiClicks = document.getElementById("kpiClicks");
+    const kpiApplies = document.getElementById("kpiApplies");
+    const kpiApplyRate = document.getElementById("kpiApplyRate");
 
     function setStatus(text, state = "run") {
       statusText.textContent = text;
@@ -477,8 +516,52 @@
       }
     }
 
+    function isEntrypointJob(job) {
+      const title = String(job?.title || job?.job_title || "").toLowerCase();
+      const provider = String(job?.provider || "").toLowerCase();
+      const link = String(job?.link || job?.apply_url || "").toLowerCase();
+      if (provider === "cn_portal") return true;
+      if (title.includes("搜索入口")) return true;
+      return [
+        "zhipin.com/web/geek/job?",
+        "liepin.com/zhaopin/?key=",
+        "sou.zhaopin.com/?kw=",
+        "we.51job.com/pc/search?",
+        "lagou.com/wn/jobs?kd=",
+      ].some((p) => link.includes(p));
+    }
+
+    async function trackEvent(eventName, payload = {}) {
+      try {
+        await fetch("/api/business/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_name: eventName, payload }),
+        });
+      } catch (_) {
+        // Ignore tracking failure to avoid impacting core UX.
+      }
+    }
+
+    async function loadGrowthKpi() {
+      try {
+        const res = await fetch("/api/business/public-proof");
+        const data = await parseJsonSafe(res);
+        if (!res.ok || !data.success) return;
+        kpiRuns.textContent = String(data.process_runs_total ?? "-");
+        kpiClicks.textContent = String(data.job_link_clicks_total ?? "-");
+        kpiApplies.textContent = String(data.applies_total ?? "-");
+        const rate = Number(data.search_to_apply_pct ?? 0);
+        kpiApplyRate.textContent = `${Number.isFinite(rate) ? rate.toFixed(1) : "0.0"}%`;
+      } catch (_) {
+        // Keep placeholders.
+      }
+    }
+
     function renderJobCards(jobs, provider) {
-      const rows = (jobs || []).filter((j) => (j.link || j.apply_url || "").startsWith("http"));
+      const rows = (jobs || [])
+        .filter((j) => (j.link || j.apply_url || "").startsWith("http"))
+        .filter((j) => !isEntrypointJob(j));
       if (!rows.length) {
         jobsMeta.textContent = `岗位来源：${provider || "-"}，未返回可投递链接。`;
         jobCards.innerHTML = '<div class="empty">未返回可点击岗位，请稍后重试。</div>';
@@ -492,15 +575,27 @@
         const salary = j.salary || j.salary_range || "";
         const platform = j.platform || j.provider || "-";
         const link = j.link || j.apply_url || "#";
+        const id = j.id || "";
         return [
           "<article class=\"job\">",
           `<b>${titleRow}</b>`,
           `<p>${company} | ${location}${salary ? ` | ${salary}` : ""}</p>`,
           `<p>来源：${platform}</p>`,
-          `<a href="${link}" target="_blank" rel="noopener noreferrer">打开岗位链接</a>`,
+          `<a class="jobLink" data-job-id="${id}" data-platform="${platform}" href="${link}" target="_blank" rel="noopener noreferrer">打开岗位链接</a>`,
           "</article>",
         ].join("");
       }).join("");
+
+      jobCards.querySelectorAll("a.jobLink").forEach((a) => {
+        a.addEventListener("click", () => {
+          trackEvent("job_link_click", {
+            job_id: a.dataset.jobId || "",
+            platform: a.dataset.platform || "",
+            href: a.getAttribute("href") || "",
+          });
+          loadGrowthKpi();
+        });
+      });
     }
 
     async function refreshRealtimeJobs(seed, providerMode) {
@@ -512,7 +607,12 @@
         return;
       }
       jobsMeta.textContent = `正在检索：${keywords.join(" / ")}...`;
-      const params = new URLSearchParams({ keywords: keywords.join(","), location, limit: "8" });
+      const params = new URLSearchParams({
+        keywords: keywords.join(","),
+        location,
+        limit: "8",
+        allow_portal_fallback: "false",
+      });
       try {
         const res = await fetch(`/api/jobs/search?${params.toString()}`);
         const data = await parseJsonSafe(res);
@@ -593,6 +693,7 @@
       }
       runBtn.disabled = true;
       setStatus("AI分析中...");
+      await trackEvent("resume_process_started", { chars: text.length });
       try {
         const res = await fetch("/api/process", {
           method: "POST",
@@ -609,15 +710,28 @@
         mockInterview.textContent = data.mock_interview || "-";
         providerMeta.textContent = `岗位来源：${data.job_provider_mode || "-"}`;
         setStatus("分析完成", "ok");
-        await refreshRealtimeJobs(data.boss_seed || {}, data.job_provider_mode || "-");
+        const structuredJobs = Array.isArray(data.recommended_jobs) ? data.recommended_jobs : [];
+        if (structuredJobs.length) {
+          renderJobCards(structuredJobs, data.job_provider_mode || "-");
+        } else {
+          await refreshRealtimeJobs(data.boss_seed || {}, data.job_provider_mode || "-");
+        }
+        await trackEvent("resume_process_success", {
+          provider_mode: data.job_provider_mode || "",
+          jobs: structuredJobs.length,
+          schema_version: data.schema_version || "",
+          quality_issues: Array.isArray(data.quality_gate?.issues) ? data.quality_gate.issues.length : 0,
+        });
+        loadGrowthKpi();
       } catch (err) {
         setStatus(err.message || "分析失败", "err");
+        await trackEvent("resume_process_failed", { message: String(err?.message || "unknown") });
       } finally {
         runBtn.disabled = false;
       }
     });
 
-    downloadBtn.addEventListener("click", () => {
+    downloadBtn.addEventListener("click", async () => {
       const payload = {
         "职业分析": careerAnalysis.textContent,
         "岗位推荐文本": jobRecommendations.textContent,
@@ -638,7 +752,12 @@
       a.download = "ai-job-report.txt";
       a.click();
       URL.revokeObjectURL(url);
+      await trackEvent("result_download", { bytes: text.length });
+      loadGrowthKpi();
     });
+
+    trackEvent("workspace_opened", { page: "app_clean" });
+    loadGrowthKpi();
   </script>
 </body>
 </html>

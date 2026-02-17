@@ -272,6 +272,33 @@ def _job_has_actionable_link(job: Dict[str, Any]) -> bool:
     return link.startswith("http://") or link.startswith("https://")
 
 
+def _is_cn_entrypoint_link(link: str) -> bool:
+    """Search entry/list pages are not treated as real actionable postings."""
+    low = (link or "").strip().lower()
+    if not low:
+        return False
+    patterns = (
+        "zhipin.com/web/geek/job?",
+        "zhipin.com/zhaopin/",
+        "liepin.com/zhaopin/?key=",
+        "sou.zhaopin.com/?kw=",
+        "we.51job.com/pc/search?",
+        "lagou.com/wn/jobs?kd=",
+    )
+    return any(p in low for p in patterns)
+
+
+def _is_cn_entrypoint_job(job: Dict[str, Any]) -> bool:
+    provider = str(job.get("provider") or "").strip().lower()
+    title = str(job.get("title") or job.get("job_title") or "").strip().lower()
+    link = str(job.get("link") or job.get("apply_url") or "").strip()
+    if provider == "cn_portal":
+        return True
+    if "搜索入口" in title:
+        return True
+    return _is_cn_entrypoint_link(link)
+
+
 def _normalize_and_filter_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
     """Keep only actionable real jobs and deduplicate by link/id/title-company."""
     out: List[Dict[str, Any]] = []
@@ -298,14 +325,38 @@ def _normalize_and_filter_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> L
     return out
 
 
+def _normalize_real_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Strict real-posting normalization:
+    - actionable links only
+    - no seed/demo
+    - no board-level search entry pages
+    """
+    scan_limit = max(20, int(limit or 10) * 5)
+    base = _normalize_and_filter_jobs(jobs, limit=scan_limit)
+    out: List[Dict[str, Any]] = []
+    for job in base:
+        if _is_cn_entrypoint_job(job):
+            continue
+        out.append(job)
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return out
+
+
 def _is_cn_job_link(link: str) -> bool:
     low = (link or "").lower()
     return any(d in low for d in CN_JOB_DOMAINS)
 
 
-def _enforce_cn_market_jobs(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _enforce_cn_market_jobs(
+    jobs: List[Dict[str, Any]],
+    allow_entrypoints: bool = False,
+) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for j in (jobs or []):
+        if (not allow_entrypoints) and _is_cn_entrypoint_job(j):
+            continue
         link = str(j.get("link") or j.get("apply_url") or "")
         platform = str(j.get("platform") or "").strip()
         if _is_cn_job_link(link):
@@ -314,6 +365,171 @@ def _enforce_cn_market_jobs(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if platform in {"Boss直聘", "猎聘", "智联招聘", "前程无忧", "拉勾"}:
             out.append(j)
     return out
+
+
+PROCESS_RESPONSE_SCHEMA_VERSION = "process_response.v2"
+LOW_QUALITY_MARKERS = (
+    "i appreciate your interest",
+    "amazon q",
+    "built by aws",
+    "i'm amazon q",
+    "i am amazon q",
+    "not career counseling",
+    "没有看到任何附件",
+)
+PUBLIC_EVENT_NAME_PATTERN = re.compile(r"^[a-z0-9_]{3,48}$")
+PUBLIC_EVENT_WHITELIST = {
+    "workspace_opened",
+    "resume_process_started",
+    "resume_process_success",
+    "resume_process_failed",
+    "job_link_click",
+    "result_download",
+}
+
+
+def _text_has_low_quality_marker(text: str) -> bool:
+    low = (text or "").strip().lower()
+    if not low:
+        return True
+    return any(marker in low for marker in LOW_QUALITY_MARKERS)
+
+
+def _render_market_analysis_fallback(info: Dict[str, Any]) -> str:
+    skills = [s for s in (info.get("skills") or []) if s][:8]
+    skills_text = ", ".join(skills) if skills else "Python, FastAPI, SQL"
+    return (
+        "【市场竞争力分析】\n\n"
+        f"✅ 识别技能：{skills_text}\n\n"
+        "📊 市场需求度：中高（基于中国技术岗位关键词覆盖）\n"
+        "💼 建议投递方向：Python后端 / AI应用工程 / 数据工程\n"
+        "📈 建议策略：先投递有明确技术栈和薪资区间的岗位，再按反馈迭代简历。\n\n"
+        "💡 市场建议：\n"
+        "1. 先聚焦 1-2 个主岗位方向，避免关键词过散。\n"
+        "2. 简历中补充可量化结果（性能提升、效率提升、交付周期）。\n"
+        "3. 优先投递带真实岗位详情页和直接投递入口的职位。"
+    )
+
+
+def _render_interview_prep_fallback(info: Dict[str, Any], jobs: List[Dict[str, Any]]) -> str:
+    top = (jobs or [{}])[0]
+    title = str(top.get("title") or "Python后端工程师")
+    company = str(top.get("company") or "目标公司")
+    return (
+        f"目标岗位：{title}（{company}）\n\n"
+        "高频问题 1：你如何设计高并发 API？\n"
+        "回答要点：异步 I/O、缓存策略、限流、慢查询治理、可观测性。\n\n"
+        "高频问题 2：你如何保证数据链路质量？\n"
+        "回答要点：输入校验、幂等设计、回滚方案、监控告警、复盘机制。\n\n"
+        "高频问题 3：你做过最有业务价值的项目是什么？\n"
+        "回答要点：按“背景-动作-结果”讲清指标提升，并说明你的关键贡献。"
+    )
+
+
+def _render_optimized_resume_fallback(resume_text: str, info: Dict[str, Any]) -> str:
+    name = str(info.get("name") or "").strip()
+    if not name or name == "未知":
+        first = (resume_text or "").strip().splitlines()
+        name = first[0].strip() if first else "候选人"
+    skills = [s for s in (info.get("skills") or []) if s][:10]
+    skills_line = ", ".join(skills) if skills else "Python, FastAPI, SQL, Docker"
+    return (
+        f"{name}\n"
+        "AI应用工程师 | Python后端工程师\n\n"
+        "核心优势\n"
+        "- 聚焦 AI 应用工程与后端交付，能从需求到上线完成闭环。\n"
+        "- 具备数据处理、服务部署、性能优化和质量门禁实践。\n\n"
+        f"技术栈\n- {skills_line}\n\n"
+        "项目亮点（示例结构）\n"
+        "- 构建 RAG/数据服务，接口稳定性提升，响应延迟下降。\n"
+        "- 建立自动化数据管道，减少人工处理成本并提高时效。\n"
+        "- 引入测试与监控机制，降低线上故障率并缩短定位时间。\n\n"
+        "求职方向\n- Python后端开发\n- AI应用开发\n- 数据工程与平台方向"
+    )
+
+
+def _run_output_quality_gate(
+    results: Dict[str, Any],
+    resume_text: str,
+    info: Dict[str, Any],
+    real_jobs: List[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    clean = dict(results or {})
+    report: Dict[str, Any] = {"passed": True, "issues": []}
+
+    market_analysis = str(clean.get("market_analysis") or "").strip()
+    if len(market_analysis) < 80 or _text_has_low_quality_marker(market_analysis):
+        clean["market_analysis"] = _render_market_analysis_fallback(info)
+        report["issues"].append("market_analysis_replaced")
+
+    optimized_resume = str(clean.get("optimized_resume") or "").strip()
+    if len(optimized_resume) < 120 or _text_has_low_quality_marker(optimized_resume):
+        clean["optimized_resume"] = _render_optimized_resume_fallback(resume_text, info)
+        report["issues"].append("optimized_resume_replaced")
+
+    interview_prep = str(clean.get("interview_prep") or "").strip()
+    if len(interview_prep) < 80 or _text_has_low_quality_marker(interview_prep):
+        clean["interview_prep"] = _render_interview_prep_fallback(info, real_jobs)
+        report["issues"].append("interview_prep_replaced")
+
+    salary_analysis = str(clean.get("salary_analysis") or "").strip()
+    if not salary_analysis:
+        clean["salary_analysis"] = "【薪资潜力分析】\n\n建议：基于岗位匹配度和市场供需，优先投递高匹配岗位后再进行薪资谈判。"
+        report["issues"].append("salary_analysis_replaced")
+
+    if report["issues"]:
+        report["passed"] = False
+    return clean, report
+
+
+def _public_job_payload(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for j in _normalize_real_jobs(jobs or [], limit=limit):
+        link = str(j.get("link") or j.get("apply_url") or "").strip()
+        out.append(
+            {
+                "id": str(j.get("id") or f"job_{abs(hash(link.lower()))}"),
+                "title": str(j.get("title") or j.get("job_title") or "未知岗位"),
+                "company": str(j.get("company") or ""),
+                "location": str(j.get("location") or ""),
+                "salary": str(j.get("salary") or j.get("salary_range") or ""),
+                "platform": str(j.get("platform") or j.get("provider") or _platform_from_link(link)),
+                "link": link,
+                "provider": str(j.get("provider") or ""),
+                "updated": str(j.get("updated") or ""),
+            }
+        )
+    return out
+
+
+def _validate_process_response_shape(payload: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    required_text_fields = (
+        "career_analysis",
+        "job_recommendations",
+        "optimized_resume",
+        "interview_prep",
+        "mock_interview",
+        "job_provider_mode",
+        "schema_version",
+    )
+    for key in required_text_fields:
+        if not isinstance(payload.get(key), str):
+            errors.append(f"{key}:expected_string")
+
+    jobs = payload.get("recommended_jobs")
+    if not isinstance(jobs, list):
+        errors.append("recommended_jobs:expected_list")
+    else:
+        for idx, row in enumerate(jobs[:20]):
+            if not isinstance(row, dict):
+                errors.append(f"recommended_jobs[{idx}]:expected_object")
+                continue
+            for key in ("id", "title", "link"):
+                if not isinstance(row.get(key), str) or not str(row.get(key)).strip():
+                    errors.append(f"recommended_jobs[{idx}].{key}:missing")
+                    break
+    return errors
 
 
 def _filter_cloud_cache_by_query(
@@ -332,11 +548,14 @@ def _filter_cloud_cache_by_query(
     matched = [j for j in cloud_jobs_cache if hit(j)]
     if not matched:
         matched = list(cloud_jobs_cache)
-    return _normalize_and_filter_jobs(matched, limit=limit)
+    return _normalize_real_jobs(matched, limit=limit)
 
 
 def _search_jobs_without_browser(
-    keywords: List[str], location: Optional[str], limit: int
+    keywords: List[str],
+    location: Optional[str],
+    limit: int,
+    allow_portal_fallback: bool = False,
 ) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
     """
     Cloud-safe real-time search path.
@@ -349,7 +568,7 @@ def _search_jobs_without_browser(
             limit=max(5, min(int(limit or 10), 50)),
         )
         mode = (real_job_service.get_statistics() or {}).get("provider_mode", "auto")
-        normalized = _normalize_and_filter_jobs(jobs, limit=limit)
+        normalized = _normalize_real_jobs(jobs, limit=limit)
         normalized = _enforce_cn_market_jobs(normalized)
         if normalized:
             return normalized, mode, None
@@ -359,18 +578,21 @@ def _search_jobs_without_browser(
         first_error = None
 
     enterprise_jobs = _search_jobs_enterprise_api(keywords, location, limit=limit)
+    enterprise_jobs = _normalize_real_jobs(enterprise_jobs, limit=limit)
     enterprise_jobs = _enforce_cn_market_jobs(enterprise_jobs)
     if enterprise_jobs:
         return enterprise_jobs, "enterprise_api", None
 
     # CN market fallback: no-browser HTML search on Chinese job sites.
     bing_html_jobs = _search_jobs_bing_html(keywords, location, limit=limit)
+    bing_html_jobs = _normalize_real_jobs(bing_html_jobs, limit=limit)
     bing_html_jobs = _enforce_cn_market_jobs(bing_html_jobs)
     if bing_html_jobs:
         return bing_html_jobs, "bing_html", None
 
     # Last fallback: DuckDuckGo HTML search (no key, no browser).
     ddg_jobs = _search_jobs_duckduckgo(keywords, location, limit=limit)
+    ddg_jobs = _normalize_real_jobs(ddg_jobs, limit=limit)
     ddg_jobs = _enforce_cn_market_jobs(ddg_jobs)
     if ddg_jobs:
         return ddg_jobs, "duckduckgo", None
@@ -381,11 +603,12 @@ def _search_jobs_without_browser(
         if remotive_jobs:
             return remotive_jobs, "remotive", None
 
-    portal_jobs = _search_jobs_cn_entrypoints(keywords, location, limit=min(limit, 5))
-    if portal_jobs:
-        return portal_jobs, "cn_portal", first_error or "using cn portal fallback"
+    if allow_portal_fallback:
+        portal_jobs = _search_jobs_cn_entrypoints(keywords, location, limit=min(limit, 5))
+        if portal_jobs:
+            return portal_jobs, "cn_portal", first_error or "using cn portal fallback"
 
-    return [], "cloud", first_error or "no result from no-browser providers"
+    return [], "no_real_jobs", first_error or "no result from no-browser providers"
 
 
 def _platform_from_link(link: str) -> str:
@@ -411,6 +634,28 @@ def _first_non_empty(row: Dict[str, Any], keys: List[str]) -> str:
         s = str(v).strip()
         if s:
             return s
+    return ""
+
+
+def _infer_company_from_title(title: str, platform: str = "") -> str:
+    t = (title or "").strip()
+    if not t:
+        return ""
+    # Boss style examples:
+    # - 「Python招聘」_苏州鼎级招聘-BOSS直聘
+    # - Python开发工程师 - 某某科技 - Boss直聘
+    if "_" in t:
+        tail = t.split("_", 1)[1].strip()
+        tail = re.split(r"[-|｜]", tail)[0].strip()
+        tail = tail.replace("招聘", "").replace("诚聘", "").strip()
+        if 1 <= len(tail) <= 24 and "直聘" not in tail:
+            return tail
+    parts = [p.strip() for p in re.split(r"[-|｜]", t) if p.strip()]
+    for p in parts[1:3]:
+        if any(x in p for x in ("直聘", "招聘", "猎聘", "前程无忧", "拉勾", "智联")):
+            continue
+        if 1 <= len(p) <= 24:
+            return p.replace("招聘", "").replace("诚聘", "").strip()
     return ""
 
 
@@ -559,14 +804,16 @@ def _search_jobs_duckduckgo(
         seen.add(low)
         title = re.sub(r"<[^>]+>", "", raw_title or "")
         title = html_lib.unescape(title).strip()
+        platform = _platform_from_link(link)
+        company = _infer_company_from_title(title, platform=platform)
         out.append(
             {
                 "id": f"duckduckgo_{abs(hash(low))}",
                 "title": title or "招聘岗位",
-                "company": "",
+                "company": company,
                 "location": location or "",
                 "salary": "",
-                "platform": _platform_from_link(link),
+                "platform": platform,
                 "link": link,
                 "provider": "duckduckgo",
             }
@@ -614,14 +861,16 @@ def _search_jobs_bing_html(
         seen.add(low)
         title = re.sub(r"<[^>]+>", "", raw_title or "")
         title = html_lib.unescape(title).strip()
+        platform = _platform_from_link(link)
+        company = _infer_company_from_title(title, platform=platform)
         out.append(
             {
                 "id": f"binghtml_{abs(hash(low))}",
                 "title": title or "招聘岗位",
-                "company": "",
+                "company": company,
                 "location": location or "",
                 "salary": "",
-                "platform": _platform_from_link(link),
+                "platform": platform,
                 "link": link,
                 "provider": "bing_html",
             }
@@ -1478,7 +1727,9 @@ async def process_resume(request: Request):
         
         if not resume_text:
             return _api_error("简历内容不能为空", status_code=400, code="empty_resume")
-        
+
+        _track_event("resume_process_started", {"chars": len(resume_text)})
+
         # 重置进度
         progress_tracker.reset()
         
@@ -1504,17 +1755,16 @@ async def process_resume(request: Request):
             seed_location = locs[0]
         provider_mode = (real_job_service.get_statistics() or {}).get("provider_mode", "")
         
-        # Replace the old hardcoded job list with real, actionable job links.
-        # Priority: cloud(cache) -> cloud-safe real-time search (no browser).
-        def _format_real_jobs(jobs, mode: str) -> str:
+        # Real, actionable job text block (backward compatible with legacy UI field).
+        def _format_real_jobs(jobs: List[Dict[str, Any]], mode: str) -> str:
             if not jobs:
                 return (
                     '【推荐岗位】（当前暂无可用岗位）\n\n'
                     '排查建议：\n'
-                    '1. 检查云端缓存：访问 /api/crawler/status 是否为 empty。\n'
-                    '2. 当前仅启用中国招聘站点搜索回退（Boss/猎聘/智联/51job/拉勾）。\n'
-                    '3. 若搜索引擎触发风控，可稍后重试或接入企业级招聘API。\n\n'
-                    '注意：系统不会回退到演示岗位或海外示例岗位；无真实数据时只展示该提示。\n'
+                    '1. 检查云端缓存：访问 /api/crawler/status。\n'
+                    '2. 检查企业级招聘 API 是否已配置。\n'
+                    '3. 若搜索引擎触发风控，可稍后重试。\n\n'
+                    '注意：系统默认不会回退到“搜索入口链接”或演示岗位。\n'
                 )
 
             heading = '【推荐岗位】（中国劳动力市场真实数据）'
@@ -1532,12 +1782,10 @@ async def process_resume(request: Request):
                 heading = '【推荐岗位】（来自 DuckDuckGo 无浏览器搜索）'
             elif mode == 'jooble':
                 heading = '【推荐岗位】（来自 Jooble API）'
-            elif mode == 'cn_portal':
-                heading = '【推荐岗位】（中国招聘站点搜索入口，适用于风控场景）'
             elif mode == 'enterprise_api':
                 heading = '【推荐岗位】（企业级中国招聘API实时数据）'
-            elif mode == 'none':
-                heading = '【推荐岗位】（未启用可用招聘源，当前仅展示空结果提示）'
+            elif mode == 'no_real_jobs':
+                heading = '【推荐岗位】（未检索到可投递真实岗位）'
 
             lines = [heading, '']
             for i, job in enumerate(jobs, 1):
@@ -1569,6 +1817,7 @@ async def process_resume(request: Request):
 
         async def _get_real_jobs_for_recommendation():
             cfg_mode = os.getenv('JOB_DATA_PROVIDER', 'auto').strip().lower()
+            allow_portal_fallback = os.getenv("ALLOW_CN_PORTAL_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
             kw = seed_keywords[:10]
             loc = seed_location
 
@@ -1578,11 +1827,16 @@ async def process_resume(request: Request):
                 if cached:
                     return cached, 'cloud'
                 # Cache empty/insufficient: fallback to cloud-safe real-time providers.
-                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(kw, loc, limit=10)
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    loc,
+                    limit=10,
+                    allow_portal_fallback=allow_portal_fallback,
+                )
                 return _enforce_cn_market_jobs(fallback_jobs), fallback_mode
 
             try:
-                jobs = _normalize_and_filter_jobs(
+                jobs = _normalize_real_jobs(
                     real_job_service.search_jobs(keywords=kw, location=loc, limit=10),
                     limit=10,
                 )
@@ -1590,40 +1844,83 @@ async def process_resume(request: Request):
                 mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
                 return jobs[:10], mode
             except Exception:
-                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(kw, loc, limit=10)
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    loc,
+                    limit=10,
+                    allow_portal_fallback=allow_portal_fallback,
+                )
                 return _enforce_cn_market_jobs(fallback_jobs), fallback_mode or cfg_mode
 
         real_jobs, real_mode = await _get_real_jobs_for_recommendation()
-        results['job_recommendations'] = _format_real_jobs(real_jobs, real_mode)
+        public_jobs = _public_job_payload(_enforce_cn_market_jobs(real_jobs), limit=10)
+        results["job_recommendations"] = _format_real_jobs(public_jobs, real_mode)
+        results, quality_gate = _run_output_quality_gate(results, resume_text, info, public_jobs)
         provider_mode = real_mode
 
         # 完成
         await progress_tracker.complete()
         await progress_tracker.add_ai_message("系统", "🎉 市场分析完成！")
         _track_event(
+            "process_quality_gate",
+            {
+                "passed": bool(quality_gate.get("passed", True)),
+                "issues_count": len(quality_gate.get("issues") or []),
+            },
+        )
+        _track_event(
+            "job_recommendation_ready",
+            {
+                "provider_mode": provider_mode,
+                "real_jobs_count": len(public_jobs),
+            },
+        )
+        _track_event(
             "resume_processed",
             {
                 "ok": True,
                 "provider_mode": provider_mode,
                 "skills_count": len(seed_keywords),
+                "real_jobs_count": len(public_jobs),
+                "quality_gate_passed": bool(quality_gate.get("passed", True)),
             },
         )
-        
-        return _api_success({
-            "career_analysis": results['market_analysis'],
-            "job_recommendations": results['job_recommendations'],
-            "optimized_resume": results['optimized_resume'],
-            "interview_prep": results['interview_prep'],
-            "mock_interview": results.get('salary_analysis', '')
-            ,
-            "job_provider_mode": provider_mode,
+
+        response_payload = {
+            "career_analysis": str(results.get("market_analysis") or ""),
+            "job_recommendations": str(results.get("job_recommendations") or ""),
+            "optimized_resume": str(results.get("optimized_resume") or ""),
+            "interview_prep": str(results.get("interview_prep") or ""),
+            "mock_interview": str(results.get("salary_analysis") or ""),
+            "job_provider_mode": str(provider_mode or ""),
+            "recommended_jobs": public_jobs,
+            "recommendation_quality": {
+                "strict_real_posting": True,
+                "count": len(public_jobs),
+                "has_actionable_jobs": bool(public_jobs),
+            },
+            "quality_gate": quality_gate,
+            "schema_version": PROCESS_RESPONSE_SCHEMA_VERSION,
             "boss_seed": {
                 "keywords": seed_keywords,
                 "location": seed_location,
             },
-        })
+        }
+        shape_errors = _validate_process_response_shape(response_payload)
+        if shape_errors:
+            _track_event(
+                "process_contract_error",
+                {
+                    "count": len(shape_errors),
+                    "sample": shape_errors[:3],
+                },
+            )
+            return _api_error("输出JSON未通过契约校验", status_code=500, code="process_contract_failed")
+
+        return _api_success(response_payload)
         
     except Exception as e:
+        _track_event("resume_process_failed", {"error": str(e)[:300]})
         _track_event("resume_processed", {"ok": False, "error": str(e)[:300]})
         _track_event("api_error", {"api": "/api/process", "error": str(e)[:300]})
         await progress_tracker.error(f"处理出错: {str(e)}")
@@ -1761,6 +2058,26 @@ async def capture_user_feedback(request: Request):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+@app.post("/api/business/event")
+async def capture_public_event(request: Request):
+    """Public-safe growth event ingest endpoint for frontend KPI tracking."""
+    try:
+        data = await request.json()
+        event_name = str(data.get("event_name") or "").strip().lower()
+        payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+
+        if (not event_name) or (not PUBLIC_EVENT_NAME_PATTERN.match(event_name)):
+            return JSONResponse({"error": "invalid event_name"}, status_code=400)
+        if event_name not in PUBLIC_EVENT_WHITELIST:
+            return JSONResponse({"error": "event not allowed"}, status_code=400)
+
+        business_service.track_event(event_name, payload)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/business/event", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @app.get("/api/business/feedback/summary")
 async def feedback_summary(request: Request, days: int = 7, limit: int = 20):
     """Feedback summary for ops dashboards and growth automation."""
@@ -1779,12 +2096,24 @@ async def business_public_proof():
     """Public-safe proof counters used on landing page."""
     try:
         m = business_service.metrics()
+        funnel = m.get("funnel", {})
+        engagement = m.get("engagement", {})
+        quality = m.get("quality", {})
         return _api_success(
             {
                 "leads_total": int(m.get("leads", {}).get("total", 0) or 0),
                 "feedback_total": int(m.get("feedback", {}).get("total", 0) or 0),
-                "uploads_total": int(m.get("funnel", {}).get("uploads", 0) or 0),
-                "process_runs_total": int(m.get("funnel", {}).get("process_runs", 0) or 0),
+                "uploads_total": int(funnel.get("uploads", 0) or 0),
+                "process_runs_total": int(funnel.get("process_runs", 0) or 0),
+                "searches_total": int(funnel.get("searches", 0) or 0),
+                "applies_total": int(funnel.get("applies", 0) or 0),
+                "job_link_clicks_total": int(engagement.get("job_link_clicks", 0) or 0),
+                "result_downloads_total": int(engagement.get("result_downloads", 0) or 0),
+                "upload_to_process_pct": float(funnel.get("upload_to_process_pct", 0) or 0),
+                "process_to_search_pct": float(funnel.get("process_to_search_pct", 0) or 0),
+                "search_to_apply_pct": float(funnel.get("search_to_apply_pct", 0) or 0),
+                "click_to_apply_pct": float(engagement.get("click_to_apply_pct", 0) or 0),
+                "quality_gate_fail_rate_pct": float(quality.get("gate_fail_rate_pct", 0) or 0),
             }
         )
     except Exception as e:
@@ -1890,7 +2219,8 @@ async def search_jobs(
     location: str = None,
     salary_min: int = None,
     experience: str = None,
-    limit: int = 50
+    limit: int = 50,
+    allow_portal_fallback: bool = False,
 ):
     """搜索真实岗位"""
     try:
@@ -1899,6 +2229,9 @@ async def search_jobs(
         n = max(1, min(n, 100))
         keyword_list = keywords.split(",") if keywords else []
         kw = [k.strip() for k in keyword_list if k and k.strip()]
+        allow_portal = bool(allow_portal_fallback) or (
+            os.getenv("ALLOW_CN_PORTAL_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+        )
 
         # Cloud mode: prefer crawler cache; fallback to cloud-safe real-time providers.
         if cfg_mode == "cloud" or cloud_jobs_cache:
@@ -1907,7 +2240,12 @@ async def search_jobs(
             warning = None
             mode = "cloud"
             if not jobs:
-                fallback_jobs, fallback_mode, fallback_err = _search_jobs_without_browser(kw, location, limit=n)
+                fallback_jobs, fallback_mode, fallback_err = _search_jobs_without_browser(
+                    kw,
+                    location,
+                    limit=n,
+                    allow_portal_fallback=allow_portal,
+                )
                 jobs = _enforce_cn_market_jobs(fallback_jobs)
                 mode = fallback_mode or "cloud"
                 warning = (
@@ -1955,11 +2293,16 @@ async def search_jobs(
                 limit=n,
                 progress_callback=progress_cb,
             )
-            jobs = _normalize_and_filter_jobs(jobs, limit=n)
+            jobs = _normalize_real_jobs(jobs, limit=n)
             jobs = _enforce_cn_market_jobs(jobs)
             mode = (real_job_service.get_statistics() or {}).get("provider_mode", cfg_mode)
         except Exception as e:
-            jobs, mode, _ = _search_jobs_without_browser(kw, location, limit=n)
+            jobs, mode, _ = _search_jobs_without_browser(
+                kw,
+                location,
+                limit=n,
+                allow_portal_fallback=allow_portal,
+            )
             jobs = _enforce_cn_market_jobs(jobs)
             if not jobs:
                 raise e

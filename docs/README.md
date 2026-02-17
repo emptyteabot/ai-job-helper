@@ -1,5 +1,9 @@
 # 文档索引（最新）
 
+## 产品化执行入口（推荐）
+
+- `docs/product_build_v2/README.md`：多角色作战文档包（需求/架构/UIUX/前后端/测试/运维/验收/GTM）
+
 如果你只想把 MVP 跑起来，只看这三份：
 
 - `docs/howto/OPENCLAW_BOSS_MVP.md`：本机 OpenClaw + Boss 实时抓岗位链接（手动投递）
@@ -20,4 +24,3 @@
 - `docs/deploy/`：部署相关
 - `docs/architecture/`：架构、数据源、对接方案
 - `docs/legacy/`：历史交付/融资/修复记录（保留但不作为当前使用指南）
-

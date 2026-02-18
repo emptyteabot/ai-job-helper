@@ -333,20 +333,38 @@ def parse_uploaded_file(uploaded_file):
         st.error(f"文件解析失败: {str(e)}")
         return None
 
-# 简历分析函数（修复 asyncio 错误）
-def analyze_resume(resume_text):
-    """简历分析 - 直接同步调用"""
+# 简历分析函数（使用快速引擎）
+def analyze_resume(resume_text, progress_placeholder=None):
+    """简历分析 - 使用快速引擎，30秒内完成"""
     try:
-        from app.core.multi_ai_debate import JobApplicationPipeline
+        from app.core.fast_ai_engine import FastJobApplicationPipeline
+        import time
 
-        pipeline = JobApplicationPipeline()
+        if progress_placeholder:
+            progress_placeholder.info("🔄 初始化快速 AI 引擎...")
 
-        # 直接调用同步函数，不需要 asyncio
+        pipeline = FastJobApplicationPipeline()
+
+        if progress_placeholder:
+            progress_placeholder.info("⚡ 6个 AI 正在并行分析（预计 20-40 秒）...")
+
+        start_time = time.time()
+
+        # 使用快速引擎（并行处理）
         results = pipeline.process_resume(resume_text)
+
+        elapsed = time.time() - start_time
+
+        if progress_placeholder:
+            progress_placeholder.success(f"✅ 分析完成！耗时 {elapsed:.1f} 秒")
+
         return results
 
     except Exception as e:
-        st.error(f"分析失败: {str(e)}")
+        if progress_placeholder:
+            progress_placeholder.error(f"❌ 分析失败: {str(e)}")
+        else:
+            st.error(f"分析失败: {str(e)}")
         import traceback
         st.error(traceback.format_exc())
         return None
@@ -399,27 +417,26 @@ with tab1:
             if len(resume_text.strip()) < 50:
                 st.warning("简历内容较少，建议至少 50 字以上")
             else:
-                with st.spinner("🔄 AI 正在分析你的简历..."):
-                    results = analyze_resume(resume_text)
+                progress_placeholder = st.empty()
+                results = analyze_resume(resume_text, progress_placeholder)
 
-                    if results:
-                        st.session_state.analysis_results = results
-                        st.success("✅ 分析完成！")
+                if results:
+                    st.session_state.analysis_results = results
 
-                        result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
+                    result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
 
-                        with result_tabs[0]:
-                            st.markdown(results.get('career_analysis', '暂无数据'))
-                        with result_tabs[1]:
-                            st.markdown(results.get('job_recommendations', '暂无数据'))
-                        with result_tabs[2]:
-                            st.markdown(results.get('resume_optimization', '暂无数据'))
-                        with result_tabs[3]:
-                            st.markdown(results.get('interview_preparation', '暂无数据'))
-                        with result_tabs[4]:
-                            st.markdown(results.get('mock_interview', '暂无数据'))
-                        with result_tabs[5]:
-                            st.markdown(results.get('skill_gap_analysis', '暂无数据'))
+                    with result_tabs[0]:
+                        st.markdown(results.get('career_analysis', '暂无数据'))
+                    with result_tabs[1]:
+                        st.markdown(results.get('job_recommendations', '暂无数据'))
+                    with result_tabs[2]:
+                        st.markdown(results.get('resume_optimization', '暂无数据'))
+                    with result_tabs[3]:
+                        st.markdown(results.get('interview_preparation', '暂无数据'))
+                    with result_tabs[4]:
+                        st.markdown(results.get('mock_interview', '暂无数据'))
+                    with result_tabs[5]:
+                        st.markdown(results.get('skill_gap_analysis', '暂无数据'))
 
     else:
         uploaded_file = st.file_uploader("上传简历", type=["pdf", "doc", "docx", "txt"], label_visibility="collapsed")
@@ -430,25 +447,24 @@ with tab1:
                     resume_text = parse_uploaded_file(uploaded_file)
 
                 if resume_text:
-                    with st.spinner("🔄 AI 正在分析你的简历..."):
-                        results = analyze_resume(resume_text)
+                    progress_placeholder = st.empty()
+                    results = analyze_resume(resume_text, progress_placeholder)
 
-                        if results:
-                            st.session_state.analysis_results = results
-                            st.success("✅ 分析完成！")
+                    if results:
+                        st.session_state.analysis_results = results
 
-                            with st.expander("🎯 职业分析", expanded=True):
-                                st.write(results.get('career_analysis', '暂无数据'))
-                            with st.expander("💼 岗位推荐"):
-                                st.write(results.get('job_recommendations', '暂无数据'))
-                            with st.expander("✍️ 简历优化"):
-                                st.write(results.get('resume_optimization', '暂无数据'))
-                            with st.expander("📚 面试准备"):
-                                st.write(results.get('interview_preparation', '暂无数据'))
-                            with st.expander("🎤 模拟面试"):
-                                st.write(results.get('mock_interview', '暂无数据'))
-                            with st.expander("📈 技能分析"):
-                                st.write(results.get('skill_gap_analysis', '暂无数据'))
+                        with st.expander("🎯 职业分析", expanded=True):
+                            st.write(results.get('career_analysis', '暂无数据'))
+                        with st.expander("💼 岗位推荐"):
+                            st.write(results.get('job_recommendations', '暂无数据'))
+                        with st.expander("✍️ 简历优化"):
+                            st.write(results.get('resume_optimization', '暂无数据'))
+                        with st.expander("📚 面试准备"):
+                            st.write(results.get('interview_preparation', '暂无数据'))
+                        with st.expander("🎤 模拟面试"):
+                            st.write(results.get('mock_interview', '暂无数据'))
+                        with st.expander("📈 技能分析"):
+                            st.write(results.get('skill_gap_analysis', '暂无数据'))
 
     st.markdown('</div>', unsafe_allow_html=True)
 

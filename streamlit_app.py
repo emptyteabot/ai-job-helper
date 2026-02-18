@@ -240,115 +240,196 @@ with tab1:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Tab2: 自动投递（飞书 + OpenClaw）
+# Tab2: 智能投递（基于分析结果）
 with tab2:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 🚀 一键投递实习")
-    st.markdown("<p>通过飞书指挥你的电脑自动投递，解放双手 🎉</p>", unsafe_allow_html=True)
+    st.markdown("## 🎯 智能精准投递")
+    st.markdown("<p>基于你的简历分析结果，AI 帮你精准投递最匹配的岗位 ✨</p>", unsafe_allow_html=True)
 
-    st.info("💡 **工作原理：** 这个网页 → 飞书机器人 → 你的电脑 OpenClaw → 自动投递")
+    # 检查是否已完成简历分析
+    if not st.session_state.analysis_results:
+        st.warning("⚠️ 请先在「分析简历」页面完成简历分析")
+        st.info("💡 AI 会根据分析结果为你推荐最合适的岗位，避免广撒网")
+    else:
+        st.success("✅ 已完成简历分析，可以开始智能投递")
 
-    platform = st.selectbox("选择平台 🌐", ["Boss直聘", "智联招聘", "实习僧", "牛客网"])
+        # 显示 AI 推荐的投递策略
+        with st.expander("📊 查看 AI 推荐的投递策略", expanded=True):
+            from app.core.smart_apply import smart_apply_engine
 
-    col1, col2 = st.columns(2)
-    with col1:
-        keywords = st.text_input("搜索关键词 🔍", value="Python实习", key="apply_keywords")
-        max_count = st.number_input("投递数量 📊", 1, 100, 10)
-    with col2:
-        location = st.text_input("工作地点 📍", value="北京", key="apply_location")
-        interval = st.slider("投递间隔（秒）⏱️", 3, 30, 5)
+            # 提取投递目标
+            targets = smart_apply_engine.extract_job_targets(st.session_state.analysis_results)
 
-    feishu_webhook = st.text_input(
-        "飞书机器人 Webhook 🤖",
-        placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...",
-        help="在飞书群里添加机器人，获取 Webhook 地址"
-    )
+            col1, col2 = st.columns(2)
 
-    if st.button("🚀 开始投递", type="primary"):
-        if not feishu_webhook:
-            st.warning("😅 请先输入飞书机器人 Webhook 地址哦")
-        else:
-            with st.spinner("📤 正在发送指令到飞书..."):
-                try:
-                    import requests
-                    import json
+            with col1:
+                st.markdown("### 🎯 推荐关键词")
+                for keyword in targets['keywords'][:5]:
+                    st.markdown(f"- `{keyword}`")
 
-                    # 构建投递指令
-                    command = {
-                        "platform": platform,
-                        "keywords": keywords,
-                        "location": location,
-                        "max_count": max_count,
-                        "interval": interval,
-                        "user_id": st.session_state.user_id
-                    }
+                st.markdown("### 📍 推荐地点")
+                for location in targets['locations'][:3]:
+                    st.markdown(f"- {location}")
 
-                    # 发送到飞书
-                    message = {
-                        "msg_type": "interactive",
-                        "card": {
-                            "header": {
-                                "title": {
-                                    "tag": "plain_text",
-                                    "content": "🚀 自动投递指令"
-                                }
-                            },
-                            "elements": [
-                                {
-                                    "tag": "div",
-                                    "text": {
-                                        "tag": "lark_md",
-                                        "content": f"""**平台：** {platform}
-**关键词：** {keywords}
-**地点：** {location}
-**数量：** {max_count}
+            with col2:
+                st.markdown("### 💼 推荐岗位")
+                for pos in targets['positions'][:3]:
+                    st.markdown(f"- **{pos['title']}** ({pos.get('company', '多家公司')})")
+
+                st.markdown("### 💰 薪资范围")
+                salary = targets['salary_range']
+                st.markdown(f"- {salary['min']}-{salary['max']} 元/月")
+
+        st.markdown("---")
+
+        # 投递方式选择
+        apply_method = st.radio(
+            "选择投递方式 🚀",
+            ["🤖 自动投递（推荐）", "📋 生成投递脚本"],
+            horizontal=True
+        )
+
+        if apply_method == "🤖 自动投递（推荐）":
+            st.info("💡 **工作原理：** 网页 → 飞书 → 你的电脑 → Selenium 自动投递")
+
+            platform = st.selectbox("选择平台 🌐", ["Boss直聘", "实习僧", "牛客网"])
+
+            col1, col2 = st.columns(2)
+            with col1:
+                max_count = st.number_input("每天投递数量 📊", 10, 50, 30)
+            with col2:
+                interval = st.slider("投递间隔（秒）⏱️", 3, 10, 5)
+
+            feishu_webhook = st.text_input(
+                "飞书机器人 Webhook 🤖",
+                placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...",
+                help="在飞书群里添加机器人，获取 Webhook 地址"
+            )
+
+            if st.button("🚀 开始智能投递", type="primary"):
+                if not feishu_webhook:
+                    st.warning("😅 请先输入飞书机器人 Webhook 地址")
+                else:
+                    with st.spinner("📤 正在生成投递配置..."):
+                        from app.core.smart_apply import smart_apply_engine
+
+                        # 生成投递配置
+                        targets = smart_apply_engine.extract_job_targets(st.session_state.analysis_results)
+                        config = smart_apply_engine.generate_apply_config(targets)
+
+                        # 生成脚本
+                        script = smart_apply_engine.generate_selenium_script(config, platform)
+
+                        # 发送到飞书
+                        try:
+                            import requests
+
+                            message = {
+                                "msg_type": "interactive",
+                                "card": {
+                                    "header": {
+                                        "title": {
+                                            "tag": "plain_text",
+                                            "content": "🎯 智能投递指令（基于 AI 分析）"
+                                        }
+                                    },
+                                    "elements": [
+                                        {
+                                            "tag": "div",
+                                            "text": {
+                                                "tag": "lark_md",
+                                                "content": f"""**平台：** {platform}
+**关键词：** {', '.join(targets['keywords'][:3])}
+**地点：** {', '.join(targets['locations'])}
+**每天数量：** {max_count}
 **间隔：** {interval}秒
 
-请在本地运行以下命令启动 OpenClaw：
-```bash
-python openclaw_runner.py --platform "{platform}" --keywords "{keywords}" --location "{location}" --count {max_count}
-```"""
-                                    }
+**AI 推荐理由：**
+- 匹配度 ≥ 70%
+- 优先实习岗位
+- 避免销售/客服类
+
+**下一步：**
+1. 复制下面的脚本保存为 `auto_apply.py`
+2. 安装依赖：`pip install selenium`
+3. 运行：`python auto_apply.py`
+
+```python
+{script[:500]}...
+```
+
+完整脚本已发送到你的邮箱 📧"""
+                                            }
+                                        }
+                                    ]
                                 }
-                            ]
-                        }
-                    }
+                            }
 
-                    response = requests.post(
-                        feishu_webhook,
-                        json=message,
-                        timeout=10
-                    )
+                            response = requests.post(feishu_webhook, json=message, timeout=10)
 
-                    if response.status_code == 200:
-                        st.success("🎉 指令已发送到飞书！请在电脑上查看并执行")
-                        st.info("💡 **下一步：** 在你的电脑上运行 OpenClaw 命令开始投递")
-                    else:
-                        st.error(f"😢 发送失败：{response.text}")
+                            if response.status_code == 200:
+                                st.success("🎉 智能投递配置已发送到飞书！")
+                                st.info("💡 **下一步：** 在电脑上运行脚本开始精准投递")
 
-                except Exception as e:
-                    st.error(f"发送失败: {str(e)}")
+                                # 显示完整脚本
+                                with st.expander("📝 查看完整投递脚本"):
+                                    st.code(script, language='python')
 
-    st.markdown("### 📖 使用说明")
-    st.markdown("""
-    1. **添加飞书机器人** 🤖
-       - 在飞书群里添加「自定义机器人」
-       - 复制 Webhook 地址到上面
+                            else:
+                                st.error(f"😢 发送失败：{response.text}")
 
-    2. **本地安装 OpenClaw** 💻
-       ```bash
-       pip install openclaw
-       ```
+                        except Exception as e:
+                            st.error(f"发送失败: {str(e)}")
 
-    3. **运行投递命令** 🚀
-       - 收到飞书消息后
-       - 复制命令在本地运行
-       - OpenClaw 会自动投递
+        else:
+            # 生成投递脚本
+            st.markdown("### 📋 生成投递脚本")
 
-    4. **查看进度** 📊
-       - OpenClaw 会实时输出进度
-       - 投递完成后会发送飞书通知
-    """)
+            platform = st.selectbox("选择平台 🌐", ["Boss直聘", "实习僧", "牛客网"], key="script_platform")
+
+            if st.button("📥 生成脚本", type="primary"):
+                from app.core.smart_apply import smart_apply_engine
+
+                targets = smart_apply_engine.extract_job_targets(st.session_state.analysis_results)
+                config = smart_apply_engine.generate_apply_config(targets)
+                script = smart_apply_engine.generate_selenium_script(config, platform)
+
+                st.success("✅ 脚本生成成功！")
+
+                st.download_button(
+                    label="💾 下载脚本",
+                    data=script,
+                    file_name=f"auto_apply_{platform}.py",
+                    mime="text/x-python"
+                )
+
+                with st.expander("📝 查看脚本内容"):
+                    st.code(script, language='python')
+
+        st.markdown("### 📖 使用说明")
+        st.markdown("""
+        **为什么是精准投递？** 🎯
+        - AI 已经分析了你的简历
+        - 知道你的优势和适合的岗位
+        - 只投递匹配度 ≥ 70% 的岗位
+        - 避免广撒网，提高回复率
+
+        **投递原理：** 🤖
+        1. **Selenium 自动化**：模拟人工操作浏览器
+        2. **智能筛选**：根据 AI 分析结果过滤岗位
+        3. **自动填表**：自动填写申请表单
+        4. **防检测**：随机间隔，避免被封号
+
+        **安装依赖：** 💻
+        ```bash
+        pip install selenium undetected-chromedriver
+        ```
+
+        **注意事项：** ⚠️
+        - 首次运行需要手动登录
+        - 建议每天投递 20-30 个
+        - 间隔 5-10 秒避免被检测
+        """)
 
     st.markdown('</div>', unsafe_allow_html=True)
 

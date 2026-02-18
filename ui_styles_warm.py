@@ -5,30 +5,30 @@
 
 WARM_UI_STYLE = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap');
 
 :root {
-    /* 温暖色调 */
-    --bg-primary: #fffbf7;
-    --bg-secondary: #fff5ed;
+    /* 温暖色调 - 更简洁 */
+    --bg-primary: #ffffff;
+    --bg-secondary: #fafafa;
     --bg-card: #ffffff;
-    --text-primary: #2d2d2d;
-    --text-secondary: #666666;
-    --text-muted: #999999;
+    --text-primary: #1a1a1a;
+    --text-secondary: #4a4a4a;
+    --text-muted: #8a8a8a;
 
-    /* 渐变色 - Instagram 风格 */
-    --gradient-warm: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #ffdde1 100%);
-    --gradient-sunset: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+    /* 渐变色 - 柔和温暖 */
+    --gradient-warm: linear-gradient(135deg, #ffb6b9 0%, #fae3d9 100%);
+    --gradient-sunset: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
     --gradient-ocean: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
     --gradient-purple: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
 
-    /* 主色调 - 柔和粉橙 */
-    --accent: #ff6b6b;
-    --accent-light: #ff8787;
-    --accent-lighter: #ffa5a5;
-    --success: #51cf66;
-    --warning: #ffd43b;
-    --info: #74c0fc;
+    /* 主色调 - 温暖橙粉 */
+    --accent: #ff8a80;
+    --accent-light: #ffab91;
+    --accent-lighter: #ffccbc;
+    --success: #81c784;
+    --warning: #ffd54f;
+    --info: #64b5f6;
 
     /* 圆角 - 更圆润 */
     --radius-sm: 12px;
@@ -52,11 +52,12 @@ WARM_UI_STYLE = """
 }
 
 body {
-    font-family: 'Noto Sans SC', 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
     background: var(--bg-secondary);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-weight: 400;
 }
 
 /* 隐藏 Streamlit 默认元素 */

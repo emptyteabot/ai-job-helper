@@ -23,9 +23,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 全局样式 - Modern UI
-from ui_styles import MODERN_UI_STYLE
-st.markdown(MODERN_UI_STYLE, unsafe_allow_html=True)
+# 全局样式 - 温暖人性化 UI
+from ui_styles_warm import WARM_UI_STYLE
+st.markdown(WARM_UI_STYLE, unsafe_allow_html=True)
 
 # 配置 API Key - 从 Streamlit Secrets 读取
 try:
@@ -147,53 +147,40 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# Hero - 现代化设计
+# Hero - 温暖友好的设计
 st.markdown('''
 <div class="hero">
-    <div class="hero-badge">DeepSeek Reasoner 驱动 · 专注实习岗位</div>
-    <h1>AI 实习求职助手</h1>
-    <div class="hero-subtitle">4个专家 AI 深度分析简历，智能推荐实习岗位，助你找到理想实习机会</div>
+    <div class="hero-badge">✨ DeepSeek AI 驱动 · 专为实习生打造</div>
+    <h1>🌟 找实习，AI 帮你搞定</h1>
+    <div class="hero-subtitle">4 位 AI 专家深度分析你的简历，帮你找到最适合的实习机会 💼</div>
 </div>
 ''', unsafe_allow_html=True)
 
-# 标签页 - 移除重复的岗位推荐
+# 标签页 - 友好的 emoji 和文案
 tab1, tab2, tab3 = st.tabs([
-    "📄 简历分析",
-    "🚀 自动投递",
-    "📊 数据统计"
+    "📝 分析简历",
+    "🚀 一键投递",
+    "📊 我的数据"
 ])
 
 # Tab1: 简历分析
 with tab1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 📄 AI 简历分析")
-    st.markdown("<p>上传简历或粘贴文本，4个专家 AI 深度分析</p>", unsafe_allow_html=True)
+    st.markdown("## 📝 让 AI 帮你看看简历")
+    st.markdown("<p>上传简历或粘贴文本，4 位 AI 专家帮你深度分析 ✨</p>", unsafe_allow_html=True)
 
-    method = st.radio("输入方式", ["文本输入", "上传文件"], horizontal=True)
+    method = st.radio("你想怎么上传？", ["✍️ 直接粘贴", "📎 上传文件"], horizontal=True)
 
-    if method == "文本输入":
-        resume_text = st.text_area("简历内容", height=200, placeholder="粘贴你的简历内容...", label_visibility="collapsed")
+    if method == "✍️ 直接粘贴":
+        resume_text = st.text_area("把简历内容粘贴到这里吧 👇", height=200, placeholder="粘贴你的简历内容...", label_visibility="collapsed")
 
-        if resume_text and st.button("开始分析", type="primary", key="analyze_text"):
+        if resume_text and st.button("✨ 开始分析", type="primary", key="analyze_text"):
             if len(resume_text.strip()) < 50:
-                st.warning("简历内容较少，建议至少 50 字以上")
+                st.warning("😅 简历内容有点少哦，建议至少 50 字以上")
             else:
                 # 创建进度条
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-
-                # 更新进度的回调函数
-                def update_progress(stage, total_stages=4):
-                    progress = int((stage / total_stages) * 100)
-                    progress_bar.progress(progress)
-                    if stage == 1:
-                        status_text.info("🤖 职业分析师正在分析...")
-                    elif stage == 2:
-                        status_text.info("💼 岗位匹配专家正在工作...")
-                    elif stage == 3:
-                        status_text.info("🎤 面试辅导专家正在准备...")
-                    elif stage == 4:
-                        status_text.info("✅ 质量审核官正在检查...")
 
                 # 开始分析
                 import time
@@ -203,7 +190,7 @@ with tab1:
 
                 elapsed = time.time() - start_time
                 progress_bar.progress(100)
-                status_text.success(f"✅ 分析完成！耗时 {elapsed:.1f} 秒")
+                status_text.success(f"🎉 分析完成！耗时 {elapsed:.1f} 秒")
 
                 if results:
                     st.session_state.analysis_results = results
@@ -224,11 +211,11 @@ with tab1:
                         st.markdown(results.get('skill_gap_analysis', '暂无数据'))
 
     else:
-        uploaded_file = st.file_uploader("上传简历", type=["pdf", "doc", "docx", "txt"], label_visibility="collapsed")
+        uploaded_file = st.file_uploader("选择你的简历文件 📄", type=["pdf", "doc", "docx", "txt"], label_visibility="collapsed")
 
         if uploaded_file:
-            if st.button("开始分析", type="primary", key="analyze_file"):
-                with st.spinner("🔄 正在解析文件..."):
+            if st.button("✨ 开始分析", type="primary", key="analyze_file"):
+                with st.spinner("🔄 正在读取文件..."):
                     resume_text = parse_uploaded_file(uploaded_file)
 
                 if resume_text:
@@ -256,30 +243,30 @@ with tab1:
 # Tab2: 自动投递（飞书 + OpenClaw）
 with tab2:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 🚀 自动投递")
-    st.markdown("<p>通过飞书指挥本地 OpenClaw 自动投递实习岗位</p>", unsafe_allow_html=True)
+    st.markdown("## 🚀 一键投递实习")
+    st.markdown("<p>通过飞书指挥你的电脑自动投递，解放双手 🎉</p>", unsafe_allow_html=True)
 
-    st.info("💡 **工作原理：** Streamlit Cloud → 飞书机器人 → 你的电脑 OpenClaw → 自动投递")
+    st.info("💡 **工作原理：** 这个网页 → 飞书机器人 → 你的电脑 OpenClaw → 自动投递")
 
-    platform = st.selectbox("选择平台", ["Boss直聘", "智联招聘", "实习僧", "牛客网"])
+    platform = st.selectbox("选择平台 🌐", ["Boss直聘", "智联招聘", "实习僧", "牛客网"])
 
     col1, col2 = st.columns(2)
     with col1:
-        keywords = st.text_input("搜索关键词", value="Python实习", key="apply_keywords")
-        max_count = st.number_input("投递数量", 1, 100, 10)
+        keywords = st.text_input("搜索关键词 🔍", value="Python实习", key="apply_keywords")
+        max_count = st.number_input("投递数量 📊", 1, 100, 10)
     with col2:
-        location = st.text_input("工作地点", value="北京", key="apply_location")
-        interval = st.slider("投递间隔（秒）", 3, 30, 5)
+        location = st.text_input("工作地点 📍", value="北京", key="apply_location")
+        interval = st.slider("投递间隔（秒）⏱️", 3, 30, 5)
 
     feishu_webhook = st.text_input(
-        "飞书机器人 Webhook",
+        "飞书机器人 Webhook 🤖",
         placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...",
         help="在飞书群里添加机器人，获取 Webhook 地址"
     )
 
-    if st.button("开始投递", type="primary"):
+    if st.button("🚀 开始投递", type="primary"):
         if not feishu_webhook:
-            st.warning("请输入飞书机器人 Webhook 地址")
+            st.warning("😅 请先输入飞书机器人 Webhook 地址哦")
         else:
             with st.spinner("📤 正在发送指令到飞书..."):
                 try:
@@ -334,62 +321,42 @@ python openclaw_runner.py --platform "{platform}" --keywords "{keywords}" --loca
                     )
 
                     if response.status_code == 200:
-                        st.success("✅ 指令已发送到飞书！请在电脑上查看并执行")
+                        st.success("🎉 指令已发送到飞书！请在电脑上查看并执行")
                         st.info("💡 **下一步：** 在你的电脑上运行 OpenClaw 命令开始投递")
                     else:
-                        st.error(f"❌ 发送失败：{response.text}")
+                        st.error(f"😢 发送失败：{response.text}")
 
                 except Exception as e:
                     st.error(f"发送失败: {str(e)}")
 
     st.markdown("### 📖 使用说明")
     st.markdown("""
-    1. **添加飞书机器人**
+    1. **添加飞书机器人** 🤖
        - 在飞书群里添加「自定义机器人」
        - 复制 Webhook 地址到上面
 
-    2. **本地安装 OpenClaw**
+    2. **本地安装 OpenClaw** 💻
        ```bash
        pip install openclaw
        ```
 
-    3. **运行投递命令**
+    3. **运行投递命令** 🚀
        - 收到飞书消息后
        - 复制命令在本地运行
        - OpenClaw 会自动投递
 
-    4. **查看进度**
+    4. **查看进度** 📊
        - OpenClaw 会实时输出进度
        - 投递完成后会发送飞书通知
     """)
 
     st.markdown('</div>', unsafe_allow_html=True)
-    with col2:
-        location = st.text_input("工作地点", value="北京", key="apply_location")
-        interval = st.slider("投递间隔（秒）", 3, 30, 5)
-
-    email = st.text_input("邮箱地址（接收进度通知）", placeholder="your@email.com")
-
-    if st.button("开始投递", type="primary"):
-        if not email:
-            st.warning("请输入邮箱地址以接收进度通知")
-        else:
-            st.info("🚧 自动投递功能需要本地运行完整版")
-            st.markdown("""
-            **本地运行步骤：**
-            1. 下载完整代码：`git clone https://github.com/emptyteabot/ai-job-helper.git`
-            2. 安装依赖：`pip install -r requirements.txt`
-            3. 运行：`streamlit run streamlit_app.py`
-            4. 或运行后端：`python web_app.py`
-            """)
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # Tab3: 数据统计（用户隔离）
 with tab3:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-    st.markdown("## 📊 数据统计")
-    st.markdown(f"<p>用户ID: {st.session_state.user_id[:8]}...</p>", unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("## 📊 我的求职数据")
+    st.markdown(f"<p>用户ID: {st.session_state.user_id[:8]}... （只有你能看到自己的数据哦 🔒）</p>", unsafe_allow_html=True)
 
     # 模拟数据（实际应该从数据库读取）
     col1, col2, col3, col4 = st.columns(4)
@@ -433,11 +400,11 @@ with tab3:
 
 # 页脚
 st.markdown('''
-<div style="text-align:center;color:var(--muted);padding:32px 0;font-size:14px;border-top:1px solid var(--line);margin-top:32px">
-    <p>💼 祝你求职顺利</p>
-    <p style="margin-top:8px">
-        <a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--muted);margin:0 12px;text-decoration:none">GitHub</a>
-        <a href="https://github.com/GodsScion/Auto_job_applier_linkedIn" style="color:var(--muted);margin:0 12px;text-decoration:none">高星项目</a>
+<div class="footer">
+    <p>💼 祝你找到心仪的实习，加油鸭！</p>
+    <p style="margin-top:12px">
+        <a href="https://github.com/emptyteabot/ai-job-helper">GitHub 开源</a>
+        <a href="https://github.com/GodsScion/Auto_job_applier_linkedIn">参考项目</a>
     </p>
 </div>
 ''', unsafe_allow_html=True)

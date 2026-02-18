@@ -114,24 +114,46 @@ class MultiAIDebateEngine:
         
         # 调用DeepSeek推理模式
         try:
-            response = self.llm_client.chat.completions.create(
-                model=self.reasoning_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.7
-            )
-            
-            message = response.choices[0].message
-            reasoning = getattr(message, "reasoning_content", "") or ""
-            output = message.content or ""
-            
-            # 清理Markdown格式
-            output = self._clean_markdown(output)
-            reasoning = self._clean_markdown(reasoning)
-            
+            import time
+            max_retries = 3
+            retry_delay = 2
+
+            for attempt in range(max_retries):
+                try:
+                    response = self.llm_client.chat.completions.create(
+                        model=self.reasoning_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.7
+                    )
+
+                    message = response.choices[0].message
+                    reasoning = getattr(message, "reasoning_content", "") or ""
+                    output = message.content or ""
+
+                    # 清理Markdown格式
+                    output = self._clean_markdown(output)
+                    reasoning = self._clean_markdown(reasoning)
+
+                    return {
+                        "role": role_info['name'],
+                        "output": output,
+                        "reasoning": reasoning
+                    }
+                except Exception as e:
+                    error_msg = str(e)
+                    if "governor" in error_msg.lower() or "rate" in error_msg.lower():
+                        if attempt < max_retries - 1:
+                            print(f"限流错误，{retry_delay}秒后重试... (尝试 {attempt + 1}/{max_retries})")
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # 指数退避
+                            continue
+                    raise
+
+            # 所有重试都失败
             return {
                 "role": role_info['name'],
-                "output": output,
-                "reasoning": reasoning
+                "output": f"AI思考出错: 请求频率过高，请稍后再试",
+                "reasoning": ""
             }
         except Exception as e:
             return {

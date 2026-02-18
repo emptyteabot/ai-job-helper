@@ -259,6 +259,9 @@ try:
     if deepseek_key:
         os.environ['OPENAI_API_KEY'] = deepseek_key
         os.environ['OPENAI_BASE_URL'] = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        # 使用 deepseek-chat 模型（避免 reasoner 的限流）
+        os.environ['DEEPSEEK_MODEL'] = "deepseek-chat"
+        os.environ['DEEPSEEK_REASONING_MODEL'] = "deepseek-chat"
     else:
         # 备用 OpenAI API
         os.environ['OPENAI_API_KEY'] = st.secrets.get("OPENAI_API_KEY", "")

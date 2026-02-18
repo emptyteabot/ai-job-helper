@@ -97,7 +97,8 @@ if platforms:
 
     for idx, platform in enumerate(platforms):
         with tabs[idx]:
-            st.markdown(f"### {{'boss': 'Boss直聘', 'zhilian': '智联招聘', 'linkedin': 'LinkedIn'}[platform]} 配置")
+            platform_names = {'boss': 'Boss直聘', 'zhilian': '智联招聘', 'linkedin': 'LinkedIn'}
+            st.markdown(f"### {platform_names[platform]} 配置")
 
             col1, col2 = st.columns(2)
 

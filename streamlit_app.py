@@ -339,23 +339,28 @@ with tab1:
 
                 if resume_text:
                     progress_placeholder = st.empty()
-                    results = analyze_resume_streaming(resume_text, progress_placeholder)
+
+                    # 创建结果展示区域（每个 Agent 完成后立即显示）
+                    result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "🎤 面试准备", "✅ 质量审核"])
+
+                    result_containers = {
+                        'career': result_tabs[0].empty(),
+                        'job': result_tabs[1].empty(),
+                        'interview': result_tabs[2].empty(),
+                        'quality': result_tabs[3].empty()
+                    }
+
+                    # 开始分析（流式显示）
+                    import time
+                    start_time = time.time()
+
+                    results = analyze_resume_streaming(resume_text, progress_placeholder, result_containers)
+
+                    elapsed = time.time() - start_time
+                    progress_placeholder.success(f"🎉 全部完成！总耗时 {elapsed:.1f} 秒")
 
                     if results:
                         st.session_state.analysis_results = results
-
-                        with st.expander("🎯 职业分析", expanded=True):
-                            st.write(results.get('career_analysis', '暂无数据'))
-                        with st.expander("💼 岗位推荐"):
-                            st.write(results.get('job_recommendations', '暂无数据'))
-                        with st.expander("✍️ 简历优化"):
-                            st.write(results.get('resume_optimization', '暂无数据'))
-                        with st.expander("📚 面试准备"):
-                            st.write(results.get('interview_preparation', '暂无数据'))
-                        with st.expander("🎤 模拟面试"):
-                            st.write(results.get('mock_interview', '暂无数据'))
-                        with st.expander("📈 技能分析"):
-                            st.write(results.get('skill_gap_analysis', '暂无数据'))
 
     st.markdown('</div>', unsafe_allow_html=True)
 

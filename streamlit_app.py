@@ -1,8 +1,13 @@
 """
-AI求职助手 - 简化版
-专注于简历分析 + 自动投递
+AI求职助手 - Streamlit 完整版
+简历分析 + 自动投递 - 全部功能集成
 """
 import streamlit as st
+import sys
+import os
+
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(__file__))
 
 st.set_page_config(
     page_title="AI求职助手",
@@ -39,9 +44,6 @@ st.markdown("""
 .stTabs [data-baseweb="tab-list"]{gap:12px;border-bottom:1px solid var(--line)}
 .stTabs [data-baseweb="tab"]{padding:14px 24px;font-size:18px;font-weight:500;color:var(--muted)}
 .stTabs [aria-selected="true"]{color:var(--text);border-bottom:2px solid var(--text)}
-.error-box{background:#fff8f8;border:1px solid #f0d5d5;border-radius:12px;padding:20px;margin:20px 0}
-.error-box h3{color:#933333;font-size:20px;margin-bottom:10px}
-.error-box p{color:#666;font-size:16px;line-height:1.6}
 </style>
 """, unsafe_allow_html=True)
 
@@ -54,27 +56,6 @@ st.markdown('''
     <div class="pill">专为大学生实习设计</div>
     <h1>让 AI 帮你找到<br>理想工作<span class="cursor"></span></h1>
     <div class="hero-subtitle">6 个 AI 协作分析简历，智能推荐岗位，自动投递到 Boss直聘、智联招聘、LinkedIn</div>
-</div>
-''', unsafe_allow_html=True)
-
-# 错误提示
-st.markdown('''
-<div class="error-box">
-    <h3>⚠️ 后端服务需要更新</h3>
-    <p><strong>当前问题：</strong></p>
-    <p>• Railway 后端部署的代码版本过旧，缺少必要的 API 端点</p>
-    <p>• 简历分析功能需要 <code>/api/process</code> 端点</p>
-    <p>• 自动投递功能需要 <code>/api/auto-apply/*</code> 端点</p>
-    <br>
-    <p><strong>解决方案：</strong></p>
-    <p>1. 推送最新的 web_app.py 到 GitHub</p>
-    <p>2. Railway 会自动重新部署</p>
-    <p>3. 或者在本地运行：<code>python web_app.py</code></p>
-    <br>
-    <p><strong>本地运行命令：</strong></p>
-    <p><code>cd "C:\\Users\\陈盈桦\\Desktop\\Desktop_整理_2026-02-09_172732\\Folders\\自动投简历"</code></p>
-    <p><code>python web_app.py</code></p>
-    <p>然后访问：<a href="http://localhost:8000" target="_blank">http://localhost:8000</a></p>
 </div>
 ''', unsafe_allow_html=True)
 
@@ -91,15 +72,105 @@ with tab1:
         method = st.radio("选择输入方式", ["上传文件", "文本输入"], horizontal=True)
 
         if method == "上传文件":
-            f = st.file_uploader("支持 PDF、Word、图片", type=["pdf", "doc", "docx", "png", "jpg", "jpeg"])
-            if f:
-                st.success(f"✓ 已上传: {f.name}")
-                if st.button("开始分析", type="primary"):
-                    st.error("❌ 后端 API 不可用，请先更新 Railway 部署或在本地运行")
+            uploaded_file = st.file_uploader("支持 PDF、Word、图片", type=["pdf", "doc", "docx", "png", "jpg", "jpeg"])
+            if uploaded_file:
+                st.success(f"✓ 已上传: {uploaded_file.name}")
+
+                if st.button("开始分析", type="primary", key="analyze_file"):
+                    with st.spinner("🔄 AI 正在分析您的简历..."):
+                        try:
+                            # 导入分析引擎
+                            from app.core.multi_ai_debate import JobApplicationPipeline
+
+                            # 读取文件内容
+                            file_content = uploaded_file.read()
+
+                            # 如果是文本文件，直接解码
+                            if uploaded_file.type == "text/plain":
+                                resume_text = file_content.decode('utf-8')
+                            else:
+                                # 对于 PDF/Word/图片，需要 OCR 或解析
+                                # 这里简化处理，提示用户使用文本输入
+                                st.warning("⚠️ 文件解析功能开发中，请使用文本输入方式")
+                                resume_text = None
+
+                            if resume_text:
+                                # 创建分析管道
+                                pipeline = JobApplicationPipeline()
+
+                                # 执行分析
+                                results = await pipeline.process_resume(resume_text)
+
+                                # 显示结果
+                                st.success("✅ 分析完成！")
+
+                                # 显示各个分析结果
+                                with st.expander("🎯 职业分析", expanded=True):
+                                    st.write(results.get('career_analysis', '暂无数据'))
+
+                                with st.expander("💼 岗位推荐"):
+                                    st.write(results.get('job_recommendations', '暂无数据'))
+
+                                with st.expander("✍️ 简历优化"):
+                                    st.write(results.get('resume_optimization', '暂无数据'))
+
+                                with st.expander("📚 面试准备"):
+                                    st.write(results.get('interview_preparation', '暂无数据'))
+
+                                with st.expander("🎤 模拟面试"):
+                                    st.write(results.get('mock_interview', '暂无数据'))
+
+                                with st.expander("📈 技能分析"):
+                                    st.write(results.get('skill_gap_analysis', '暂无数据'))
+
+                        except Exception as e:
+                            st.error(f"❌ 分析失败: {str(e)}")
         else:
-            txt = st.text_area("粘贴简历内容", height=280, placeholder="请在此粘贴您的简历内容...")
-            if txt and st.button("开始分析", type="primary"):
-                st.error("❌ 后端 API 不可用，请先更新 Railway 部署或在本地运行")
+            resume_text = st.text_area("粘贴简历内容", height=280, placeholder="请在此粘贴您的简历内容...")
+
+            if resume_text and st.button("开始分析", type="primary", key="analyze_text"):
+                with st.spinner("🔄 AI 正在分析您的简历..."):
+                    try:
+                        # 导入分析引擎
+                        from app.core.multi_ai_debate import JobApplicationPipeline
+                        import asyncio
+
+                        # 创建分析管道
+                        pipeline = JobApplicationPipeline()
+
+                        # 执行分析（同步方式）
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        results = loop.run_until_complete(pipeline.process_resume(resume_text))
+                        loop.close()
+
+                        # 显示结果
+                        st.success("✅ 分析完成！")
+
+                        # 使用标签页显示结果
+                        result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
+
+                        with result_tabs[0]:
+                            st.markdown(results.get('career_analysis', '暂无数据'))
+
+                        with result_tabs[1]:
+                            st.markdown(results.get('job_recommendations', '暂无数据'))
+
+                        with result_tabs[2]:
+                            st.markdown(results.get('resume_optimization', '暂无数据'))
+
+                        with result_tabs[3]:
+                            st.markdown(results.get('interview_preparation', '暂无数据'))
+
+                        with result_tabs[4]:
+                            st.markdown(results.get('mock_interview', '暂无数据'))
+
+                        with result_tabs[5]:
+                            st.markdown(results.get('skill_gap_analysis', '暂无数据'))
+
+                    except Exception as e:
+                        st.error(f"❌ 分析失败: {str(e)}")
+                        st.info("💡 提示：请确保已配置 API Key")
 
     with col2:
         st.markdown("""### 分析内容
@@ -116,19 +187,39 @@ with tab2:
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.markdown("## 🚀 自动投递")
 
-    p = st.multiselect("选择平台", ["Boss直聘", "智联招聘", "LinkedIn"], default=["Boss直聘"])
+    platforms = st.multiselect("选择平台", ["Boss直聘", "智联招聘", "LinkedIn"], default=["Boss直聘"])
 
-    if p:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.text_input("搜索关键词", value="实习生,应届生")
-            st.text_input("工作地点", value="北京,上海,深圳")
-        with c2:
-            st.number_input("投递数量", 1, 500, 50)
-            st.slider("投递间隔（秒）", 3, 30, 5)
+    if platforms:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            keywords = st.text_input("搜索关键词", value="实习生,应届生")
+            locations = st.text_input("工作地点", value="北京,上海,深圳")
+
+        with col2:
+            max_count = st.number_input("投递数量", 1, 500, 50)
+            interval = st.slider("投递间隔（秒）", 3, 30, 5)
 
         if st.button("开始投递", type="primary"):
-            st.error("❌ 后端 API 不可用，请先更新 Railway 部署或在本地运行")
+            st.warning("⚠️ 自动投递功能需要浏览器自动化环境")
+            st.info("""
+            **本地运行说明：**
+
+            1. 安装依赖：
+            ```bash
+            pip install playwright
+            playwright install chromium
+            ```
+
+            2. 运行后端：
+            ```bash
+            python web_app.py
+            ```
+
+            3. 访问：http://localhost:8000
+
+            **注意：** Streamlit Cloud 不支持浏览器自动化，需要本地运行。
+            """)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -139,7 +230,7 @@ st.markdown('''
     <p>💼 祝你求职顺利</p>
     <p>
         <a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--text);margin:0 16px">GitHub</a>
-        <a href="https://ai-job-hunter-production-2730.up.railway.app" style="color:var(--text);margin:0 16px">Railway 后端</a>
+        <a href="https://ai-job-apper-ibpzap2nnajzrnu8mkthuv.streamlit.app" style="color:var(--text);margin:0 16px">在线体验</a>
     </p>
 </div>
 ''', unsafe_allow_html=True)

@@ -260,7 +260,133 @@ if 'user_id' not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 if 'analysis_results' not in st.session_state:
     st.session_state.analysis_results = None
+if 'show_welcome' not in st.session_state:
+    st.session_state.show_welcome = True
 
+# 欢迎页面
+if st.session_state.show_welcome:
+    # Hero - 超大渐变背景
+    st.markdown('''
+    <div class="hero" style="min-height: 80vh; display: flex; align-items: center; justify-content: center;">
+        <div style="max-width: 900px; margin: 0 auto;">
+            <div class="hero-badge">✨ 由 DeepSeek AI 驱动</div>
+            <h1 style="font-size: 4.5rem; margin-bottom: 1.5rem;">AI 驱动的智能求职平台</h1>
+            <div class="hero-subtitle" style="font-size: 1.5rem; margin-bottom: 3rem;">
+                4 个 AI Agent 协作分析简历，精准匹配岗位，自动投递<br>让求职效率提升 10 倍
+            </div>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # 居中按钮
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🚀 立即开始", type="primary", use_container_width=True, key="start_app"):
+            st.session_state.show_welcome = False
+            st.rerun()
+
+    # 特性展示
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("## 为什么选择我们？")
+    st.markdown("<p style='text-align: center; color: var(--text-secondary); font-size: 1.25rem; margin-bottom: 3rem;'>AI 多角色协作，让求职更智能、更高效</p>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🤖</div>
+            <h3>4-AI 协作引擎</h3>
+            <p>职业分析师、岗位匹配专家、面试辅导教练、质量审核官协同工作</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
+            <h3>飞书 + OpenClaw</h3>
+            <p>集成飞书机器人和 OpenClaw，一键自动投递 Boss直聘、实习僧</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🎯</div>
+            <h3>智能精准匹配</h3>
+            <p>基于简历深度分析，AI 自动提取关键词、技能、地点，精准匹配岗位</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">🎤</div>
+            <h3>面试全程辅导</h3>
+            <p>AI 面试教练提供专业建议，针对目标岗位准备常见问题</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with col3:
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">⚡</div>
+            <h3>流式实时显示</h3>
+            <p>每个 AI Agent 完成后立即显示结果，伪进度条减少等待焦虑</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">✨</div>
+            <h3>Gemini 风格 UI</h3>
+            <p>蓝紫粉渐变色、玻璃态设计、流畅动画，现代化界面</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    # 工作流程
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.markdown("## 简单 3 步，开启智能求职")
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="width: 50px; height: 50px; background: var(--gemini-gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 500; margin: 0 auto 1rem;">1</div>
+            <h3>上传简历</h3>
+            <p>支持 PDF、Word、文本</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with col2:
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="width: 50px; height: 50px; background: var(--gemini-gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 500; margin: 0 auto 1rem;">2</div>
+            <h3>AI 分析</h3>
+            <p>4 个 Agent 协作分析</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    with col3:
+        st.markdown('''
+        <div class="card" style="text-align: center;">
+            <div style="width: 50px; height: 50px; background: var(--gemini-gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 500; margin: 0 auto 1rem;">3</div>
+            <h3>自动投递</h3>
+            <p>飞书 + OpenClaw 一键投递</p>
+        </div>
+        ''', unsafe_allow_html=True)
+
+    # 底部 CTA
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🚀 免费开始使用", type="primary", use_container_width=True, key="start_app_bottom"):
+            st.session_state.show_welcome = False
+            st.rerun()
+
+    st.stop()
+
+# 主应用（原有代码）
 # 顶部导航
 st.markdown('''
 <div class="top">

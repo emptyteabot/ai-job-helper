@@ -65,7 +65,31 @@ footer,
 
 .main .block-container {
     max-width: var(--maxw);
-    padding: 1.5rem 1rem 3rem;
+    padding: 2rem 1.5rem 4rem;
+    line-height: 1.8;
+}
+
+/* 增加所有文本的行间距 */
+p, li, div {
+    line-height: 1.8;
+    margin-bottom: 0.8em;
+}
+
+/* 标题间距 */
+h1, h2, h3, h4 {
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+    line-height: 1.3;
+}
+
+/* 列表间距 */
+ul, ol {
+    margin: 1em 0;
+    padding-left: 2em;
+}
+
+li {
+    margin-bottom: 0.6em;
 }
 
 /* 顶部导航 */
@@ -143,21 +167,23 @@ h1 {
     border: 1px solid var(--line);
     border-radius: 18px;
     background: #fff;
-    padding: 22px;
-    margin-bottom: 16px;
+    padding: 32px;
+    margin-bottom: 24px;
+    line-height: 1.8;
 }
 
 .panel h2 {
     font-size: 28px;
     font-weight: 700;
-    margin-bottom: 14px;
+    margin-bottom: 20px;
+    line-height: 1.3;
 }
 
 .panel p {
     color: var(--muted);
     font-size: 19px;
-    line-height: 1.6;
-    margin-bottom: 16px;
+    line-height: 1.8;
+    margin-bottom: 20px;
 }
 
 /* 按钮 */
@@ -192,12 +218,13 @@ h1 {
 
 /* 标签页 */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 12px;
+    gap: 16px;
     border-bottom: 1px solid var(--line);
+    margin-bottom: 24px;
 }
 
 .stTabs [data-baseweb="tab"] {
-    padding: 14px 24px;
+    padding: 16px 28px;
     font-size: 18px;
     font-weight: 500;
     color: var(--muted);
@@ -206,6 +233,40 @@ h1 {
 .stTabs [aria-selected="true"] {
     color: var(--text);
     border-bottom: 2px solid var(--text);
+}
+
+/* Expander 间距 */
+.stExpander {
+    margin-bottom: 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+.stExpander > div {
+    padding: 20px;
+}
+
+/* Markdown 内容间距 */
+.stMarkdown {
+    line-height: 1.8;
+}
+
+.stMarkdown p {
+    margin-bottom: 1em;
+}
+
+.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
+    margin-top: 1.5em;
+    margin-bottom: 0.8em;
+}
+
+.stMarkdown ul, .stMarkdown ol {
+    margin: 1em 0;
+    padding-left: 2em;
+}
+
+.stMarkdown li {
+    margin-bottom: 0.6em;
 }
 
 /* 岗位卡片 */
@@ -333,30 +394,30 @@ def parse_uploaded_file(uploaded_file):
         st.error(f"文件解析失败: {str(e)}")
         return None
 
-# 简历分析函数（使用快速引擎）
+# 简历分析函数（使用优化的推理模型流程）
 def analyze_resume(resume_text, progress_placeholder=None):
-    """简历分析 - 使用快速引擎，30秒内完成"""
+    """简历分析 - 使用推理模型，4个核心Agent"""
     try:
-        from app.core.fast_ai_engine import FastJobApplicationPipeline
+        from app.core.optimized_pipeline import OptimizedJobPipeline
         import time
 
         if progress_placeholder:
-            progress_placeholder.info("🔄 初始化快速 AI 引擎...")
+            progress_placeholder.info("🔄 初始化推理引擎（DeepSeek Reasoner）...")
 
-        pipeline = FastJobApplicationPipeline()
+        pipeline = OptimizedJobPipeline()
 
         if progress_placeholder:
-            progress_placeholder.info("⚡ 6个 AI 正在并行分析（预计 20-40 秒）...")
+            progress_placeholder.info("🧠 4个专家 AI 正在深度分析（预计 2-4 分钟）...")
 
         start_time = time.time()
 
-        # 使用快速引擎（并行处理）
+        # 使用优化的推理流程
         results = pipeline.process_resume(resume_text)
 
         elapsed = time.time() - start_time
 
         if progress_placeholder:
-            progress_placeholder.success(f"✅ 分析完成！耗时 {elapsed:.1f} 秒")
+            progress_placeholder.success(f"✅ 深度分析完成！耗时 {elapsed:.1f} 秒")
 
         return results
 

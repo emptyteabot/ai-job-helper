@@ -18,46 +18,256 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 全局样式 - OpenAI 打字机风格
+# 全局样式 - 参考 OpenAI/Google Material Design
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
-:root{--bg:#fff;--text:#131313;--muted:#64646b;--line:#e8e8ec;--soft:#f7f7f9}
-*{font-family:'Noto Sans SC',sans-serif;box-sizing:border-box}
-#MainMenu,footer,header{visibility:hidden}
-.main .block-container{max-width:980px;padding:1.5rem 1rem 3rem}
-.top-nav{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding:10px 0 16px;margin-bottom:2rem}
-.brand{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:800}
-.dot{width:8px;height:8px;border-radius:50%;background:#121212;box-shadow:0 0 0 6px rgba(18,18,18,0.08)}
-.hero{padding:52px 0 34px}
-.pill{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);padding:6px 11px;font:500 12px/1 'IBM Plex Mono',monospace;margin-bottom:16px}
-.pill::before{content:"";width:5px;height:5px;border-radius:50%;background:#121212}
-.hero h1{font-size:clamp(48px,9vw,84px);font-weight:800;letter-spacing:-1.8px;line-height:1.04;margin-bottom:20px}
-.hero-subtitle{color:var(--muted);font-size:24px;line-height:1.75;max-width:780px}
-.cursor{display:inline-block;width:8px;height:1em;margin-left:4px;background:#151515;vertical-align:-2px;animation:blink 1s steps(1,end) infinite}
-@keyframes blink{0%,48%{opacity:1}49%,100%{opacity:0}}
-.panel{border:1px solid var(--line);border-radius:18px;background:#fff;padding:28px;margin-bottom:20px}
-.panel h2{font-size:28px;font-weight:700;margin-bottom:16px}
-.panel p{font-size:18px;color:var(--muted);line-height:1.6;margin-bottom:20px}
-.stButton>button{border:1px solid #121212;background:#121212;color:white;border-radius:12px;padding:16px 28px;font-size:18px;font-weight:700}
-.stButton>button:hover{background:#2a2a2a;transform:translateY(-1px)}
-.stTextInput>div>div>input,.stTextArea>div>div>textarea{border:1px solid var(--line);border-radius:14px;padding:16px;font-size:18px}
-.stTextArea>div>div>textarea{min-height:280px}
-.stTabs [data-baseweb="tab-list"]{gap:12px;border-bottom:1px solid var(--line)}
-.stTabs [data-baseweb="tab"]{padding:14px 24px;font-size:18px;font-weight:500;color:var(--muted)}
-.stTabs [aria-selected="true"]{color:var(--text);border-bottom:2px solid var(--text)}
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+:root {
+    --primary: #10a37f;
+    --primary-hover: #0d8c6d;
+    --text-primary: #202123;
+    --text-secondary: #6e6e80;
+    --border: #e5e5e5;
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f7f8;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.07);
+    --radius: 8px;
+}
+
+* {
+    font-family: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    box-sizing: border-box;
+}
+
+#MainMenu, footer, header {visibility: hidden}
+
+.main .block-container {
+    max-width: 1200px;
+    padding: 2rem 1.5rem 4rem;
+}
+
+/* 顶部导航 */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 0 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #10a37f 0%, #1a7f64 100%);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+}
+
+/* Hero 区域 */
+.hero {
+    text-align: center;
+    padding: 3rem 0 4rem;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.hero h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+}
+
+.hero-subtitle {
+    font-size: 1.125rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 2rem;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    padding: 0.375rem 0.875rem;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+}
+
+/* 卡片样式 */
+.card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.card h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.card p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin-bottom: 1rem;
+}
+
+/* 按钮样式 */
+.stButton > button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.stButton > button:hover {
+    background: var(--primary-hover);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+/* 输入框样式 */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
+}
+
+.stTextArea > div > div > textarea {
+    min-height: 200px;
+}
+
+/* 标签页样式 */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.stTabs [data-baseweb="tab"] {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+}
+
+.stTabs [aria-selected="true"] {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* 信息框样式 */
+.stAlert {
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+/* 文件上传 */
+.stFileUploader {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 2rem;
+    text-align: center;
+}
+
+/* 侧边栏信息 */
+.info-box {
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.info-box h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.75rem;
+}
+
+.info-box ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.info-box li {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    padding: 0.375rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-box li::before {
+    content: "✓";
+    color: var(--primary);
+    font-weight: 700;
+}
 </style>
 """, unsafe_allow_html=True)
 
 # 顶部导航
-st.markdown('<div class="top-nav"><div class="brand"><div class="dot"></div><span>AI求职助手</span></div></div>', unsafe_allow_html=True)
+st.markdown('''
+<div class="top-bar">
+    <div class="logo">
+        <div class="logo-icon">AI</div>
+        <span>求职助手</span>
+    </div>
+</div>
+''', unsafe_allow_html=True)
 
 # Hero 区域
 st.markdown('''
 <div class="hero">
-    <div class="pill">专为大学生实习设计</div>
-    <h1>让 AI 帮你找到<br>理想工作<span class="cursor"></span></h1>
-    <div class="hero-subtitle">6 个 AI 协作分析简历，智能推荐岗位，自动投递到 Boss直聘、智联招聘、LinkedIn</div>
+    <div class="badge">🎓 专为大学生实习设计</div>
+    <h1>AI 驱动的智能求职平台</h1>
+    <div class="hero-subtitle">
+        6 个 AI 协作分析简历，智能推荐岗位，自动投递到 Boss直聘、智联招聘、LinkedIn
+    </div>
 </div>
 ''', unsafe_allow_html=True)
 
@@ -214,27 +424,29 @@ if 'analysis_results' not in st.session_state:
 tab1, tab2 = st.tabs(["📄 简历分析", "🚀 自动投递"])
 
 with tab1:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-    st.markdown("## 📄 AI 简历分析")
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("## 📄 简历分析")
+    st.markdown("<p>上传简历或粘贴文本，AI 将为你提供职业建议和岗位推荐</p>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        method = st.radio("选择输入方式", ["文本输入", "上传文件"], horizontal=True)
+        method = st.radio("输入方式", ["文本输入", "上传文件"], horizontal=True, label_visibility="collapsed")
 
         if method == "文本输入":
             resume_text = st.text_area(
-                "粘贴简历内容",
-                height=280,
-                placeholder="请在此粘贴您的简历内容...\n\n支持中英文简历",
-                help="直接粘贴简历文本，支持中英文"
+                "简历内容",
+                height=200,
+                placeholder="粘贴你的简历内容...",
+                help="支持中英文简历",
+                label_visibility="collapsed"
             )
 
-            if resume_text and st.button("开始分析", type="primary", key="analyze_text"):
+            if resume_text and st.button("开始分析", type="primary", key="analyze_text", use_container_width=True):
                 if len(resume_text.strip()) < 50:
-                    st.warning("⚠️ 简历内容较少，建议至少 50 字以上")
+                    st.warning("简历内容较少，建议至少 50 字以上")
                 else:
-                    with st.spinner("🔄 AI 正在分析您的简历..."):
+                    with st.spinner("AI 正在分析你的简历..."):
                         try:
                             # 导入分析引擎
                             from app.core.multi_ai_debate import JobApplicationPipeline
@@ -250,10 +462,10 @@ with tab1:
                                 st.session_state.analysis_results = results
 
                                 # 显示结果
-                                st.success("✅ 分析完成！")
+                                st.success("分析完成！")
 
                                 # 使用标签页显示结果
-                                result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
+                                result_tabs = st.tabs(["职业分析", "岗位推荐", "简历优化", "面试准备", "模拟面试", "技能分析"])
 
                                 with result_tabs[0]:
                                     st.markdown(results.get('career_analysis', '暂无数据'))
@@ -274,32 +486,33 @@ with tab1:
                                     st.markdown(results.get('skill_gap_analysis', '暂无数据'))
 
                         except Exception as e:
-                            st.error(f"❌ 分析失败: {str(e)}")
-                            st.info("💡 提示：请检查网络连接和 API 配置")
+                            st.error(f"分析失败: {str(e)}")
+                            st.info("请检查网络连接和 API 配置")
 
         else:  # 上传文件
             uploaded_file = st.file_uploader(
-                "支持 PDF、Word、图片、文本",
+                "上传简历",
                 type=["pdf", "doc", "docx", "png", "jpg", "jpeg", "txt"],
-                help="支持 PDF、Word 文档、图片（OCR识别）和文本文件"
+                help="支持 PDF、Word、图片（OCR）和文本文件",
+                label_visibility="collapsed"
             )
 
             if uploaded_file:
-                st.success(f"✓ 已上传: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
+                st.success(f"已上传: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
 
-                if st.button("开始分析", type="primary", key="analyze_file"):
-                    with st.spinner("🔄 正在解析文件..."):
+                if st.button("开始分析", type="primary", key="analyze_file", use_container_width=True):
+                    with st.spinner("正在解析文件..."):
                         # 使用老版本的解析代码
                         resume_text = parse_uploaded_file(uploaded_file)
 
                     if resume_text:
-                        st.success(f"✅ 文件解析成功，提取了 {len(resume_text)} 个字符")
+                        st.success(f"文件解析成功，提取了 {len(resume_text)} 个字符")
 
                         # 显示提取的文本预览
-                        with st.expander("📄 查看提取的文本"):
+                        with st.expander("查看提取的文本"):
                             st.text(resume_text[:500] + "..." if len(resume_text) > 500 else resume_text)
 
-                        with st.spinner("🔄 AI 正在分析您的简历..."):
+                        with st.spinner("AI 正在分析你的简历..."):
                             try:
                                 # 导入分析引擎
                                 from app.core.multi_ai_debate import JobApplicationPipeline
@@ -315,65 +528,66 @@ with tab1:
                                     st.session_state.analysis_results = results
 
                                     # 显示结果
-                                    st.success("✅ 分析完成！")
+                                    st.success("分析完成！")
 
                                     # 显示各个分析结果
-                                    with st.expander("🎯 职业分析", expanded=True):
+                                    with st.expander("职业分析", expanded=True):
                                         st.write(results.get('career_analysis', '暂无数据'))
 
-                                    with st.expander("💼 岗位推荐"):
+                                    with st.expander("岗位推荐"):
                                         st.write(results.get('job_recommendations', '暂无数据'))
 
-                                    with st.expander("✍️ 简历优化"):
+                                    with st.expander("简历优化"):
                                         st.write(results.get('resume_optimization', '暂无数据'))
 
-                                    with st.expander("📚 面试准备"):
+                                    with st.expander("面试准备"):
                                         st.write(results.get('interview_preparation', '暂无数据'))
 
-                                    with st.expander("🎤 模拟面试"):
+                                    with st.expander("模拟面试"):
                                         st.write(results.get('mock_interview', '暂无数据'))
 
-                                    with st.expander("📈 技能分析"):
+                                    with st.expander("技能分析"):
                                         st.write(results.get('skill_gap_analysis', '暂无数据'))
 
                             except Exception as e:
-                                st.error(f"❌ 分析失败: {str(e)}")
-                                st.info("💡 提示：请检查网络连接和 API 配置")
+                                st.error(f"分析失败: {str(e)}")
+                                st.info("请检查网络连接和 API 配置")
 
     with col2:
-        st.markdown("""### 分析内容
-- 🎯 职业分析
-- 💼 岗位推荐
-- ✍️ 简历优化
-- 📚 面试准备
-- 🎤 模拟面试
-- 📈 技能分析
-
-### 支持格式
-- 📄 PDF 文档
-- 📝 Word 文档
-- 🖼️ 图片（OCR）
-- 📋 文本文件
-
-### 使用提示
-1. 文本输入最快
-2. PDF/Word 自动解析
-3. 图片需要 OCR 识别
-4. 建议简历 > 50 字""")
+        st.markdown("""
+        <div class="info-box">
+            <h3>分析内容</h3>
+            <ul>
+                <li>职业分析</li>
+                <li>岗位推荐</li>
+                <li>简历优化</li>
+                <li>面试准备</li>
+                <li>模拟面试</li>
+                <li>技能分析</li>
+            </ul>
+        </div>
+        <div class="info-box">
+            <h3>支持格式</h3>
+            <ul>
+                <li>PDF 文档</li>
+                <li>Word 文档</li>
+                <li>图片（OCR）</li>
+                <li>文本文件</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("## 🚀 自动投递")
+    st.markdown("<p>基于 GitHub 高星项目，智能化自动投递简历到多个平台</p>", unsafe_allow_html=True)
 
     st.info("""
     **基于 GitHub 高星项目** [GodsScion/Auto_job_applier_linkedIn](https://github.com/GodsScion/Auto_job_applier_linkedIn) (1544⭐)
 
-    ✨ 智能化 - AI 自动回答申请表单
-    ⚡ 高效率 - 每小时可投递 50+ 职位
-    🔒 安全性 - 使用反检测技术
-    📊 可追踪 - 完整的投递历史记录
+    智能化 - AI 自动回答申请表单 | 高效率 - 每小时可投递 50+ 职位 | 安全性 - 使用反检测技术 | 可追踪 - 完整的投递历史记录
     """)
 
     platforms = st.multiselect(
@@ -409,10 +623,10 @@ with tab2:
             pause_before_submit = st.checkbox("提交前暂停审核", value=False, help="每次提交前暂停，人工审核")
             easy_apply_only = st.checkbox("仅 Easy Apply 职位", value=True, help="只投递支持快速申请的职位")
 
-        if st.button("开始投递", type="primary"):
-            st.warning("⚠️ 自动投递功能需要本地运行（浏览器自动化）")
+        if st.button("开始投递", type="primary", use_container_width=True):
+            st.warning("自动投递功能需要本地运行（浏览器自动化）")
 
-            with st.expander("📖 本地运行指南", expanded=True):
+            with st.expander("本地运行指南", expanded=True):
                 st.markdown("""
                 ### 方式 1：使用 FastAPI 后端（推荐）
 
@@ -472,14 +686,13 @@ with tab2:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # 页脚
-st.markdown("---")
 st.markdown('''
-<div style="text-align:center;color:var(--muted);padding:32px 0;font-size:16px">
-    <p>💼 祝你求职顺利</p>
-    <p>
-        <a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--text);margin:0 16px">GitHub</a>
-        <a href="https://github.com/GodsScion/Auto_job_applier_linkedIn" style="color:var(--text);margin:0 16px">高星项目</a>
-        <a href="https://ai-job-apper-ibpzap2nnajzrnu8mkthuv.streamlit.app" style="color:var(--text);margin:0 16px">在线体验</a>
+<div style="text-align:center;color:var(--text-secondary);padding:3rem 0;font-size:0.875rem;border-top:1px solid var(--border);margin-top:3rem">
+    <p style="margin-bottom:0.5rem">祝你求职顺利 🎯</p>
+    <p style="margin:0">
+        <a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--text-secondary);margin:0 1rem;text-decoration:none">GitHub</a>
+        <a href="https://github.com/GodsScion/Auto_job_applier_linkedIn" style="color:var(--text-secondary);margin:0 1rem;text-decoration:none">高星项目</a>
+        <a href="https://ai-job-apper-ibpzap2nnajzrnu8mkthuv.streamlit.app" style="color:var(--text-secondary);margin:0 1rem;text-decoration:none">在线体验</a>
     </p>
 </div>
 ''', unsafe_allow_html=True)

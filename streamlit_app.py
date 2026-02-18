@@ -65,9 +65,9 @@ st.markdown('''
 os.environ['OPENAI_API_KEY'] = 'sk-SnQQxqPPxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxq'
 os.environ['OPENAI_BASE_URL'] = 'https://oneapi.gemiaude.com/v1'
 
-# 文件解析函数（老版本代码）
+# 文件解析函数（老版本代码 - 优化版）
 def parse_uploaded_file(uploaded_file):
-    """解析上传的文件 - 支持 PDF/Word/图片"""
+    """解析上传的文件 - 支持 PDF/Word/图片（OCR）"""
     try:
         file_content = uploaded_file.read()
         file_ext = os.path.splitext(uploaded_file.name)[1].lower()
@@ -78,19 +78,33 @@ def parse_uploaded_file(uploaded_file):
             try:
                 resume_text = file_content.decode('utf-8')
             except:
-                resume_text = file_content.decode('gbk', errors='ignore')
+                try:
+                    resume_text = file_content.decode('gbk', errors='ignore')
+                except:
+                    resume_text = file_content.decode('latin-1', errors='ignore')
 
         elif file_ext == '.pdf':
             # PDF文件
             try:
                 import PyPDF2
                 pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-                for page in pdf_reader.pages:
+
+                if len(pdf_reader.pages) == 0:
+                    st.error("PDF 文件为空")
+                    return None
+
+                for page_num, page in enumerate(pdf_reader.pages):
                     text = page.extract_text()
                     if text:
                         resume_text += text + "\n"
+
+                if not resume_text.strip():
+                    st.warning("PDF 可能是扫描件，尝试使用图片上传方式")
+                    return None
+
             except Exception as e:
-                st.error(f"PDF解析失败: {str(e)}")
+                st.error(f"PDF 解析失败: {str(e)}")
+                st.info("💡 提示：如果是扫描版 PDF，请转换为图片后上传")
                 return None
 
         elif file_ext in ['.docx', '.doc']:
@@ -112,8 +126,13 @@ def parse_uploaded_file(uploaded_file):
                                 resume_text += cell.text + " "
                         resume_text += "\n"
 
+                if not resume_text.strip():
+                    st.error("Word 文档为空或无法提取文字")
+                    return None
+
             except Exception as e:
-                st.error(f"Word文档解析失败: {str(e)}")
+                st.error(f"Word 文档解析失败: {str(e)}")
+                st.info("💡 提示：请确保文件未损坏，或尝试另存为 .docx 格式")
                 return None
 
         elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
@@ -125,20 +144,48 @@ def parse_uploaded_file(uploaded_file):
                 # 打开图片
                 image = Image.open(io.BytesIO(file_content))
 
+                # 显示图片预览
+                st.image(image, caption="上传的图片", use_container_width=True)
+
                 # OCR识别（支持中英文）
-                resume_text = pytesseract.image_to_string(image, lang='chi_sim+eng')
+                with st.spinner("🔍 正在识别图片中的文字..."):
+                    resume_text = pytesseract.image_to_string(image, lang='chi_sim+eng')
 
                 if not resume_text.strip():
-                    st.error("图片识别失败，未能提取到文字。请确保图片清晰。")
+                    st.error("图片识别失败，未能提取到文字")
+                    st.info("💡 提示：请确保图片清晰、文字可读，或尝试调整图片亮度和对比度")
                     return None
 
             except ImportError:
-                st.error("图片OCR功能需要安装 pytesseract。请运行：pip install pytesseract")
-                st.info("或者使用文本输入方式")
+                st.error("❌ 图片 OCR 功能未安装")
+                st.info("""
+                **安装方法：**
+
+                1. 安装 pytesseract：
+                ```bash
+                pip install pytesseract
+                ```
+
+                2. 安装 Tesseract OCR 引擎：
+                - Windows: https://github.com/UB-Mannheim/tesseract/wiki
+                - Mac: `brew install tesseract`
+                - Linux: `sudo apt-get install tesseract-ocr`
+
+                或者使用文本输入方式
+                """)
                 return None
             except Exception as e:
                 st.error(f"图片识别失败: {str(e)}")
+                st.info("💡 提示：请确保已安装 Tesseract OCR 引擎")
                 return None
+
+        else:
+            st.error(f"不支持的文件格式: {file_ext}")
+            return None
+
+        # 检查提取的文本长度
+        if resume_text and len(resume_text.strip()) < 50:
+            st.warning("⚠️ 提取的文字内容较少，可能影响分析质量")
 
         return resume_text.strip() if resume_text else None
 
@@ -159,6 +206,10 @@ def run_async(coro):
         st.error(f"执行出错: {str(e)}")
         return None
 
+# 初始化 session state
+if 'analysis_results' not in st.session_state:
+    st.session_state.analysis_results = None
+
 # 标签页
 tab1, tab2 = st.tabs(["📄 简历分析", "🚀 自动投递"])
 
@@ -172,48 +223,59 @@ with tab1:
         method = st.radio("选择输入方式", ["文本输入", "上传文件"], horizontal=True)
 
         if method == "文本输入":
-            resume_text = st.text_area("粘贴简历内容", height=280, placeholder="请在此粘贴您的简历内容...")
+            resume_text = st.text_area(
+                "粘贴简历内容",
+                height=280,
+                placeholder="请在此粘贴您的简历内容...\n\n支持中英文简历",
+                help="直接粘贴简历文本，支持中英文"
+            )
 
             if resume_text and st.button("开始分析", type="primary", key="analyze_text"):
-                with st.spinner("🔄 AI 正在分析您的简历..."):
-                    try:
-                        # 导入分析引擎
-                        from app.core.multi_ai_debate import JobApplicationPipeline
+                if len(resume_text.strip()) < 50:
+                    st.warning("⚠️ 简历内容较少，建议至少 50 字以上")
+                else:
+                    with st.spinner("🔄 AI 正在分析您的简历..."):
+                        try:
+                            # 导入分析引擎
+                            from app.core.multi_ai_debate import JobApplicationPipeline
 
-                        # 创建分析管道
-                        pipeline = JobApplicationPipeline()
+                            # 创建分析管道
+                            pipeline = JobApplicationPipeline()
 
-                        # 执行分析（使用同步包装器）
-                        results = run_async(pipeline.process_resume(resume_text))
+                            # 执行分析（使用同步包装器）
+                            results = run_async(pipeline.process_resume(resume_text))
 
-                        if results:
-                            # 显示结果
-                            st.success("✅ 分析完成！")
+                            if results:
+                                # 保存结果到 session state
+                                st.session_state.analysis_results = results
 
-                            # 使用标签页显示结果
-                            result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
+                                # 显示结果
+                                st.success("✅ 分析完成！")
 
-                            with result_tabs[0]:
-                                st.markdown(results.get('career_analysis', '暂无数据'))
+                                # 使用标签页显示结果
+                                result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
 
-                            with result_tabs[1]:
-                                st.markdown(results.get('job_recommendations', '暂无数据'))
+                                with result_tabs[0]:
+                                    st.markdown(results.get('career_analysis', '暂无数据'))
 
-                            with result_tabs[2]:
-                                st.markdown(results.get('resume_optimization', '暂无数据'))
+                                with result_tabs[1]:
+                                    st.markdown(results.get('job_recommendations', '暂无数据'))
 
-                            with result_tabs[3]:
-                                st.markdown(results.get('interview_preparation', '暂无数据'))
+                                with result_tabs[2]:
+                                    st.markdown(results.get('resume_optimization', '暂无数据'))
 
-                            with result_tabs[4]:
-                                st.markdown(results.get('mock_interview', '暂无数据'))
+                                with result_tabs[3]:
+                                    st.markdown(results.get('interview_preparation', '暂无数据'))
 
-                            with result_tabs[5]:
-                                st.markdown(results.get('skill_gap_analysis', '暂无数据'))
+                                with result_tabs[4]:
+                                    st.markdown(results.get('mock_interview', '暂无数据'))
 
-                    except Exception as e:
-                        st.error(f"❌ 分析失败: {str(e)}")
-                        st.info("💡 提示：请检查 API 配置")
+                                with result_tabs[5]:
+                                    st.markdown(results.get('skill_gap_analysis', '暂无数据'))
+
+                        except Exception as e:
+                            st.error(f"❌ 分析失败: {str(e)}")
+                            st.info("💡 提示：请检查网络连接和 API 配置")
 
         else:  # 上传文件
             uploaded_file = st.file_uploader(
@@ -223,7 +285,7 @@ with tab1:
             )
 
             if uploaded_file:
-                st.success(f"✓ 已上传: {uploaded_file.name}")
+                st.success(f"✓ 已上传: {uploaded_file.name} ({uploaded_file.size / 1024:.1f} KB)")
 
                 if st.button("开始分析", type="primary", key="analyze_file"):
                     with st.spinner("🔄 正在解析文件..."):
@@ -231,6 +293,12 @@ with tab1:
                         resume_text = parse_uploaded_file(uploaded_file)
 
                     if resume_text:
+                        st.success(f"✅ 文件解析成功，提取了 {len(resume_text)} 个字符")
+
+                        # 显示提取的文本预览
+                        with st.expander("📄 查看提取的文本"):
+                            st.text(resume_text[:500] + "..." if len(resume_text) > 500 else resume_text)
+
                         with st.spinner("🔄 AI 正在分析您的简历..."):
                             try:
                                 # 导入分析引擎
@@ -243,6 +311,9 @@ with tab1:
                                 results = run_async(pipeline.process_resume(resume_text))
 
                                 if results:
+                                    # 保存结果到 session state
+                                    st.session_state.analysis_results = results
+
                                     # 显示结果
                                     st.success("✅ 分析完成！")
 
@@ -267,6 +338,7 @@ with tab1:
 
                             except Exception as e:
                                 st.error(f"❌ 分析失败: {str(e)}")
+                                st.info("💡 提示：请检查网络连接和 API 配置")
 
     with col2:
         st.markdown("""### 分析内容
@@ -281,7 +353,13 @@ with tab1:
 - 📄 PDF 文档
 - 📝 Word 文档
 - 🖼️ 图片（OCR）
-- 📋 文本文件""")
+- 📋 文本文件
+
+### 使用提示
+1. 文本输入最快
+2. PDF/Word 自动解析
+3. 图片需要 OCR 识别
+4. 建议简历 > 50 字""")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -292,10 +370,10 @@ with tab2:
     st.info("""
     **基于 GitHub 高星项目** [GodsScion/Auto_job_applier_linkedIn](https://github.com/GodsScion/Auto_job_applier_linkedIn) (1544⭐)
 
-    ✨ 智能化 AI 自动回答申请表单
-    ⚡ 高效率 每小时可投递 50+ 职位
-    🔒 安全性 使用反检测技术
-    📊 可追踪 完整的投递历史记录
+    ✨ 智能化 - AI 自动回答申请表单
+    ⚡ 高效率 - 每小时可投递 50+ 职位
+    🔒 安全性 - 使用反检测技术
+    📊 可追踪 - 完整的投递历史记录
     """)
 
     platforms = st.multiselect(
@@ -309,12 +387,12 @@ with tab2:
         col1, col2 = st.columns(2)
 
         with col1:
-            keywords = st.text_input("搜索关键词", value="Python Developer, Full Stack Engineer")
-            locations = st.text_input("工作地点", value="Remote, San Francisco, 北京")
+            keywords = st.text_input("搜索关键词", value="Python Developer, Full Stack Engineer", help="多个关键词用逗号分隔")
+            locations = st.text_input("工作地点", value="Remote, San Francisco, 北京", help="多个地点用逗号分隔")
 
         with col2:
-            max_count = st.number_input("投递数量", 1, 500, 50, help="建议每次 50 个以内")
-            interval = st.slider("投递间隔（秒）", 3, 30, 5)
+            max_count = st.number_input("投递数量", 1, 500, 50, help="建议每次 50 个以内，避免被封号")
+            interval = st.slider("投递间隔（秒）", 3, 30, 5, help="间隔时间越长越安全")
 
         st.markdown("### 高级配置")
 
@@ -328,11 +406,11 @@ with tab2:
             )
 
         with col4:
-            pause_before_submit = st.checkbox("提交前暂停审核", value=False)
-            easy_apply_only = st.checkbox("仅 Easy Apply 职位", value=True)
+            pause_before_submit = st.checkbox("提交前暂停审核", value=False, help="每次提交前暂停，人工审核")
+            easy_apply_only = st.checkbox("仅 Easy Apply 职位", value=True, help="只投递支持快速申请的职位")
 
         if st.button("开始投递", type="primary"):
-            st.warning("⚠️ 自动投递功能需要本地运行")
+            st.warning("⚠️ 自动投递功能需要本地运行（浏览器自动化）")
 
             with st.expander("📖 本地运行指南", expanded=True):
                 st.markdown("""
@@ -350,7 +428,7 @@ with tab2:
                 http://localhost:8000/static/auto_apply_panel.html
                 ```
 
-                ### 方式 2：直接使用 GitHub 项目
+                ### 方式 2：直接使用 GitHub 高星项目
 
                 ```bash
                 # 1. 克隆项目
@@ -371,7 +449,8 @@ with tab2:
 
                 - 浏览器自动化需要 Chromium/Chrome
                 - 需要持久化会话和 Cookie
-                - Streamlit Cloud 不支持这些功能
+                - 需要图形界面环境
+                - Streamlit Cloud 是无头环境，不支持这些功能
 
                 ### 推荐架构
 
@@ -380,6 +459,14 @@ with tab2:
                      ↓ API 调用
                 Railway/本地 (后端 + 浏览器自动化)
                 ```
+
+                ### 安全提示
+
+                ⚠️ **重要：**
+                - 不要过度使用，避免账号被封
+                - 建议每天投递不超过 100 个
+                - 使用间隔时间 5-10 秒
+                - 定期更换 IP 地址
                 """)
 
     st.markdown('</div>', unsafe_allow_html=True)

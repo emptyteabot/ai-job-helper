@@ -1,11 +1,12 @@
 """
 AI求职助手 - Streamlit 完整版
-简历分析 + 自动投递 - 全部功能集成
+简历分析（老版本代码）+ 自动投递（GitHub高星项目）
 """
 import streamlit as st
 import sys
 import os
 import asyncio
+import io
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(__file__))
@@ -63,6 +64,87 @@ st.markdown('''
 # 配置 API Key（直接写在代码里）
 os.environ['OPENAI_API_KEY'] = 'sk-SnQQxqPPxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxq'
 os.environ['OPENAI_BASE_URL'] = 'https://oneapi.gemiaude.com/v1'
+
+# 文件解析函数（老版本代码）
+def parse_uploaded_file(uploaded_file):
+    """解析上传的文件 - 支持 PDF/Word/图片"""
+    try:
+        file_content = uploaded_file.read()
+        file_ext = os.path.splitext(uploaded_file.name)[1].lower()
+        resume_text = ""
+
+        if file_ext == '.txt':
+            # 文本文件
+            try:
+                resume_text = file_content.decode('utf-8')
+            except:
+                resume_text = file_content.decode('gbk', errors='ignore')
+
+        elif file_ext == '.pdf':
+            # PDF文件
+            try:
+                import PyPDF2
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                for page in pdf_reader.pages:
+                    text = page.extract_text()
+                    if text:
+                        resume_text += text + "\n"
+            except Exception as e:
+                st.error(f"PDF解析失败: {str(e)}")
+                return None
+
+        elif file_ext in ['.docx', '.doc']:
+            # Word文件
+            try:
+                from docx import Document
+                doc = Document(io.BytesIO(file_content))
+
+                # 提取段落文本
+                for paragraph in doc.paragraphs:
+                    if paragraph.text.strip():
+                        resume_text += paragraph.text + "\n"
+
+                # 提取表格文本
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            if cell.text.strip():
+                                resume_text += cell.text + " "
+                        resume_text += "\n"
+
+            except Exception as e:
+                st.error(f"Word文档解析失败: {str(e)}")
+                return None
+
+        elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
+            # 图片文件 - 使用OCR
+            try:
+                from PIL import Image
+                import pytesseract
+
+                # 打开图片
+                image = Image.open(io.BytesIO(file_content))
+
+                # OCR识别（支持中英文）
+                resume_text = pytesseract.image_to_string(image, lang='chi_sim+eng')
+
+                if not resume_text.strip():
+                    st.error("图片识别失败，未能提取到文字。请确保图片清晰。")
+                    return None
+
+            except ImportError:
+                st.error("图片OCR功能需要安装 pytesseract。请运行：pip install pytesseract")
+                st.info("或者使用文本输入方式")
+                return None
+            except Exception as e:
+                st.error(f"图片识别失败: {str(e)}")
+                return None
+
+        return resume_text.strip() if resume_text else None
+
+    except Exception as e:
+        st.error(f"文件解析失败: {str(e)}")
+        return None
 
 # 异步函数包装器
 def run_async(coro):
@@ -134,26 +216,23 @@ with tab1:
                         st.info("💡 提示：请检查 API 配置")
 
         else:  # 上传文件
-            uploaded_file = st.file_uploader("支持 PDF、Word、图片", type=["pdf", "doc", "docx", "png", "jpg", "jpeg", "txt"])
+            uploaded_file = st.file_uploader(
+                "支持 PDF、Word、图片、文本",
+                type=["pdf", "doc", "docx", "png", "jpg", "jpeg", "txt"],
+                help="支持 PDF、Word 文档、图片（OCR识别）和文本文件"
+            )
 
             if uploaded_file:
                 st.success(f"✓ 已上传: {uploaded_file.name}")
 
                 if st.button("开始分析", type="primary", key="analyze_file"):
-                    with st.spinner("🔄 AI 正在分析您的简历..."):
-                        try:
-                            # 读取文件内容
-                            file_content = uploaded_file.read()
+                    with st.spinner("🔄 正在解析文件..."):
+                        # 使用老版本的解析代码
+                        resume_text = parse_uploaded_file(uploaded_file)
 
-                            # 如果是文本文件，直接解码
-                            if uploaded_file.type == "text/plain" or uploaded_file.name.endswith('.txt'):
-                                resume_text = file_content.decode('utf-8')
-                            else:
-                                # 对于 PDF/Word/图片，提示用户使用文本输入
-                                st.warning("⚠️ PDF/Word/图片解析功能开发中，请使用文本输入方式")
-                                resume_text = None
-
-                            if resume_text:
+                    if resume_text:
+                        with st.spinner("🔄 AI 正在分析您的简历..."):
+                            try:
                                 # 导入分析引擎
                                 from app.core.multi_ai_debate import JobApplicationPipeline
 
@@ -186,8 +265,8 @@ with tab1:
                                     with st.expander("📈 技能分析"):
                                         st.write(results.get('skill_gap_analysis', '暂无数据'))
 
-                        except Exception as e:
-                            st.error(f"❌ 分析失败: {str(e)}")
+                            except Exception as e:
+                                st.error(f"❌ 分析失败: {str(e)}")
 
     with col2:
         st.markdown("""### 分析内容
@@ -196,7 +275,13 @@ with tab1:
 - ✍️ 简历优化
 - 📚 面试准备
 - 🎤 模拟面试
-- 📈 技能分析""")
+- 📈 技能分析
+
+### 支持格式
+- 📄 PDF 文档
+- 📝 Word 文档
+- 🖼️ 图片（OCR）
+- 📋 文本文件""")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -204,39 +289,98 @@ with tab2:
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.markdown("## 🚀 自动投递")
 
-    platforms = st.multiselect("选择平台", ["Boss直聘", "智联招聘", "LinkedIn"], default=["Boss直聘"])
+    st.info("""
+    **基于 GitHub 高星项目** [GodsScion/Auto_job_applier_linkedIn](https://github.com/GodsScion/Auto_job_applier_linkedIn) (1544⭐)
+
+    ✨ 智能化 AI 自动回答申请表单
+    ⚡ 高效率 每小时可投递 50+ 职位
+    🔒 安全性 使用反检测技术
+    📊 可追踪 完整的投递历史记录
+    """)
+
+    platforms = st.multiselect(
+        "选择平台",
+        ["LinkedIn (Easy Apply)", "Boss直聘", "智联招聘"],
+        default=["LinkedIn (Easy Apply)"],
+        help="LinkedIn 基于 GitHub 高星项目，其他平台开发中"
+    )
 
     if platforms:
         col1, col2 = st.columns(2)
 
         with col1:
-            keywords = st.text_input("搜索关键词", value="实习生,应届生")
-            locations = st.text_input("工作地点", value="北京,上海,深圳")
+            keywords = st.text_input("搜索关键词", value="Python Developer, Full Stack Engineer")
+            locations = st.text_input("工作地点", value="Remote, San Francisco, 北京")
 
         with col2:
-            max_count = st.number_input("投递数量", 1, 500, 50)
+            max_count = st.number_input("投递数量", 1, 500, 50, help="建议每次 50 个以内")
             interval = st.slider("投递间隔（秒）", 3, 30, 5)
 
+        st.markdown("### 高级配置")
+
+        col3, col4 = st.columns(2)
+
+        with col3:
+            blacklist = st.text_area(
+                "公司黑名单（每行一个）",
+                height=100,
+                placeholder="不想投递的公司名称\n每行一个"
+            )
+
+        with col4:
+            pause_before_submit = st.checkbox("提交前暂停审核", value=False)
+            easy_apply_only = st.checkbox("仅 Easy Apply 职位", value=True)
+
         if st.button("开始投递", type="primary"):
-            st.warning("⚠️ 自动投递功能需要浏览器自动化环境")
-            st.info("""
-            **本地运行说明：**
+            st.warning("⚠️ 自动投递功能需要本地运行")
 
-            1. 安装依赖：
-            ```bash
-            pip install playwright
-            playwright install chromium
-            ```
+            with st.expander("📖 本地运行指南", expanded=True):
+                st.markdown("""
+                ### 方式 1：使用 FastAPI 后端（推荐）
 
-            2. 运行后端：
-            ```bash
-            python web_app.py
-            ```
+                ```bash
+                # 1. 安装依赖
+                pip install playwright undetected-chromedriver
+                playwright install chromium
 
-            3. 访问：http://localhost:8000
+                # 2. 启动后端
+                python web_app.py
 
-            **注意：** Streamlit Cloud 不支持浏览器自动化，需要本地运行。
-            """)
+                # 3. 访问自动投递面板
+                http://localhost:8000/static/auto_apply_panel.html
+                ```
+
+                ### 方式 2：直接使用 GitHub 项目
+
+                ```bash
+                # 1. 克隆项目
+                git clone https://github.com/GodsScion/Auto_job_applier_linkedIn.git
+                cd Auto_job_applier_linkedIn
+
+                # 2. 安装依赖
+                pip install -r requirements.txt
+
+                # 3. 配置 config.yaml
+                # 填写你的 LinkedIn 账号和投递参数
+
+                # 4. 运行
+                python main.py
+                ```
+
+                ### 为什么 Streamlit Cloud 不支持？
+
+                - 浏览器自动化需要 Chromium/Chrome
+                - 需要持久化会话和 Cookie
+                - Streamlit Cloud 不支持这些功能
+
+                ### 推荐架构
+
+                ```
+                Streamlit Cloud (前端 UI)
+                     ↓ API 调用
+                Railway/本地 (后端 + 浏览器自动化)
+                ```
+                """)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -247,6 +391,7 @@ st.markdown('''
     <p>💼 祝你求职顺利</p>
     <p>
         <a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--text);margin:0 16px">GitHub</a>
+        <a href="https://github.com/GodsScion/Auto_job_applier_linkedIn" style="color:var(--text);margin:0 16px">高星项目</a>
         <a href="https://ai-job-apper-ibpzap2nnajzrnu8mkthuv.streamlit.app" style="color:var(--text);margin:0 16px">在线体验</a>
     </p>
 </div>

@@ -404,11 +404,119 @@ with tab2:
         # 投递方式选择
         apply_method = st.radio(
             "选择投递方式 🚀",
-            ["☁️ 云端投递（无需安装）", "🤖 本地投递（需要电脑）", "📋 生成脚本（自己运行）"],
+            ["🤖 飞书 + OpenClaw（推荐）", "📋 生成脚本（自己运行）"],
             horizontal=True
         )
 
-        if apply_method == "☁️ 云端投递（无需安装）":
+        if apply_method == "🤖 飞书 + OpenClaw（推荐）":
+            st.success("✨ 最智能的方式！飞书发送指令，OpenClaw 自动投递")
+
+            st.markdown("### 📝 配置飞书机器人")
+
+            st.info("""
+            💡 **使用你的飞书机器人：**
+            - App ID: `cli_a908b88dc6b8dcd4`
+            - App Secret: `Q8jjY7RDcwfcsmTd0Zvylee4dfs6kVhK`
+
+            **工作原理：**
+            1. 点击「发送到飞书」
+            2. 飞书机器人发送投递指令
+            3. 你在电脑上运行 OpenClaw 命令
+            4. 自动投递，结果回传飞书
+            """)
+
+            col1, col2 = st.columns(2)
+            with col1:
+                feishu_user_id = st.text_input(
+                    "飞书用户 ID 📱",
+                    placeholder="ou_xxx 或你的邮箱",
+                    help="在飞书中找到你的用户 ID"
+                )
+            with col2:
+                platform = st.selectbox("选择平台 🌐", ["Boss直聘", "实习僧", "牛客网"])
+
+            if st.button("🚀 发送到飞书", type="primary"):
+                if not feishu_user_id:
+                    st.warning("😅 请输入飞书用户 ID")
+                else:
+                    with st.spinner("📤 正在发送到飞书..."):
+                        try:
+                            from app.core.smart_apply import smart_apply_engine
+                            from app.core.feishu_openclaw_bridge import feishu_openclaw_bridge
+
+                            # 提取投递目标
+                            targets = smart_apply_engine.extract_job_targets(st.session_state.analysis_results)
+
+                            # 发送到飞书
+                            result = feishu_openclaw_bridge.send_apply_task(
+                                receive_id=feishu_user_id,
+                                targets=targets,
+                                platform=platform
+                            )
+
+                            if result['status'] == 'sent':
+                                st.success("🎉 投递任务已发送到飞书！")
+
+                                st.info(f"""
+                                📧 **任务 ID：** {result['task_id']}
+
+                                **下一步：**
+                                1. 打开飞书，查看机器人消息
+                                2. 复制 OpenClaw 命令
+                                3. 在电脑上运行命令
+                                4. 等待投递完成
+
+                                **投递完成后，结果会自动发送到飞书 📊**
+                                """)
+
+                                # 显示 OpenClaw 脚本
+                                with st.expander("📝 查看 OpenClaw 脚本"):
+                                    st.code(result['openclaw_script'], language='bash')
+
+                                # 显示备用 Selenium 脚本
+                                with st.expander("💻 备用：Selenium 脚本"):
+                                    st.code(result['selenium_script'], language='python')
+
+                            else:
+                                st.error("😢 发送失败，请检查飞书配置")
+
+                        except Exception as e:
+                            st.error(f"发送失败: {str(e)}")
+                            import traceback
+                            st.error(traceback.format_exc())
+
+            st.markdown("### 📖 使用说明")
+            st.markdown("""
+            **为什么选择飞书 + OpenClaw？** 🤔
+            - ✅ 飞书消息不会丢失
+            - ✅ OpenClaw 更稳定可靠
+            - ✅ 支持多平台投递
+            - ✅ 自动回传结果
+
+            **安装 OpenClaw：** 💻
+            ```bash
+            # 方法1：npm 安装（推荐）
+            npm install -g openclaw
+
+            # 方法2：从源码安装
+            git clone https://github.com/openclaw/openclaw.git
+            cd openclaw && npm install
+            ```
+
+            **首次使用：** 🔧
+            1. 安装 OpenClaw
+            2. 配置飞书机器人
+            3. 获取你的飞书用户 ID
+            4. 发送投递任务
+
+            **投递流程：** 🔄
+            1. AI 分析简历 → 提取目标
+            2. 发送到飞书 → 生成命令
+            3. 运行 OpenClaw → 自动投递
+            4. 结果回传 → 飞书通知
+            """)
+
+        elif apply_method == "📋 生成脚本（自己运行）":
             st.success("✨ 最简单的方式！只需输入手机号和邮箱，我们帮你投递")
 
             st.markdown("### 📝 填写联系方式")

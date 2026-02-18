@@ -184,6 +184,37 @@ if page == "🏠 首页":
 
     st.markdown("---")
 
+    # 快速链接
+    st.markdown("## 📚 快速链接")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("""
+        **📖 文档**
+        - [快速开始](https://github.com/emptyteabot/ai-job-helper/blob/main/QUICKSTART.md)
+        - [使用指南](https://github.com/emptyteabot/ai-job-helper/blob/main/README_STREAMLIT_USAGE.md)
+        - [部署指南](https://github.com/emptyteabot/ai-job-helper/blob/main/DEPLOYMENT_GUIDE.md)
+        """)
+
+    with col2:
+        st.markdown("""
+        **🔗 资源**
+        - [GitHub 仓库](https://github.com/emptyteabot/ai-job-helper)
+        - [在线体验](https://ai-job-hunter-production-2730.up.railway.app)
+        - [问题反馈](https://github.com/emptyteabot/ai-job-helper/issues)
+        """)
+
+    with col3:
+        st.markdown("""
+        **🤝 参与**
+        - [贡献指南](https://github.com/emptyteabot/ai-job-helper/blob/main/CONTRIBUTING.md)
+        - [讨论区](https://github.com/emptyteabot/ai-job-helper/discussions)
+        - [Star 项目](https://github.com/emptyteabot/ai-job-helper)
+        """)
+
+    st.markdown("---")
+
     # 常见问题
     with st.expander("❓ 常见问题"):
         st.markdown("""

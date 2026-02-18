@@ -467,6 +467,280 @@ button[kind="header"],
     }
 }
 
+/* 微交互动画 */
+
+/* 按钮点击波纹效果 */
+.stButton > button {
+    position: relative;
+    overflow: hidden;
+}
+
+.stButton > button::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.stButton > button:active::after {
+    width: 300px;
+    height: 300px;
+}
+
+/* 输入框聚焦动画 */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea {
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus {
+    transform: translateY(-2px);
+}
+
+/* 卡片悬停动画 */
+.card {
+    position: relative;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(66, 133, 244, 0.1), rgba(139, 92, 246, 0.1));
+    opacity: 0;
+    transition: opacity 0.3s;
+    border-radius: var(--radius-lg);
+    pointer-events: none;
+}
+
+.card:hover::before {
+    opacity: 1;
+}
+
+/* Tab 切换动画 */
+.stTabs [data-baseweb="tab"] {
+    position: relative;
+}
+
+.stTabs [data-baseweb="tab"]::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 0;
+    height: 2px;
+    background: var(--gemini-blue-purple);
+    transform: translateX(-50%);
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stTabs [aria-selected="true"]::after {
+    width: 80%;
+}
+
+/* 加载骨架屏动画 */
+@keyframes skeleton-loading {
+    0% {
+        background-position: -200px 0;
+    }
+    100% {
+        background-position: calc(200px + 100%) 0;
+    }
+}
+
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+/* 淡入淡出动画 */
+@keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fade-out {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+.fade-in {
+    animation: fade-in 0.3s ease-in;
+}
+
+.fade-out {
+    animation: fade-out 0.3s ease-out;
+}
+
+/* 滑入动画 */
+@keyframes slide-in-left {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slide-in-right {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.slide-in-left {
+    animation: slide-in-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slide-in-right {
+    animation: slide-in-right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 缩放动画 */
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.scale-in {
+    animation: scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 弹跳动画 */
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.bounce {
+    animation: bounce 1s ease-in-out infinite;
+}
+
+/* 旋转加载动画 */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+/* 心跳动画 */
+@keyframes heartbeat {
+    0%, 100% {
+        transform: scale(1);
+    }
+    25% {
+        transform: scale(1.1);
+    }
+    50% {
+        transform: scale(1);
+    }
+    75% {
+        transform: scale(1.05);
+    }
+}
+
+.heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+/* 摇晃动画 */
+@keyframes shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-5px);
+    }
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+.shake {
+    animation: shake 0.5s ease-in-out;
+}
+
+/* 闪烁动画 */
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.blink {
+    animation: blink 1.5s ease-in-out infinite;
+}
+
+/* 页面加载动画 */
+.page-enter {
+    animation: fade-in-up 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Expander 展开动画 */
+.stExpander {
+    animation: scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Alert 出现动画 */
+.stAlert {
+    animation: slide-in-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 统计卡片数字滚动动画 */
+@keyframes count-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.stat-value {
+    animation: count-up 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* 页脚 */
 .footer {
     text-align: center;
@@ -551,5 +825,159 @@ p, span, div, label {
 .hero span {
     color: #ffffff !important;
 }
+
+/* 响应式设计 */
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding: 1rem 1rem 3rem;
+    }
+
+    .hero {
+        padding: 3rem 1.5rem;
+    }
+
+    .hero h1 {
+        font-size: 2rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1rem;
+    }
+
+    .card {
+        padding: 1.5rem;
+    }
+
+    .card h2 {
+        font-size: 1.5rem;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+    }
+
+    .stButton > button {
+        padding: 0.75rem 1.5rem;
+        font-size: 0.9375rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+    }
+
+    .hero-badge {
+        font-size: 0.75rem;
+        padding: 0.375rem 0.75rem;
+    }
+
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea {
+        font-size: 16px;
+    }
+}
+
+/* 平板优化 */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .main .block-container {
+        padding: 1.5rem 1.5rem 3.5rem;
+    }
+
+    .hero h1 {
+        font-size: 3rem;
+    }
+}
+
+/* 大屏优化 */
+@media (min-width: 1440px) {
+    .main .block-container {
+        max-width: 1400px;
+    }
+
+    .hero h1 {
+        font-size: 5rem;
+    }
+
+    .hero-subtitle {
+        font-size: 1.5rem;
+    }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+    .stButton > button {
+        min-height: 48px;
+        padding: 1rem 2rem;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        min-height: 48px;
+    }
+
+    .card:hover {
+        transform: none;
+    }
+
+    .stButton > button:hover {
+        transform: none;
+    }
+}
+
+/* 暗黑模式 */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #0f0f0f;
+        --bg-tertiary: #2a2a2a;
+        --text-primary: #e8e8e8;
+        --text-secondary: #b8b8b8;
+        --text-tertiary: #888888;
+        --border: rgba(255, 255, 255, 0.1);
+        --border-light: rgba(255, 255, 255, 0.05);
+    }
+
+    body {
+        background: var(--bg-secondary);
+    }
+
+    .card {
+        background: rgba(26, 26, 26, 0.9);
+        border-color: var(--border);
+    }
+
+    .stTabs [data-baseweb="tab-list"] {
+        background: var(--bg-primary);
+        border-color: var(--border);
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        color: var(--text-secondary);
+    }
+
+    .stTabs [data-baseweb="tab"]:hover {
+        background: var(--bg-tertiary);
+    }
+
+    .top {
+        background: rgba(26, 26, 26, 0.9);
+        border-color: var(--border);
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--text-primary) !important;
+    }
+
+    p, span, div, label {
+        color: var(--text-secondary) !important;
+    }
+
+    .stMarkdown code {
+        background: var(--bg-tertiary);
+        border-color: var(--border);
+    }
+}
+
 </style>
 """

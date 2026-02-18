@@ -95,12 +95,14 @@ def parse_uploaded_file(uploaded_file):
         st.error(f"文件解析失败: {str(e)}")
         return None
 
-# 简历分析函数（流式显示）
+# 简历分析函数（流式显示 + 伪进度条）
 def analyze_resume_streaming(resume_text, progress_placeholder=None, result_containers=None):
-    """简历分析 - 流式显示每个 Agent 的结果"""
+    """简历分析 - 流式显示每个 Agent 的结果 + 伪进度条"""
     try:
         from app.core.optimized_pipeline import OptimizedJobPipeline
+        from app.components.progress import FakeProgressBar
         import time
+        import threading
 
         if progress_placeholder:
             progress_placeholder.info("🔄 初始化 AI 引擎...")
@@ -112,7 +114,20 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
 
         # Agent 1: 职业分析
         if progress_placeholder:
-            progress_placeholder.info("🤖 职业分析师正在分析...")
+            progress_placeholder.info("🤖 职业分析师正在深度思考...")
+
+        # 创建伪进度条
+        fake_progress = FakeProgressBar(total_time=30.0)
+        progress_bar = st.progress(0)
+
+        # 在后台线程中更新伪进度
+        def update_fake_progress():
+            for i in range(95):  # 到 95%
+                progress_bar.progress(i / 100)
+                time.sleep(0.3)
+
+        thread = threading.Thread(target=update_fake_progress, daemon=True)
+        thread.start()
 
         start_time = time.time()
         career_analysis = pipeline._ai_think(
@@ -120,6 +135,9 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
             f"请分析以下简历：\n\n{resume_text}"
         )
         results['career_analysis'] = career_analysis
+
+        # 完成进度条
+        progress_bar.progress(1.0)
 
         # 立即显示结果
         if result_containers and 'career' in result_containers:
@@ -134,6 +152,16 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         if progress_placeholder:
             progress_placeholder.info("💼 岗位匹配专家正在工作...")
 
+        progress_bar2 = st.progress(0)
+
+        def update_fake_progress2():
+            for i in range(95):
+                progress_bar2.progress(i / 100)
+                time.sleep(0.4)
+
+        thread2 = threading.Thread(target=update_fake_progress2, daemon=True)
+        thread2.start()
+
         start_time = time.time()
         job_and_resume = pipeline._ai_think(
             "job_matcher",
@@ -141,6 +169,8 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         )
         results['job_recommendations'] = job_and_resume
         results['resume_optimization'] = job_and_resume
+
+        progress_bar2.progress(1.0)
 
         # 立即显示结果
         if result_containers and 'job' in result_containers:
@@ -155,6 +185,16 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         if progress_placeholder:
             progress_placeholder.info("🎤 面试辅导专家正在准备...")
 
+        progress_bar3 = st.progress(0)
+
+        def update_fake_progress3():
+            for i in range(95):
+                progress_bar3.progress(i / 100)
+                time.sleep(0.3)
+
+        thread3 = threading.Thread(target=update_fake_progress3, daemon=True)
+        thread3.start()
+
         start_time = time.time()
         interview_prep = pipeline._ai_think(
             "interview_coach",
@@ -162,6 +202,8 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         )
         results['interview_preparation'] = interview_prep
         results['mock_interview'] = interview_prep
+
+        progress_bar3.progress(1.0)
 
         # 立即显示结果
         if result_containers and 'interview' in result_containers:
@@ -176,6 +218,16 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         if progress_placeholder:
             progress_placeholder.info("✅ 质量审核官正在检查...")
 
+        progress_bar4 = st.progress(0)
+
+        def update_fake_progress4():
+            for i in range(95):
+                progress_bar4.progress(i / 100)
+                time.sleep(0.2)
+
+        thread4 = threading.Thread(target=update_fake_progress4, daemon=True)
+        thread4.start()
+
         start_time = time.time()
         quality_audit = pipeline._ai_think(
             "quality_auditor",
@@ -183,6 +235,8 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         )
         results['skill_gap_analysis'] = quality_audit
         results['quality_audit'] = quality_audit
+
+        progress_bar4.progress(1.0)
 
         # 立即显示结果
         if result_containers and 'quality' in result_containers:

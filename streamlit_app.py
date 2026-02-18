@@ -23,9 +23,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 全局样式 - 温暖人性化 UI
-from ui_styles_warm import WARM_UI_STYLE
-st.markdown(WARM_UI_STYLE, unsafe_allow_html=True)
+# 全局样式 - 高对比度清晰 UI
+from ui_styles_clear import CLEAR_UI_STYLE
+st.markdown(CLEAR_UI_STYLE, unsafe_allow_html=True)
 
 # 配置 API Key - 从 Streamlit Secrets 读取
 try:
@@ -147,12 +147,12 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# Hero - 温暖友好的设计
+# Hero - 高对比度设计
 st.markdown('''
 <div class="hero">
-    <div class="hero-badge">✨ DeepSeek AI 驱动 · 专为实习生打造</div>
-    <h1>🌟 找实习，AI 帮你搞定</h1>
-    <div class="hero-subtitle">4 位 AI 专家深度分析你的简历，帮你找到最适合的实习机会 💼</div>
+    <div class="hero-badge">✨ AI 驱动 · 专为实习生设计</div>
+    <h1>找实习，让 AI 帮你</h1>
+    <div class="hero-subtitle">4 位 AI 专家分析简历，精准推荐岗位，自动投递</div>
 </div>
 ''', unsafe_allow_html=True)
 

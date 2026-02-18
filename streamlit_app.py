@@ -113,138 +113,168 @@ def analyze_resume_streaming(resume_text, progress_placeholder=None, result_cont
         results = {}
 
         # Agent 1: 职业分析
-        if progress_placeholder:
-            progress_placeholder.info("🤖 职业分析师正在深度思考...")
+        try:
+            if progress_placeholder:
+                progress_placeholder.info("🤖 职业分析师正在深度思考...")
 
-        # 创建伪进度条
-        fake_progress = FakeProgressBar(total_time=30.0)
-        progress_bar = st.progress(0)
+            # 创建伪进度条
+            fake_progress = FakeProgressBar(total_time=30.0)
+            progress_bar = st.progress(0)
 
-        # 在后台线程中更新伪进度
-        def update_fake_progress():
-            for i in range(95):  # 到 95%
-                progress_bar.progress(i / 100)
-                time.sleep(0.3)
+            # 在后台线程中更新伪进度
+            def update_fake_progress():
+                for i in range(95):  # 到 95%
+                    progress_bar.progress(i / 100)
+                    time.sleep(0.3)
 
-        thread = threading.Thread(target=update_fake_progress, daemon=True)
-        thread.start()
+            thread = threading.Thread(target=update_fake_progress, daemon=True)
+            thread.start()
 
-        start_time = time.time()
-        career_analysis = pipeline._ai_think(
-            "career_analyst",
-            f"请分析以下简历：\n\n{resume_text}"
-        )
-        results['career_analysis'] = career_analysis
+            start_time = time.time()
+            career_analysis = pipeline._ai_think(
+                "career_analyst",
+                f"请分析以下简历：\n\n{resume_text}"
+            )
+            results['career_analysis'] = career_analysis
 
-        # 完成进度条
-        progress_bar.progress(1.0)
+            # 完成进度条
+            progress_bar.progress(1.0)
 
-        # 立即显示结果
-        if result_containers and 'career' in result_containers:
-            result_containers['career'].markdown(career_analysis)
+            # 立即显示结果
+            if result_containers and 'career' in result_containers:
+                result_containers['career'].markdown(career_analysis)
 
-        if progress_placeholder:
-            elapsed = time.time() - start_time
-            progress_placeholder.success(f"✅ 职业分析完成！耗时 {elapsed:.1f} 秒")
-            time.sleep(0.5)
+            if progress_placeholder:
+                elapsed = time.time() - start_time
+                progress_placeholder.success(f"✅ 职业分析完成！耗时 {elapsed:.1f} 秒")
+                time.sleep(0.5)
+        except Exception as e:
+            progress_bar.progress(1.0)
+            if result_containers and 'career' in result_containers:
+                result_containers['career'].error(f"❌ 职业分析失败: {str(e)}")
+            if progress_placeholder:
+                progress_placeholder.warning(f"⚠️ 职业分析跳过，继续下一步...")
+            career_analysis = "分析失败"
 
         # Agent 2: 岗位匹配
-        if progress_placeholder:
-            progress_placeholder.info("💼 岗位匹配专家正在工作...")
+        try:
+            if progress_placeholder:
+                progress_placeholder.info("💼 岗位匹配专家正在工作...")
 
-        progress_bar2 = st.progress(0)
+            progress_bar2 = st.progress(0)
 
-        def update_fake_progress2():
-            for i in range(95):
-                progress_bar2.progress(i / 100)
-                time.sleep(0.4)
+            def update_fake_progress2():
+                for i in range(95):
+                    progress_bar2.progress(i / 100)
+                    time.sleep(0.4)
 
-        thread2 = threading.Thread(target=update_fake_progress2, daemon=True)
-        thread2.start()
+            thread2 = threading.Thread(target=update_fake_progress2, daemon=True)
+            thread2.start()
 
-        start_time = time.time()
-        job_and_resume = pipeline._ai_think(
-            "job_matcher",
-            f"简历：\n{resume_text}\n\n职业分析：\n{career_analysis}"
-        )
-        results['job_recommendations'] = job_and_resume
-        results['resume_optimization'] = job_and_resume
+            start_time = time.time()
+            job_and_resume = pipeline._ai_think(
+                "job_matcher",
+                f"简历：\n{resume_text}\n\n职业分析：\n{career_analysis}"
+            )
+            results['job_recommendations'] = job_and_resume
+            results['resume_optimization'] = job_and_resume
 
-        progress_bar2.progress(1.0)
+            progress_bar2.progress(1.0)
 
-        # 立即显示结果
-        if result_containers and 'job' in result_containers:
-            result_containers['job'].markdown(job_and_resume)
+            # 立即显示结果
+            if result_containers and 'job' in result_containers:
+                result_containers['job'].markdown(job_and_resume)
 
-        if progress_placeholder:
-            elapsed = time.time() - start_time
-            progress_placeholder.success(f"✅ 岗位匹配完成！耗时 {elapsed:.1f} 秒")
-            time.sleep(0.5)
+            if progress_placeholder:
+                elapsed = time.time() - start_time
+                progress_placeholder.success(f"✅ 岗位匹配完成！耗时 {elapsed:.1f} 秒")
+                time.sleep(0.5)
+        except Exception as e:
+            progress_bar2.progress(1.0)
+            if result_containers and 'job' in result_containers:
+                result_containers['job'].error(f"❌ 岗位匹配失败: {str(e)}")
+            if progress_placeholder:
+                progress_placeholder.warning(f"⚠️ 岗位匹配跳过，继续下一步...")
 
         # Agent 3: 面试辅导
-        if progress_placeholder:
-            progress_placeholder.info("🎤 面试辅导专家正在准备...")
+        try:
+            if progress_placeholder:
+                progress_placeholder.info("🎤 面试辅导专家正在准备...")
 
-        progress_bar3 = st.progress(0)
+            progress_bar3 = st.progress(0)
 
-        def update_fake_progress3():
-            for i in range(95):
-                progress_bar3.progress(i / 100)
-                time.sleep(0.3)
+            def update_fake_progress3():
+                for i in range(95):
+                    progress_bar3.progress(i / 100)
+                    time.sleep(0.3)
 
-        thread3 = threading.Thread(target=update_fake_progress3, daemon=True)
-        thread3.start()
+            thread3 = threading.Thread(target=update_fake_progress3, daemon=True)
+            thread3.start()
 
-        start_time = time.time()
-        interview_prep = pipeline._ai_think(
-            "interview_coach",
-            f"简历：\n{resume_text}\n\n职业分析：\n{career_analysis}\n\n岗位匹配：\n{job_and_resume}"
-        )
-        results['interview_preparation'] = interview_prep
-        results['mock_interview'] = interview_prep
+            start_time = time.time()
+            interview_prep = pipeline._ai_think(
+                "interview_coach",
+                f"简历：\n{resume_text}\n\n职业分析：\n{results.get('career_analysis', '无')}\n\n岗位匹配：\n{results.get('job_recommendations', '无')}"
+            )
+            results['interview_preparation'] = interview_prep
+            results['mock_interview'] = interview_prep
 
-        progress_bar3.progress(1.0)
+            progress_bar3.progress(1.0)
 
-        # 立即显示结果
-        if result_containers and 'interview' in result_containers:
-            result_containers['interview'].markdown(interview_prep)
+            # 立即显示结果
+            if result_containers and 'interview' in result_containers:
+                result_containers['interview'].markdown(interview_prep)
 
-        if progress_placeholder:
-            elapsed = time.time() - start_time
-            progress_placeholder.success(f"✅ 面试准备完成！耗时 {elapsed:.1f} 秒")
-            time.sleep(0.5)
+            if progress_placeholder:
+                elapsed = time.time() - start_time
+                progress_placeholder.success(f"✅ 面试准备完成！耗时 {elapsed:.1f} 秒")
+                time.sleep(0.5)
+        except Exception as e:
+            progress_bar3.progress(1.0)
+            if result_containers and 'interview' in result_containers:
+                result_containers['interview'].error(f"❌ 面试准备失败: {str(e)}")
+            if progress_placeholder:
+                progress_placeholder.warning(f"⚠️ 面试准备跳过，继续下一步...")
+            interview_prep = "分析失败"
 
         # Agent 4: 质量审核
-        if progress_placeholder:
-            progress_placeholder.info("✅ 质量审核官正在检查...")
+        try:
+            if progress_placeholder:
+                progress_placeholder.info("✅ 质量审核官正在检查...")
 
-        progress_bar4 = st.progress(0)
+            progress_bar4 = st.progress(0)
 
-        def update_fake_progress4():
-            for i in range(95):
-                progress_bar4.progress(i / 100)
-                time.sleep(0.2)
+            def update_fake_progress4():
+                for i in range(95):
+                    progress_bar4.progress(i / 100)
+                    time.sleep(0.2)
 
-        thread4 = threading.Thread(target=update_fake_progress4, daemon=True)
-        thread4.start()
+            thread4 = threading.Thread(target=update_fake_progress4, daemon=True)
+            thread4.start()
 
-        start_time = time.time()
-        quality_audit = pipeline._ai_think(
-            "quality_auditor",
-            f"职业分析：\n{career_analysis}\n\n岗位匹配：\n{job_and_resume}\n\n面试准备：\n{interview_prep}"
-        )
-        results['skill_gap_analysis'] = quality_audit
-        results['quality_audit'] = quality_audit
+            start_time = time.time()
+            quality_audit = pipeline._ai_think(
+                "quality_auditor",
+                f"职业分析：\n{results.get('career_analysis', '无')}\n\n岗位匹配：\n{results.get('job_recommendations', '无')}\n\n面试准备：\n{results.get('interview_preparation', '无')}"
+            )
+            results['skill_gap_analysis'] = quality_audit
+            results['quality_audit'] = quality_audit
 
-        progress_bar4.progress(1.0)
+            progress_bar4.progress(1.0)
 
-        # 立即显示结果
-        if result_containers and 'quality' in result_containers:
-            result_containers['quality'].markdown(quality_audit)
+            # 立即显示结果
+            if result_containers and 'quality' in result_containers:
+                result_containers['quality'].markdown(quality_audit)
 
-        if progress_placeholder:
-            elapsed = time.time() - start_time
-            progress_placeholder.success(f"✅ 质量审核完成！耗时 {elapsed:.1f} 秒")
+            if progress_placeholder:
+                elapsed = time.time() - start_time
+                progress_placeholder.success(f"✅ 质量审核完成！耗时 {elapsed:.1f} 秒")
+        except Exception as e:
+            progress_bar4.progress(1.0)
+            if result_containers and 'quality' in result_containers:
+                result_containers['quality'].error(f"❌ 质量审核失败: {str(e)}")
+            if progress_placeholder:
+                progress_placeholder.warning(f"⚠️ 质量审核跳过")
 
         return results
 

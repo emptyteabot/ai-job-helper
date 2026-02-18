@@ -3,204 +3,606 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI求职助手 - 首页</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>AI求职助手 - 让求职更简单</title>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         :root {
+            /* Gemini 渐变色 */
+            --gemini-gradient: linear-gradient(135deg, #4285f4 0%, #8b5cf6 50%, #ec4899 100%);
+            --gemini-animated: linear-gradient(270deg, #4285f4, #8b5cf6, #ec4899, #4285f4);
+            --gemini-blue: #4285f4;
+            --gemini-purple: #8b5cf6;
+            --gemini-pink: #ec4899;
+
             --bg-primary: #ffffff;
-            --bg-secondary: #f7f7f8;
-            --text-primary: #0d0d0d;
-            --text-secondary: #6e6e80;
-            --accent: #10a37f;
-            --border: #d9d9e3;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --border: rgba(0, 0, 0, 0.08);
         }
-        
+
         body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-primary);
+            font-family: 'Google Sans', 'Roboto', -apple-system, sans-serif;
+            background: var(--bg-secondary);
             color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
         }
-        
+
         /* 导航栏 */
         .navbar {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            height: 60px;
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(10px);
+            height: 70px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            padding: 0 2rem;
+            padding: 0 3rem;
             z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
-        
+
         .logo {
-            font-size: 1.2rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #10a37f 0%, #1a7f64 100%);
+            font-size: 1.5rem;
+            font-weight: 500;
+            background: var(--gemini-gradient);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
-        
+
+        .logo-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--gemini-gradient);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
         .nav-links {
             margin-left: auto;
             display: flex;
-            gap: 2rem;
+            gap: 2.5rem;
+            align-items: center;
         }
-        
+
         .nav-link {
             color: var(--text-secondary);
             text-decoration: none;
-            font-size: 0.9rem;
-            transition: color 0.3s;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: color 0.2s;
             cursor: pointer;
         }
-        
+
         .nav-link:hover {
             color: var(--text-primary);
         }
-        
-        /* Hero区域 */
+
+        .nav-cta {
+            padding: 0.75rem 1.5rem;
+            background: var(--gemini-gradient);
+            color: white !important;
+            border-radius: 999px;
+            font-weight: 500;
+            transition: all 0.3s;
+            box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(66, 133, 244, 0.4);
+        }
+
+        /* Hero 区域 - 超大渐变背景 */
         .hero {
-            padding: 120px 2rem 80px;
+            padding: 150px 2rem 100px;
             text-align: center;
+            background: var(--gemini-animated);
+            background-size: 400% 400%;
+            animation: gradient-shift 8s ease infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at 30% 50%, rgba(255,255,255,0.1) 0%, transparent 50%);
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(20px, -20px); }
+        }
+
+        .hero-content {
             max-width: 900px;
             margin: 0 auto;
+            position: relative;
+            z-index: 1;
         }
-        
-        .hero h1 {
-            font-size: 3.5rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            line-height: 1.2;
-        }
-        
-        .hero p {
-            font-size: 1.3rem;
-            color: var(--text-secondary);
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1.25rem;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 999px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: white;
             margin-bottom: 2rem;
         }
-        
-        .cta-button {
-            display: inline-block;
-            padding: 1rem 2.5rem;
-            background: var(--accent);
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            line-height: 1.1;
             color: white;
+            text-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+            letter-spacing: -0.02em;
+        }
+
+        .hero-subtitle {
+            font-size: 1.5rem;
+            color: rgba(255, 255, 255, 0.95);
+            margin-bottom: 3rem;
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1.25rem 3rem;
+            background: white;
+            color: var(--gemini-blue) !important;
             text-decoration: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            transition: all 0.3s;
+            border-radius: 999px;
+            font-size: 1.25rem;
+            font-weight: 500;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
         }
-        
+
         .cta-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(16, 163, 127, 0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
         }
-        
+
+        .cta-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white !important;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .cta-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
         /* 特性展示 */
         .features {
             max-width: 1200px;
-            margin: 80px auto;
+            margin: 100px auto;
             padding: 0 2rem;
+        }
+
+        .features-header {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .features-header h2 {
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        .features-header p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+        }
+
+        .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
             gap: 2rem;
         }
-        
+
         .feature-card {
-            background: var(--bg-secondary);
-            padding: 2rem;
-            border-radius: 12px;
+            background: white;
+            padding: 2.5rem;
+            border-radius: 16px;
             border: 1px solid var(--border);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
         }
-        
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(66, 133, 244, 0.05), rgba(139, 92, 246, 0.05));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.1);
+            border-color: rgba(66, 133, 244, 0.3);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
         .feature-icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
+            font-size: 3rem;
+            margin-bottom: 1.5rem;
+            position: relative;
+            z-index: 1;
         }
-        
+
         .feature-card h3 {
-            font-size: 1.3rem;
-            margin-bottom: 0.8rem;
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            position: relative;
+            z-index: 1;
         }
-        
+
         .feature-card p {
             color: var(--text-secondary);
-            line-height: 1.6;
+            line-height: 1.7;
+            font-size: 1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 工作流程 */
+        .workflow {
+            max-width: 1000px;
+            margin: 100px auto;
+            padding: 0 2rem;
+            text-align: center;
+        }
+
+        .workflow h2 {
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-bottom: 3rem;
+        }
+
+        .workflow-steps {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .workflow-step {
+            flex: 1;
+            min-width: 150px;
+            padding: 2rem 1.5rem;
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .workflow-step::after {
+            content: '→';
+            position: absolute;
+            right: -1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 2rem;
+            color: var(--gemini-blue);
+        }
+
+        .workflow-step:last-child::after {
+            display: none;
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            background: var(--gemini-gradient);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            margin: 0 auto 1rem;
+        }
+
+        .workflow-step h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .workflow-step p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* CTA Section */
+        .cta-section {
+            max-width: 800px;
+            margin: 100px auto;
+            padding: 4rem 2rem;
+            text-align: center;
+            background: var(--gemini-animated);
+            background-size: 400% 400%;
+            animation: gradient-shift 8s ease infinite;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(66, 133, 244, 0.2);
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            font-weight: 500;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .cta-section p {
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.95);
+            margin-bottom: 2rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            margin-top: 100px;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .footer-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .footer-link:hover {
+            color: var(--gemini-blue);
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .navbar {
+                padding: 0 1.5rem;
+            }
+
+            .nav-links {
+                gap: 1rem;
+            }
+
+            .nav-link {
+                font-size: 0.9rem;
+            }
+
+            .hero {
+                padding: 120px 1.5rem 80px;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+
+            .cta-button {
+                padding: 1rem 2rem;
+                font-size: 1.1rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .workflow-steps {
+                flex-direction: column;
+            }
+
+            .workflow-step::after {
+                content: '↓';
+                right: 50%;
+                top: auto;
+                bottom: -1.5rem;
+                transform: translateX(50%);
+            }
         }
     </style>
 </head>
 <body>
+    <!-- 导航栏 -->
     <nav class="navbar">
-        <div class="logo" onclick="location.href='/'">AI求职助手</div>
+        <div class="logo">
+            <div class="logo-dot"></div>
+            AI求职助手
+        </div>
         <div class="nav-links">
-            <a class="nav-link" onclick="location.href='/app'">开始使用</a>
-            <a class="nav-link" onclick="showPage('features')">功能</a>
-            <a class="nav-link" onclick="showPage('pricing')">定价</a>
-            <a class="nav-link" onclick="showPage('docs')">文档</a>
+            <a class="nav-link" href="#features">功能</a>
+            <a class="nav-link" href="#workflow">工作流程</a>
+            <a class="nav-link" href="https://github.com/emptyteabot/ai-job-helper" target="_blank">GitHub</a>
+            <a class="nav-cta" href="https://ai-job-helper.streamlit.app" target="_blank">🚀 开始使用</a>
         </div>
     </nav>
-    
+
+    <!-- Hero 区域 -->
     <div class="hero">
-        <h1>AI驱动的智能求职平台</h1>
-        <p>6个AI协作优化简历，自动匹配岗位，提升求职效率10倍</p>
-        <a href="/app" class="cta-button">🚀 立即开始</a>
-    </div>
-    
-    <div class="features">
-        <div class="feature-card">
-            <div class="feature-icon">🤖</div>
-            <h3>6-AI协作引擎</h3>
-            <p>职业规划师、招聘专家、简历优化师等6个AI角色协同工作，确保最佳结果</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-icon">🎯</div>
-            <h3>智能岗位匹配</h3>
-            <p>基于技能图谱的智能匹配算法，从1000+真实岗位中找到最适合您的机会</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-icon">✍️</div>
-            <h3>简历深度优化</h3>
-            <p>多轮AI辩论优化，质量检查官审核，确保简历完美匹配目标岗位</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-icon">🎓</div>
-            <h3>面试全程辅导</h3>
-            <p>面试教练提供专业建议，模拟面试官进行实战演练</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-icon">⚡</div>
-            <h3>实时进度追踪</h3>
-            <p>5步可视化进度条，实时显示AI协作状态和处理进度</p>
-        </div>
-        
-        <div class="feature-card">
-            <div class="feature-icon">📊</div>
-            <h3>数据驱动决策</h3>
-            <p>基于真实招聘数据，提供职业分析和薪资建议</p>
+        <div class="hero-content">
+            <div class="hero-badge">
+                ✨ 由 DeepSeek AI 驱动
+            </div>
+            <h1>AI 驱动的智能求职平台</h1>
+            <p class="hero-subtitle">4 个 AI Agent 协作分析简历，精准匹配岗位，自动投递，让求职效率提升 10 倍</p>
+            <div class="hero-buttons">
+                <a href="https://ai-job-helper.streamlit.app" target="_blank" class="cta-button">
+                    🚀 立即开始
+                </a>
+                <a href="#workflow" class="cta-button cta-secondary">
+                    📖 了解更多
+                </a>
+            </div>
         </div>
     </div>
-    
-    <script>
-        function showPage(page) {
-            alert(`${page}页面开发中...`);
-        }
-    </script>
+
+    <!-- 特性展示 -->
+    <div class="features" id="features">
+        <div class="features-header">
+            <h2>为什么选择我们？</h2>
+            <p>AI 多角色协作，让求职更智能、更高效</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3>4-AI 协作引擎</h3>
+                <p>职业分析师、岗位匹配专家、面试辅导教练、质量审核官，4 个 AI 角色协同工作，确保最佳结果</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>智能精准匹配</h3>
+                <p>基于简历深度分析，AI 自动提取关键词、技能、地点，精准匹配最适合的岗位</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>流式实时显示</h3>
+                <p>每个 AI Agent 完成后立即显示结果，伪进度条减少等待焦虑，体验流畅</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🚀</div>
+                <h3>飞书 + OpenClaw 自动投递</h3>
+                <p>集成飞书机器人和 OpenClaw，一键发送投递任务，自动化投递 Boss直聘、实习僧等平台</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎤</div>
+                <h3>面试全程辅导</h3>
+                <p>AI 面试教练提供专业建议，针对目标岗位准备常见问题和回答技巧</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">✨</div>
+                <h3>Gemini 风格 UI</h3>
+                <p>蓝紫粉渐变色、玻璃态设计、流畅动画，现代化界面让使用更愉悦</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 工作流程 -->
+    <div class="workflow" id="workflow">
+        <h2>简单 3 步，开启智能求职</h2>
+
+        <div class="workflow-steps">
+            <div class="workflow-step">
+                <div class="step-number">1</div>
+                <h4>上传简历</h4>
+                <p>支持 PDF、Word、文本</p>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">2</div>
+                <h4>AI 分析</h4>
+                <p>4 个 Agent 协作分析</p>
+            </div>
+
+            <div class="workflow-step">
+                <div class="step-number">3</div>
+                <h4>自动投递</h4>
+                <p>飞书 + OpenClaw 一键投递</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- CTA Section */
+    <div class="cta-section">
+        <h2>准备好开始了吗？</h2>
+        <p>加入数千名求职者，让 AI 帮你找到理想工作</p>
+        <a href="https://ai-job-helper.streamlit.app" target="_blank" class="cta-button">
+            🚀 免费开始使用
+        </a>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-links">
+            <a href="https://github.com/emptyteabot/ai-job-helper" target="_blank" class="footer-link">GitHub</a>
+            <a href="https://ai-job-helper.streamlit.app" target="_blank" class="footer-link">应用</a>
+            <a href="https://github.com/emptyteabot/ai-job-helper/blob/main/docs/飞书OpenClaw使用指南.md" target="_blank" class="footer-link">文档</a>
+        </div>
+        <p>© 2026 AI求职助手. Powered by DeepSeek AI.</p>
+    </div>
 </body>
 </html>
 

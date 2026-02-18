@@ -84,6 +84,7 @@ st.markdown("""
 /* Hero */
 .hero {
     padding: 42px 0 28px;
+    text-align: center;
 }
 
 .pill {
@@ -95,7 +96,7 @@ st.markdown("""
     background: #fff;
     color: var(--muted);
     padding: 6px 11px;
-    font: 500 11px/1 "IBM Plex Mono", monospace;
+    font: 500 14px/1 "IBM Plex Mono", monospace;
     margin-bottom: 10px;
 }
 
@@ -108,17 +109,20 @@ st.markdown("""
 }
 
 h1 {
-    font-size: clamp(38px, 7vw, 64px);
+    font-size: clamp(50px, 9vw, 84px);
     letter-spacing: -1.4px;
     line-height: 1.1;
     margin-bottom: 12px;
+    text-align: center;
 }
 
 .sub {
     color: var(--muted);
-    font-size: 19px;
+    font-size: 25px;
     line-height: 1.65;
     max-width: 680px;
+    text-align: center;
+    margin: 0 auto;
 }
 
 /* 面板 */
@@ -131,14 +135,14 @@ h1 {
 }
 
 .panel h2 {
-    font-size: 22px;
+    font-size: 28px;
     font-weight: 700;
     margin-bottom: 14px;
 }
 
 .panel p {
     color: var(--muted);
-    font-size: 15px;
+    font-size: 19px;
     line-height: 1.6;
     margin-bottom: 16px;
 }
@@ -149,8 +153,8 @@ h1 {
     color: white;
     border: none;
     border-radius: 12px;
-    padding: 12px 24px;
-    font-size: 15px;
+    padding: 14px 28px;
+    font-size: 18px;
     font-weight: 600;
     transition: all 0.2s;
 }
@@ -165,8 +169,8 @@ h1 {
 .stTextArea > div > div > textarea {
     border: 1px solid var(--line);
     border-radius: 12px;
-    padding: 12px;
-    font-size: 15px;
+    padding: 14px;
+    font-size: 18px;
 }
 
 .stTextArea > div > div > textarea {
@@ -180,8 +184,8 @@ h1 {
 }
 
 .stTabs [data-baseweb="tab"] {
-    padding: 12px 20px;
-    font-size: 15px;
+    padding: 14px 24px;
+    font-size: 18px;
     font-weight: 500;
     color: var(--muted);
 }
@@ -207,7 +211,7 @@ h1 {
 }
 
 .job-title {
-    font-size: 18px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--text);
     margin-bottom: 8px;
@@ -216,7 +220,7 @@ h1 {
 .job-meta {
     display: flex;
     gap: 16px;
-    font-size: 14px;
+    font-size: 17px;
     color: var(--muted);
     margin-bottom: 8px;
 }
@@ -235,22 +239,29 @@ h1 {
 }
 
 .stat-value {
-    font-size: 36px;
+    font-size: 42px;
     font-weight: 800;
     color: var(--primary);
     margin-bottom: 6px;
 }
 
 .stat-label {
-    font-size: 14px;
+    font-size: 17px;
     color: var(--muted);
 }
 </style>
 """, unsafe_allow_html=True)
 
-# 配置 API Key
-os.environ['OPENAI_API_KEY'] = 'sk-SnQQxqPPxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxq'
-os.environ['OPENAI_BASE_URL'] = 'https://oneapi.gemiaude.com/v1'
+# 配置 API Key - 从 Streamlit Secrets 读取
+try:
+    os.environ['OPENAI_API_KEY'] = st.secrets.get("OPENAI_API_KEY", "")
+    os.environ['OPENAI_BASE_URL'] = st.secrets.get("OPENAI_BASE_URL", "https://oneapi.gemiaude.com/v1")
+
+    if not os.environ['OPENAI_API_KEY']:
+        st.error("⚠️ 请在 Streamlit Cloud Secrets 中配置 OPENAI_API_KEY")
+        st.info("Settings → Secrets → 添加: OPENAI_API_KEY = \"your_key_here\"")
+except Exception as e:
+    st.error(f"API Key 配置错误: {str(e)}")
 
 # 后端 API 地址
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")

@@ -50,6 +50,19 @@ st.markdown("""
 
 #MainMenu, footer, header {visibility: hidden}
 
+/* 隐藏右下角的管理按钮和其他 Streamlit 默认元素 */
+.stDeployButton,
+button[kind="header"],
+[data-testid="stToolbar"],
+[data-testid="manage-app"],
+.viewerBadge_container__1QSob,
+.styles_viewerBadge__1yB5_,
+footer,
+#MainMenu {
+    display: none !important;
+    visibility: hidden !important;
+}
+
 .main .block-container {
     max-width: var(--maxw);
     padding: 1.5rem 1rem 3rem;

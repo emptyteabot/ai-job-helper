@@ -23,9 +23,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 全局样式 - 高对比度清晰 UI
-from ui_styles_clear import CLEAR_UI_STYLE
-st.markdown(CLEAR_UI_STYLE, unsafe_allow_html=True)
+# 全局样式 - Gemini 风格
+from ui_styles_gemini import GEMINI_STYLE
+st.markdown(GEMINI_STYLE, unsafe_allow_html=True)
 
 # 配置 API Key - 从 Streamlit Secrets 读取
 try:
@@ -95,38 +95,108 @@ def parse_uploaded_file(uploaded_file):
         st.error(f"文件解析失败: {str(e)}")
         return None
 
-# 简历分析函数（使用优化的推理模型流程）
-def analyze_resume(resume_text, progress_placeholder=None):
-    """简历分析 - 使用推理模型，4个核心Agent"""
+# 简历分析函数（流式显示）
+def analyze_resume_streaming(resume_text, progress_placeholder=None, result_containers=None):
+    """简历分析 - 流式显示每个 Agent 的结果"""
     try:
         from app.core.optimized_pipeline import OptimizedJobPipeline
         import time
 
         if progress_placeholder:
-            progress_placeholder.info("🔄 初始化推理引擎（DeepSeek Reasoner）...")
+            progress_placeholder.info("🔄 初始化 AI 引擎...")
 
         pipeline = OptimizedJobPipeline()
 
+        # 创建结果字典
+        results = {}
+
+        # Agent 1: 职业分析
         if progress_placeholder:
-            progress_placeholder.info("🧠 4个专家 AI 正在深度分析（预计 2-4 分钟）...")
+            progress_placeholder.info("🤖 职业分析师正在分析...")
 
         start_time = time.time()
+        career_analysis = pipeline._ai_think(
+            "career_analyst",
+            f"请分析以下简历：\n\n{resume_text}"
+        )
+        results['career_analysis'] = career_analysis
 
-        # 使用优化的推理流程
-        results = pipeline.process_resume(resume_text)
-
-        elapsed = time.time() - start_time
+        # 立即显示结果
+        if result_containers and 'career' in result_containers:
+            result_containers['career'].markdown(career_analysis)
 
         if progress_placeholder:
-            progress_placeholder.success(f"✅ 深度分析完成！耗时 {elapsed:.1f} 秒")
+            elapsed = time.time() - start_time
+            progress_placeholder.success(f"✅ 职业分析完成！耗时 {elapsed:.1f} 秒")
+            time.sleep(0.5)
+
+        # Agent 2: 岗位匹配
+        if progress_placeholder:
+            progress_placeholder.info("💼 岗位匹配专家正在工作...")
+
+        start_time = time.time()
+        job_and_resume = pipeline._ai_think(
+            "job_matcher",
+            f"简历：\n{resume_text}\n\n职业分析：\n{career_analysis}"
+        )
+        results['job_recommendations'] = job_and_resume
+        results['resume_optimization'] = job_and_resume
+
+        # 立即显示结果
+        if result_containers and 'job' in result_containers:
+            result_containers['job'].markdown(job_and_resume)
+
+        if progress_placeholder:
+            elapsed = time.time() - start_time
+            progress_placeholder.success(f"✅ 岗位匹配完成！耗时 {elapsed:.1f} 秒")
+            time.sleep(0.5)
+
+        # Agent 3: 面试辅导
+        if progress_placeholder:
+            progress_placeholder.info("🎤 面试辅导专家正在准备...")
+
+        start_time = time.time()
+        interview_prep = pipeline._ai_think(
+            "interview_coach",
+            f"简历：\n{resume_text}\n\n职业分析：\n{career_analysis}\n\n岗位匹配：\n{job_and_resume}"
+        )
+        results['interview_preparation'] = interview_prep
+        results['mock_interview'] = interview_prep
+
+        # 立即显示结果
+        if result_containers and 'interview' in result_containers:
+            result_containers['interview'].markdown(interview_prep)
+
+        if progress_placeholder:
+            elapsed = time.time() - start_time
+            progress_placeholder.success(f"✅ 面试准备完成！耗时 {elapsed:.1f} 秒")
+            time.sleep(0.5)
+
+        # Agent 4: 质量审核
+        if progress_placeholder:
+            progress_placeholder.info("✅ 质量审核官正在检查...")
+
+        start_time = time.time()
+        quality_audit = pipeline._ai_think(
+            "quality_auditor",
+            f"职业分析：\n{career_analysis}\n\n岗位匹配：\n{job_and_resume}\n\n面试准备：\n{interview_prep}"
+        )
+        results['skill_gap_analysis'] = quality_audit
+        results['quality_audit'] = quality_audit
+
+        # 立即显示结果
+        if result_containers and 'quality' in result_containers:
+            result_containers['quality'].markdown(quality_audit)
+
+        if progress_placeholder:
+            elapsed = time.time() - start_time
+            progress_placeholder.success(f"✅ 质量审核完成！耗时 {elapsed:.1f} 秒")
 
         return results
 
     except Exception as e:
         if progress_placeholder:
             progress_placeholder.error(f"❌ 分析失败: {str(e)}")
-        else:
-            st.error(f"分析失败: {str(e)}")
         import traceback
         st.error(traceback.format_exc())
         return None
@@ -147,12 +217,12 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# Hero - 高对比度设计
+# Hero - Gemini 风格
 st.markdown('''
 <div class="hero">
-    <div class="hero-badge">✨ AI 驱动 · 专为实习生设计</div>
+    <div class="hero-badge">✨ AI 驱动 · 智能求职助手</div>
     <h1>找实习，让 AI 帮你</h1>
-    <div class="hero-subtitle">4 位 AI 专家分析简历，精准推荐岗位，自动投递</div>
+    <div class="hero-subtitle">4 位 AI 专家深度分析，精准推荐，自动投递</div>
 </div>
 ''', unsafe_allow_html=True)
 
@@ -178,37 +248,32 @@ with tab1:
             if len(resume_text.strip()) < 50:
                 st.warning("😅 简历内容有点少哦，建议至少 50 字以上")
             else:
-                # 创建进度条
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+                # 创建进度显示区域
+                progress_placeholder = st.empty()
 
-                # 开始分析
+                # 创建结果显示区域（提前创建，流式显示）
+                st.markdown("### 📊 分析结果（实时更新）")
+
+                result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "🎤 面试准备", "✅ 质量审核"])
+
+                result_containers = {
+                    'career': result_tabs[0].empty(),
+                    'job': result_tabs[1].empty(),
+                    'interview': result_tabs[2].empty(),
+                    'quality': result_tabs[3].empty()
+                }
+
+                # 开始分析（流式显示）
                 import time
                 start_time = time.time()
 
-                results = analyze_resume(resume_text, status_text)
+                results = analyze_resume_streaming(resume_text, progress_placeholder, result_containers)
 
                 elapsed = time.time() - start_time
-                progress_bar.progress(100)
-                status_text.success(f"🎉 分析完成！耗时 {elapsed:.1f} 秒")
+                progress_placeholder.success(f"🎉 全部完成！总耗时 {elapsed:.1f} 秒")
 
                 if results:
                     st.session_state.analysis_results = results
-
-                    result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
-
-                    with result_tabs[0]:
-                        st.markdown(results.get('career_analysis', '暂无数据'))
-                    with result_tabs[1]:
-                        st.markdown(results.get('job_recommendations', '暂无数据'))
-                    with result_tabs[2]:
-                        st.markdown(results.get('resume_optimization', '暂无数据'))
-                    with result_tabs[3]:
-                        st.markdown(results.get('interview_preparation', '暂无数据'))
-                    with result_tabs[4]:
-                        st.markdown(results.get('mock_interview', '暂无数据'))
-                    with result_tabs[5]:
-                        st.markdown(results.get('skill_gap_analysis', '暂无数据'))
 
     else:
         uploaded_file = st.file_uploader("选择你的简历文件 📄", type=["pdf", "doc", "docx", "txt"], label_visibility="collapsed")

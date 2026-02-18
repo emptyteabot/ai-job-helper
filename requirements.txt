@@ -66,6 +66,3 @@ ddddocr>=1.4.0
 #   3. 或运行：npm install -g @openclaw/cli
 #
 # 不安装OpenClaw也可以正常使用，系统会使用本地模拟数据
-
-# Streamlit - 快速部署界面
-streamlit>=1.30.0

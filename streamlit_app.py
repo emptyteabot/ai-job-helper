@@ -5,6 +5,7 @@ AI求职助手 - Streamlit 完整版
 import streamlit as st
 import sys
 import os
+import asyncio
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(__file__))
@@ -59,6 +60,23 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
+# 配置 API Key（直接写在代码里）
+os.environ['OPENAI_API_KEY'] = 'sk-SnQQxqPPxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxqxq'
+os.environ['OPENAI_BASE_URL'] = 'https://oneapi.gemiaude.com/v1'
+
+# 异步函数包装器
+def run_async(coro):
+    """运行异步函数的同步包装器"""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(coro)
+        loop.close()
+        return result
+    except Exception as e:
+        st.error(f"执行出错: {str(e)}")
+        return None
+
 # 标签页
 tab1, tab2 = st.tabs(["📄 简历分析", "🚀 自动投递"])
 
@@ -69,63 +87,9 @@ with tab1:
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        method = st.radio("选择输入方式", ["上传文件", "文本输入"], horizontal=True)
+        method = st.radio("选择输入方式", ["文本输入", "上传文件"], horizontal=True)
 
-        if method == "上传文件":
-            uploaded_file = st.file_uploader("支持 PDF、Word、图片", type=["pdf", "doc", "docx", "png", "jpg", "jpeg"])
-            if uploaded_file:
-                st.success(f"✓ 已上传: {uploaded_file.name}")
-
-                if st.button("开始分析", type="primary", key="analyze_file"):
-                    with st.spinner("🔄 AI 正在分析您的简历..."):
-                        try:
-                            # 导入分析引擎
-                            from app.core.multi_ai_debate import JobApplicationPipeline
-
-                            # 读取文件内容
-                            file_content = uploaded_file.read()
-
-                            # 如果是文本文件，直接解码
-                            if uploaded_file.type == "text/plain":
-                                resume_text = file_content.decode('utf-8')
-                            else:
-                                # 对于 PDF/Word/图片，需要 OCR 或解析
-                                # 这里简化处理，提示用户使用文本输入
-                                st.warning("⚠️ 文件解析功能开发中，请使用文本输入方式")
-                                resume_text = None
-
-                            if resume_text:
-                                # 创建分析管道
-                                pipeline = JobApplicationPipeline()
-
-                                # 执行分析
-                                results = await pipeline.process_resume(resume_text)
-
-                                # 显示结果
-                                st.success("✅ 分析完成！")
-
-                                # 显示各个分析结果
-                                with st.expander("🎯 职业分析", expanded=True):
-                                    st.write(results.get('career_analysis', '暂无数据'))
-
-                                with st.expander("💼 岗位推荐"):
-                                    st.write(results.get('job_recommendations', '暂无数据'))
-
-                                with st.expander("✍️ 简历优化"):
-                                    st.write(results.get('resume_optimization', '暂无数据'))
-
-                                with st.expander("📚 面试准备"):
-                                    st.write(results.get('interview_preparation', '暂无数据'))
-
-                                with st.expander("🎤 模拟面试"):
-                                    st.write(results.get('mock_interview', '暂无数据'))
-
-                                with st.expander("📈 技能分析"):
-                                    st.write(results.get('skill_gap_analysis', '暂无数据'))
-
-                        except Exception as e:
-                            st.error(f"❌ 分析失败: {str(e)}")
-        else:
+        if method == "文本输入":
             resume_text = st.text_area("粘贴简历内容", height=280, placeholder="请在此粘贴您的简历内容...")
 
             if resume_text and st.button("开始分析", type="primary", key="analyze_text"):
@@ -133,44 +97,97 @@ with tab1:
                     try:
                         # 导入分析引擎
                         from app.core.multi_ai_debate import JobApplicationPipeline
-                        import asyncio
 
                         # 创建分析管道
                         pipeline = JobApplicationPipeline()
 
-                        # 执行分析（同步方式）
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        results = loop.run_until_complete(pipeline.process_resume(resume_text))
-                        loop.close()
+                        # 执行分析（使用同步包装器）
+                        results = run_async(pipeline.process_resume(resume_text))
 
-                        # 显示结果
-                        st.success("✅ 分析完成！")
+                        if results:
+                            # 显示结果
+                            st.success("✅ 分析完成！")
 
-                        # 使用标签页显示结果
-                        result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
+                            # 使用标签页显示结果
+                            result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "✍️ 简历优化", "📚 面试准备", "🎤 模拟面试", "📈 技能分析"])
 
-                        with result_tabs[0]:
-                            st.markdown(results.get('career_analysis', '暂无数据'))
+                            with result_tabs[0]:
+                                st.markdown(results.get('career_analysis', '暂无数据'))
 
-                        with result_tabs[1]:
-                            st.markdown(results.get('job_recommendations', '暂无数据'))
+                            with result_tabs[1]:
+                                st.markdown(results.get('job_recommendations', '暂无数据'))
 
-                        with result_tabs[2]:
-                            st.markdown(results.get('resume_optimization', '暂无数据'))
+                            with result_tabs[2]:
+                                st.markdown(results.get('resume_optimization', '暂无数据'))
 
-                        with result_tabs[3]:
-                            st.markdown(results.get('interview_preparation', '暂无数据'))
+                            with result_tabs[3]:
+                                st.markdown(results.get('interview_preparation', '暂无数据'))
 
-                        with result_tabs[4]:
-                            st.markdown(results.get('mock_interview', '暂无数据'))
+                            with result_tabs[4]:
+                                st.markdown(results.get('mock_interview', '暂无数据'))
 
-                        with result_tabs[5]:
-                            st.markdown(results.get('skill_gap_analysis', '暂无数据'))
+                            with result_tabs[5]:
+                                st.markdown(results.get('skill_gap_analysis', '暂无数据'))
 
                     except Exception as e:
                         st.error(f"❌ 分析失败: {str(e)}")
-                        st.info("💡 提示：请确保已配置 API Key")
+                        st.info("💡 提示：请检查 API 配置")
+
+        else:  # 上传文件
+            uploaded_file = st.file_uploader("支持 PDF、Word、图片", type=["pdf", "doc", "docx", "png", "jpg", "jpeg", "txt"])
+
+            if uploaded_file:
+                st.success(f"✓ 已上传: {uploaded_file.name}")
+
+                if st.button("开始分析", type="primary", key="analyze_file"):
+                    with st.spinner("🔄 AI 正在分析您的简历..."):
+                        try:
+                            # 读取文件内容
+                            file_content = uploaded_file.read()
+
+                            # 如果是文本文件，直接解码
+                            if uploaded_file.type == "text/plain" or uploaded_file.name.endswith('.txt'):
+                                resume_text = file_content.decode('utf-8')
+                            else:
+                                # 对于 PDF/Word/图片，提示用户使用文本输入
+                                st.warning("⚠️ PDF/Word/图片解析功能开发中，请使用文本输入方式")
+                                resume_text = None
+
+                            if resume_text:
+                                # 导入分析引擎
+                                from app.core.multi_ai_debate import JobApplicationPipeline
+
+                                # 创建分析管道
+                                pipeline = JobApplicationPipeline()
+
+                                # 执行分析
+                                results = run_async(pipeline.process_resume(resume_text))
+
+                                if results:
+                                    # 显示结果
+                                    st.success("✅ 分析完成！")
+
+                                    # 显示各个分析结果
+                                    with st.expander("🎯 职业分析", expanded=True):
+                                        st.write(results.get('career_analysis', '暂无数据'))
+
+                                    with st.expander("💼 岗位推荐"):
+                                        st.write(results.get('job_recommendations', '暂无数据'))
+
+                                    with st.expander("✍️ 简历优化"):
+                                        st.write(results.get('resume_optimization', '暂无数据'))
+
+                                    with st.expander("📚 面试准备"):
+                                        st.write(results.get('interview_preparation', '暂无数据'))
+
+                                    with st.expander("🎤 模拟面试"):
+                                        st.write(results.get('mock_interview', '暂无数据'))
+
+                                    with st.expander("📈 技能分析"):
+                                        st.write(results.get('skill_gap_analysis', '暂无数据'))
+
+                        except Exception as e:
+                            st.error(f"❌ 分析失败: {str(e)}")
 
     with col2:
         st.markdown("""### 分析内容

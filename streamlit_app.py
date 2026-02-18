@@ -156,10 +156,9 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# 标签页
-tab1, tab2, tab3, tab4 = st.tabs([
+# 标签页 - 移除重复的岗位推荐
+tab1, tab2, tab3 = st.tabs([
     "📄 简历分析",
-    "💼 岗位推荐",
     "🚀 自动投递",
     "📊 数据统计"
 ])
@@ -254,44 +253,117 @@ with tab1:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Tab2: 岗位推荐（直接集成，无需后端）
+# Tab2: 自动投递（飞书 + OpenClaw）
 with tab2:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
-    st.markdown("## 💼 岗位推荐")
-    st.markdown("<p>基于简历分析结果，智能推荐匹配岗位</p>", unsafe_allow_html=True)
-
-    if st.session_state.analysis_results and 'job_recommendations' in st.session_state.analysis_results:
-        st.markdown("### 📋 推荐岗位")
-        st.markdown(st.session_state.analysis_results['job_recommendations'])
-    else:
-        st.info("💡 请先在「简历分析」标签页完成简历分析，系统会自动推荐匹配岗位")
-
-        st.markdown("### 🔍 或者手动搜索岗位")
-        col1, col2 = st.columns(2)
-        with col1:
-            keywords = st.text_input("搜索关键词", value="Python开发", key="manual_search_keywords")
-        with col2:
-            location = st.text_input("工作地点", value="北京", key="manual_search_location")
-
-        if st.button("搜索岗位", type="primary", key="manual_search_btn"):
-            st.info("🚧 手动搜索功能开发中，建议先完成简历分析获取智能推荐")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Tab3: 自动投递（直接集成）
-with tab3:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("## 🚀 自动投递")
-    st.markdown("<p>自动投递到 Boss直聘、智联招聘、LinkedIn</p>", unsafe_allow_html=True)
+    st.markdown("<p>通过飞书指挥本地 OpenClaw 自动投递实习岗位</p>", unsafe_allow_html=True)
 
-    st.warning("⚠️ 自动投递功能需要浏览器自动化，建议本地运行")
+    st.info("💡 **工作原理：** Streamlit Cloud → 飞书机器人 → 你的电脑 OpenClaw → 自动投递")
 
-    platform = st.selectbox("选择平台", ["Boss直聘", "智联招聘", "LinkedIn (Easy Apply)"])
+    platform = st.selectbox("选择平台", ["Boss直聘", "智联招聘", "实习僧", "牛客网"])
 
     col1, col2 = st.columns(2)
     with col1:
-        keywords = st.text_input("搜索关键词", value="Python Developer", key="apply_keywords")
+        keywords = st.text_input("搜索关键词", value="Python实习", key="apply_keywords")
         max_count = st.number_input("投递数量", 1, 100, 10)
+    with col2:
+        location = st.text_input("工作地点", value="北京", key="apply_location")
+        interval = st.slider("投递间隔（秒）", 3, 30, 5)
+
+    feishu_webhook = st.text_input(
+        "飞书机器人 Webhook",
+        placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...",
+        help="在飞书群里添加机器人，获取 Webhook 地址"
+    )
+
+    if st.button("开始投递", type="primary"):
+        if not feishu_webhook:
+            st.warning("请输入飞书机器人 Webhook 地址")
+        else:
+            with st.spinner("📤 正在发送指令到飞书..."):
+                try:
+                    import requests
+                    import json
+
+                    # 构建投递指令
+                    command = {
+                        "platform": platform,
+                        "keywords": keywords,
+                        "location": location,
+                        "max_count": max_count,
+                        "interval": interval,
+                        "user_id": st.session_state.user_id
+                    }
+
+                    # 发送到飞书
+                    message = {
+                        "msg_type": "interactive",
+                        "card": {
+                            "header": {
+                                "title": {
+                                    "tag": "plain_text",
+                                    "content": "🚀 自动投递指令"
+                                }
+                            },
+                            "elements": [
+                                {
+                                    "tag": "div",
+                                    "text": {
+                                        "tag": "lark_md",
+                                        "content": f"""**平台：** {platform}
+**关键词：** {keywords}
+**地点：** {location}
+**数量：** {max_count}
+**间隔：** {interval}秒
+
+请在本地运行以下命令启动 OpenClaw：
+```bash
+python openclaw_runner.py --platform "{platform}" --keywords "{keywords}" --location "{location}" --count {max_count}
+```"""
+                                    }
+                                }
+                            ]
+                        }
+                    }
+
+                    response = requests.post(
+                        feishu_webhook,
+                        json=message,
+                        timeout=10
+                    )
+
+                    if response.status_code == 200:
+                        st.success("✅ 指令已发送到飞书！请在电脑上查看并执行")
+                        st.info("💡 **下一步：** 在你的电脑上运行 OpenClaw 命令开始投递")
+                    else:
+                        st.error(f"❌ 发送失败：{response.text}")
+
+                except Exception as e:
+                    st.error(f"发送失败: {str(e)}")
+
+    st.markdown("### 📖 使用说明")
+    st.markdown("""
+    1. **添加飞书机器人**
+       - 在飞书群里添加「自定义机器人」
+       - 复制 Webhook 地址到上面
+
+    2. **本地安装 OpenClaw**
+       ```bash
+       pip install openclaw
+       ```
+
+    3. **运行投递命令**
+       - 收到飞书消息后
+       - 复制命令在本地运行
+       - OpenClaw 会自动投递
+
+    4. **查看进度**
+       - OpenClaw 会实时输出进度
+       - 投递完成后会发送飞书通知
+    """)
+
+    st.markdown('</div>', unsafe_allow_html=True)
     with col2:
         location = st.text_input("工作地点", value="北京", key="apply_location")
         interval = st.slider("投递间隔（秒）", 3, 30, 5)
@@ -313,8 +385,8 @@ with tab3:
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Tab4: 数据统计（用户隔离）
-with tab4:
+# Tab3: 数据统计（用户隔离）
+with tab3:
     st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.markdown("## 📊 数据统计")
     st.markdown(f"<p>用户ID: {st.session_state.user_id[:8]}...</p>", unsafe_allow_html=True)

@@ -9,7 +9,7 @@
 
 **让每个人都能找到理想工作**
 
-[🚀 在线体验](https://ai-job-hunter-production-2730.up.railway.app) | [📖 文档](./docs) | [💬 讨论](https://github.com/emptyteabot/ai-job-helper/discussions)
+[🚀 在线体验](https://ai-job-hunter-production-2730.up.railway.app) | [🎨 Streamlit 版本](./README_STREAMLIT_USAGE.md) | [📖 文档](./docs) | [💬 讨论](https://github.com/emptyteabot/ai-job-helper/discussions)
 
 </div>
 
@@ -66,6 +66,28 @@
 4. 查看完整分析报告
 
 ### 本地运行
+
+#### 方式 1：Streamlit 版本（推荐新手）
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/emptyteabot/ai-job-helper.git
+cd ai-job-helper
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 启动应用（Windows）
+start.bat
+
+# 或启动应用（Linux/Mac）
+./start.sh
+
+# 4. 访问
+# 浏览器自动打开 http://localhost:8501
+```
+
+#### 方式 2：FastAPI 版本（完整功能）
 
 ```bash
 # 1. 克隆项目

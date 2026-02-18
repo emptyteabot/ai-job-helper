@@ -1,11 +1,17 @@
 """
-AI求职助手 - OpenAI 打字机风格
-超大字体 + 打字机光标 + 极简设计
+AI求职助手 - 简化版
+专注于简历分析 + 自动投递
 """
 import streamlit as st
 
-st.set_page_config(page_title="AI求职助手", page_icon="✨", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(
+    page_title="AI求职助手",
+    page_icon="✨",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
+# 全局样式 - OpenAI 打字机风格
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
@@ -33,28 +39,68 @@ st.markdown("""
 .stTabs [data-baseweb="tab-list"]{gap:12px;border-bottom:1px solid var(--line)}
 .stTabs [data-baseweb="tab"]{padding:14px 24px;font-size:18px;font-weight:500;color:var(--muted)}
 .stTabs [aria-selected="true"]{color:var(--text);border-bottom:2px solid var(--text)}
+.error-box{background:#fff8f8;border:1px solid #f0d5d5;border-radius:12px;padding:20px;margin:20px 0}
+.error-box h3{color:#933333;font-size:20px;margin-bottom:10px}
+.error-box p{color:#666;font-size:16px;line-height:1.6}
 </style>
 """, unsafe_allow_html=True)
 
+# 顶部导航
 st.markdown('<div class="top-nav"><div class="brand"><div class="dot"></div><span>AI求职助手</span></div></div>', unsafe_allow_html=True)
-st.markdown('<div class="hero"><div class="pill">专为大学生实习设计</div><h1>让 AI 帮你找到<br>理想工作<span class="cursor"></span></h1><div class="hero-subtitle">6 个 AI 协作分析简历，智能推荐岗位，自动投递到 Boss直聘、智联招聘、LinkedIn</div></div>', unsafe_allow_html=True)
 
-tab1,tab2,tab3,tab4=st.tabs(["📄 简历分析","🚀 自动投递","📚 文档","❓ 帮助"])
+# Hero 区域
+st.markdown('''
+<div class="hero">
+    <div class="pill">专为大学生实习设计</div>
+    <h1>让 AI 帮你找到<br>理想工作<span class="cursor"></span></h1>
+    <div class="hero-subtitle">6 个 AI 协作分析简历，智能推荐岗位，自动投递到 Boss直聘、智联招聘、LinkedIn</div>
+</div>
+''', unsafe_allow_html=True)
+
+# 错误提示
+st.markdown('''
+<div class="error-box">
+    <h3>⚠️ 后端服务需要更新</h3>
+    <p><strong>当前问题：</strong></p>
+    <p>• Railway 后端部署的代码版本过旧，缺少必要的 API 端点</p>
+    <p>• 简历分析功能需要 <code>/api/process</code> 端点</p>
+    <p>• 自动投递功能需要 <code>/api/auto-apply/*</code> 端点</p>
+    <br>
+    <p><strong>解决方案：</strong></p>
+    <p>1. 推送最新的 web_app.py 到 GitHub</p>
+    <p>2. Railway 会自动重新部署</p>
+    <p>3. 或者在本地运行：<code>python web_app.py</code></p>
+    <br>
+    <p><strong>本地运行命令：</strong></p>
+    <p><code>cd "C:\\Users\\陈盈桦\\Desktop\\Desktop_整理_2026-02-09_172732\\Folders\\自动投简历"</code></p>
+    <p><code>python web_app.py</code></p>
+    <p>然后访问：<a href="http://localhost:8000" target="_blank">http://localhost:8000</a></p>
+</div>
+''', unsafe_allow_html=True)
+
+# 标签页
+tab1, tab2 = st.tabs(["📄 简历分析", "🚀 自动投递"])
 
 with tab1:
-    st.markdown('<div class="panel">',unsafe_allow_html=True)
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.markdown("## 📄 AI 简历分析")
-    col1,col2=st.columns([2,1])
+
+    col1, col2 = st.columns([2, 1])
+
     with col1:
-        method=st.radio("选择输入方式",["上传文件","文本输入"],horizontal=True)
-        if method=="上传文件":
-            f=st.file_uploader("支持 PDF、Word、图片",type=["pdf","doc","docx","png","jpg","jpeg"])
+        method = st.radio("选择输入方式", ["上传文件", "文本输入"], horizontal=True)
+
+        if method == "上传文件":
+            f = st.file_uploader("支持 PDF、Word、图片", type=["pdf", "doc", "docx", "png", "jpg", "jpeg"])
             if f:
                 st.success(f"✓ 已上传: {f.name}")
-                if st.button("开始分析",type="primary"):st.info("分析功能开发中...")
+                if st.button("开始分析", type="primary"):
+                    st.error("❌ 后端 API 不可用，请先更新 Railway 部署或在本地运行")
         else:
-            txt=st.text_area("粘贴简历内容",height=280,placeholder="请在此粘贴您的简历内容...")
-            if txt and st.button("开始分析",type="primary"):st.info("分析功能开发中...")
+            txt = st.text_area("粘贴简历内容", height=280, placeholder="请在此粘贴您的简历内容...")
+            if txt and st.button("开始分析", type="primary"):
+                st.error("❌ 后端 API 不可用，请先更新 Railway 部署或在本地运行")
+
     with col2:
         st.markdown("""### 分析内容
 - 🎯 职业分析
@@ -63,46 +109,37 @@ with tab1:
 - 📚 面试准备
 - 🎤 模拟面试
 - 📈 技能分析""")
-    st.markdown('</div>',unsafe_allow_html=True)
+
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
-    st.markdown('<div class="panel">',unsafe_allow_html=True)
+    st.markdown('<div class="panel">', unsafe_allow_html=True)
     st.markdown("## 🚀 自动投递")
-    p=st.multiselect("选择平台",["Boss直聘","智联招聘","LinkedIn"],default=["Boss直聘"])
+
+    p = st.multiselect("选择平台", ["Boss直聘", "智联招聘", "LinkedIn"], default=["Boss直聘"])
+
     if p:
-        c1,c2=st.columns(2)
+        c1, c2 = st.columns(2)
         with c1:
-            st.text_input("搜索关键词",value="实习生,应届生")
-            st.text_input("工作地点",value="北京,上海,深圳")
+            st.text_input("搜索关键词", value="实习生,应届生")
+            st.text_input("工作地点", value="北京,上海,深圳")
         with c2:
-            st.number_input("投递数量",1,500,50)
-            st.slider("投递间隔（秒）",3,30,5)
-        if st.button("开始投递",type="primary"):st.info("投递功能开发中...")
-    st.markdown('</div>',unsafe_allow_html=True)
+            st.number_input("投递数量", 1, 500, 50)
+            st.slider("投递间隔（秒）", 3, 30, 5)
 
-with tab3:
-    st.markdown('<div class="panel">',unsafe_allow_html=True)
-    st.markdown("## 📚 文档中心")
-    with st.expander("🚀 快速开始",expanded=True):
-        st.markdown("""### 在线体验
-https://ai-job-hunter-production-2730.up.railway.app
+        if st.button("开始投递", type="primary"):
+            st.error("❌ 后端 API 不可用，请先更新 Railway 部署或在本地运行")
 
-### 本地运行
-```bash
-start.bat  # Windows
-./start.sh # Linux/Mac
-```""")
-    st.markdown('</div>',unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-with tab4:
-    st.markdown('<div class="panel">',unsafe_allow_html=True)
-    st.markdown("## ❓ 帮助中心")
-    with st.expander("如何快速上手？"):st.markdown("""1. 上传简历
-2. 开始分析
-3. 查看结果
-4. 自动投递""")
-    with st.expander("支持哪些格式？"):st.markdown("PDF、Word、图片、文本")
-    st.markdown('</div>',unsafe_allow_html=True)
-
+# 页脚
 st.markdown("---")
-st.markdown('<div style="text-align:center;color:var(--muted);padding:32px 0;font-size:16px"><p>💼 祝你求职顺利</p><p><a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--text);margin:0 16px">GitHub</a><a href="https://github.com/emptyteabot/ai-job-helper/blob/main/QUICKSTART.md" style="color:var(--text);margin:0 16px">文档</a></p></div>',unsafe_allow_html=True)
+st.markdown('''
+<div style="text-align:center;color:var(--muted);padding:32px 0;font-size:16px">
+    <p>💼 祝你求职顺利</p>
+    <p>
+        <a href="https://github.com/emptyteabot/ai-job-helper" style="color:var(--text);margin:0 16px">GitHub</a>
+        <a href="https://ai-job-hunter-production-2730.up.railway.app" style="color:var(--text);margin:0 16px">Railway 后端</a>
+    </p>
+</div>
+''', unsafe_allow_html=True)

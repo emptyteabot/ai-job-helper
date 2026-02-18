@@ -360,23 +360,23 @@ with tab1:
                             # 使用标签页显示结果
                             result_tabs = st.tabs(["职业分析", "岗位推荐", "简历优化", "面试准备", "模拟面试", "技能分析"])
 
-                                with result_tabs[0]:
-                                    st.markdown(results.get('career_analysis', '暂无数据'))
+                            with result_tabs[0]:
+                                st.markdown(results.get('career_analysis', '暂无数据'))
 
-                                with result_tabs[1]:
-                                    st.markdown(results.get('job_recommendations', '暂无数据'))
+                            with result_tabs[1]:
+                                st.markdown(results.get('job_recommendations', '暂无数据'))
 
-                                with result_tabs[2]:
-                                    st.markdown(results.get('resume_optimization', '暂无数据'))
+                            with result_tabs[2]:
+                                st.markdown(results.get('resume_optimization', '暂无数据'))
 
-                                with result_tabs[3]:
-                                    st.markdown(results.get('interview_preparation', '暂无数据'))
+                            with result_tabs[3]:
+                                st.markdown(results.get('interview_preparation', '暂无数据'))
 
-                                with result_tabs[4]:
-                                    st.markdown(results.get('mock_interview', '暂无数据'))
+                            with result_tabs[4]:
+                                st.markdown(results.get('mock_interview', '暂无数据'))
 
-                                with result_tabs[5]:
-                                    st.markdown(results.get('skill_gap_analysis', '暂无数据'))
+                            with result_tabs[5]:
+                                st.markdown(results.get('skill_gap_analysis', '暂无数据'))
 
                     except Exception as e:
                         st.error(f"分析失败: {str(e)}")

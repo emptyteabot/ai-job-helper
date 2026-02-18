@@ -254,12 +254,19 @@ h1 {
 
 # 配置 API Key - 从 Streamlit Secrets 读取
 try:
-    os.environ['OPENAI_API_KEY'] = st.secrets.get("OPENAI_API_KEY", "")
-    os.environ['OPENAI_BASE_URL'] = st.secrets.get("OPENAI_BASE_URL", "https://oneapi.gemiaude.com/v1")
+    # 优先使用 DeepSeek API
+    deepseek_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+    if deepseek_key:
+        os.environ['OPENAI_API_KEY'] = deepseek_key
+        os.environ['OPENAI_BASE_URL'] = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+    else:
+        # 备用 OpenAI API
+        os.environ['OPENAI_API_KEY'] = st.secrets.get("OPENAI_API_KEY", "")
+        os.environ['OPENAI_BASE_URL'] = st.secrets.get("OPENAI_BASE_URL", "https://oneapi.gemiaude.com/v1")
 
     if not os.environ['OPENAI_API_KEY']:
-        st.error("⚠️ 请在 Streamlit Cloud Secrets 中配置 OPENAI_API_KEY")
-        st.info("Settings → Secrets → 添加: OPENAI_API_KEY = \"your_key_here\"")
+        st.error("⚠️ 请在 Streamlit Cloud Secrets 中配置 API Key")
+        st.info("Settings → Secrets → 添加:\nDEEPSEEK_API_KEY = \"sk-xxx\"\nDEEPSEEK_BASE_URL = \"https://api.deepseek.com\"")
 except Exception as e:
     st.error(f"API Key 配置错误: {str(e)}")
 

@@ -292,26 +292,20 @@ def parse_uploaded_file(uploaded_file):
 
 # 简历分析函数（修复 asyncio 错误）
 def analyze_resume(resume_text):
-    """简历分析 - 同步调用"""
+    """简历分析 - 直接同步调用"""
     try:
         from app.core.multi_ai_debate import JobApplicationPipeline
-        import asyncio
 
         pipeline = JobApplicationPipeline()
 
-        # 创建新的事件循环
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            # 运行异步函数
-            results = loop.run_until_complete(pipeline.process_resume(resume_text))
-            return results
-        finally:
-            loop.close()
+        # 直接调用同步函数，不需要 asyncio
+        results = pipeline.process_resume(resume_text)
+        return results
 
     except Exception as e:
         st.error(f"分析失败: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
         return None
 
 # 初始化 session state

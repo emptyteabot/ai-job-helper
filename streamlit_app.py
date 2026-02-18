@@ -339,7 +339,7 @@ with tab1:
 
                 if resume_text:
                     progress_placeholder = st.empty()
-                    results = analyze_resume(resume_text, progress_placeholder)
+                    results = analyze_resume_streaming(resume_text, progress_placeholder)
 
                     if results:
                         st.session_state.analysis_results = results

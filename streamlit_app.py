@@ -23,308 +23,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 全局样式 - 参考 auto_apply_panel.html 和 home.html
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
-
-:root {
-    --bg: #ffffff;
-    --text: #131313;
-    --muted: #64646b;
-    --line: #e8e8ec;
-    --soft: #f7f7f9;
-    --ok: #1f7c49;
-    --err: #b54040;
-    --warn: #d97706;
-    --primary: #10a37f;
-    --maxw: 980px;
-}
-
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    font-family: "Noto Sans SC", "PingFang SC", sans-serif;
-}
-
-#MainMenu, footer, header {visibility: hidden}
-
-/* 隐藏右下角的管理按钮和其他 Streamlit 默认元素 */
-.stDeployButton,
-button[kind="header"],
-[data-testid="stToolbar"],
-[data-testid="manage-app"],
-.viewerBadge_container__1QSob,
-.styles_viewerBadge__1yB5_,
-footer,
-#MainMenu {
-    display: none !important;
-    visibility: hidden !important;
-}
-
-.main .block-container {
-    max-width: var(--maxw);
-    padding: 2rem 1.5rem 4rem;
-    line-height: 1.8;
-}
-
-/* 增加所有文本的行间距 */
-p, li, div {
-    line-height: 1.8;
-    margin-bottom: 0.8em;
-}
-
-/* 标题间距 */
-h1, h2, h3, h4 {
-    margin-top: 1.5em;
-    margin-bottom: 0.8em;
-    line-height: 1.3;
-}
-
-/* 列表间距 */
-ul, ol {
-    margin: 1em 0;
-    padding-left: 2em;
-}
-
-li {
-    margin-bottom: 0.6em;
-}
-
-/* 顶部导航 */
-.top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--line);
-    padding: 10px 0 16px;
-    margin-bottom: 8px;
-}
-
-.brand {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 14px;
-    font-weight: 800;
-}
-
-.dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #121212;
-    box-shadow: 0 0 0 6px rgba(18, 18, 18, 0.08);
-}
-
-/* Hero */
-.hero {
-    padding: 42px 0 28px;
-    text-align: center;
-}
-
-.pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: #fff;
-    color: var(--muted);
-    padding: 6px 11px;
-    font: 500 14px/1 "IBM Plex Mono", monospace;
-    margin-bottom: 10px;
-}
-
-.pill::before {
-    content: "";
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: #121212;
-}
-
-h1 {
-    font-size: clamp(50px, 9vw, 84px);
-    letter-spacing: -1.4px;
-    line-height: 1.1;
-    margin-bottom: 12px;
-    text-align: center;
-}
-
-.sub {
-    color: var(--muted);
-    font-size: 25px;
-    line-height: 1.65;
-    max-width: 680px;
-    text-align: center;
-    margin: 0 auto;
-}
-
-/* 面板 */
-.panel {
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    background: #fff;
-    padding: 32px;
-    margin-bottom: 24px;
-    line-height: 1.8;
-}
-
-.panel h2 {
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: 20px;
-    line-height: 1.3;
-}
-
-.panel p {
-    color: var(--muted);
-    font-size: 19px;
-    line-height: 1.8;
-    margin-bottom: 20px;
-}
-
-/* 按钮 */
-.stButton > button {
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 12px;
-    padding: 14px 28px;
-    font-size: 18px;
-    font-weight: 600;
-    transition: all 0.2s;
-}
-
-.stButton > button:hover {
-    background: #0d8c6d;
-    transform: translateY(-1px);
-}
-
-/* 输入框 */
-.stTextInput > div > div > input,
-.stTextArea > div > div > textarea {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 14px;
-    font-size: 18px;
-}
-
-.stTextArea > div > div > textarea {
-    min-height: 200px;
-}
-
-/* 标签页 */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 16px;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 24px;
-}
-
-.stTabs [data-baseweb="tab"] {
-    padding: 16px 28px;
-    font-size: 18px;
-    font-weight: 500;
-    color: var(--muted);
-}
-
-.stTabs [aria-selected="true"] {
-    color: var(--text);
-    border-bottom: 2px solid var(--text);
-}
-
-/* Expander 间距 */
-.stExpander {
-    margin-bottom: 16px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-}
-
-.stExpander > div {
-    padding: 20px;
-}
-
-/* Markdown 内容间距 */
-.stMarkdown {
-    line-height: 1.8;
-}
-
-.stMarkdown p {
-    margin-bottom: 1em;
-}
-
-.stMarkdown h1, .stMarkdown h2, .stMarkdown h3 {
-    margin-top: 1.5em;
-    margin-bottom: 0.8em;
-}
-
-.stMarkdown ul, .stMarkdown ol {
-    margin: 1em 0;
-    padding-left: 2em;
-}
-
-.stMarkdown li {
-    margin-bottom: 0.6em;
-}
-
-/* 岗位卡片 */
-.job-card {
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px;
-    margin-bottom: 12px;
-    transition: all 0.2s;
-    background: var(--bg);
-}
-
-.job-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-    border-color: var(--primary);
-}
-
-.job-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 8px;
-}
-
-.job-meta {
-    display: flex;
-    gap: 16px;
-    font-size: 17px;
-    color: var(--muted);
-    margin-bottom: 8px;
-}
-
-.job-salary {
-    color: var(--primary);
-    font-weight: 600;
-}
-
-/* 统计卡片 */
-.stat-card {
-    background: var(--soft);
-    border-radius: 12px;
-    padding: 20px;
-    text-align: center;
-}
-
-.stat-value {
-    font-size: 42px;
-    font-weight: 800;
-    color: var(--primary);
-    margin-bottom: 6px;
-}
-
-.stat-label {
-    font-size: 17px;
-    color: var(--muted);
-}
-</style>
-""", unsafe_allow_html=True)
+# 全局样式 - Modern UI
+from ui_styles import MODERN_UI_STYLE
+st.markdown(MODERN_UI_STYLE, unsafe_allow_html=True)
 
 # 配置 API Key - 从 Streamlit Secrets 读取
 try:
@@ -446,12 +147,12 @@ st.markdown('''
 </div>
 ''', unsafe_allow_html=True)
 
-# Hero
+# Hero - 现代化设计
 st.markdown('''
 <div class="hero">
-    <div class="pill">真实岗位数据 · OpenClaw驱动</div>
-    <h1>让 AI 帮你找到<br>理想工作</h1>
-    <div class="sub">6 个 AI 协作分析简历，智能推荐岗位，自动投递到 Boss直聘、智联招聘、LinkedIn</div>
+    <div class="hero-badge">DeepSeek Reasoner 驱动</div>
+    <h1>AI 求职助手</h1>
+    <div class="hero-subtitle">4个专家 AI 深度分析简历，智能推荐岗位，助你找到理想工作</div>
 </div>
 ''', unsafe_allow_html=True)
 
@@ -465,9 +166,9 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # Tab1: 简历分析
 with tab1:
-    st.markdown('<div class="panel">', unsafe_allow_html=True)
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("## 📄 AI 简历分析")
-    st.markdown("<p>上传简历或粘贴文本，6 个 AI 协作为你提供职业建议</p>", unsafe_allow_html=True)
+    st.markdown("<p>上传简历或粘贴文本，4个专家 AI 深度分析</p>", unsafe_allow_html=True)
 
     method = st.radio("输入方式", ["文本输入", "上传文件"], horizontal=True)
 
@@ -478,8 +179,32 @@ with tab1:
             if len(resume_text.strip()) < 50:
                 st.warning("简历内容较少，建议至少 50 字以上")
             else:
-                progress_placeholder = st.empty()
-                results = analyze_resume(resume_text, progress_placeholder)
+                # 创建进度条
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                # 更新进度的回调函数
+                def update_progress(stage, total_stages=4):
+                    progress = int((stage / total_stages) * 100)
+                    progress_bar.progress(progress)
+                    if stage == 1:
+                        status_text.info("🤖 职业分析师正在分析...")
+                    elif stage == 2:
+                        status_text.info("💼 岗位匹配专家正在工作...")
+                    elif stage == 3:
+                        status_text.info("🎤 面试辅导专家正在准备...")
+                    elif stage == 4:
+                        status_text.info("✅ 质量审核官正在检查...")
+
+                # 开始分析
+                import time
+                start_time = time.time()
+
+                results = analyze_resume(resume_text, status_text)
+
+                elapsed = time.time() - start_time
+                progress_bar.progress(100)
+                status_text.success(f"✅ 分析完成！耗时 {elapsed:.1f} 秒")
 
                 if results:
                     st.session_state.analysis_results = results

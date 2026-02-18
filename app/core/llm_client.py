@@ -1,4 +1,5 @@
 import os
+import random
 from typing import Dict
 
 from openai import AsyncOpenAI, OpenAI
@@ -10,6 +11,24 @@ def _first_non_empty(*keys: str) -> str:
         if v:
             return v
     return ""
+
+
+def _get_api_key() -> str:
+    """获取 API Key，支持多 Key 轮换"""
+    # 检查是否有多个 Key
+    keys_str = os.getenv("DEEPSEEK_API_KEYS", "").strip()
+    if keys_str:
+        keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+        if keys:
+            return random.choice(keys)
+
+    # 单个 Key
+    return _first_non_empty(
+        "OPENAI_COMPAT_API_KEY",
+        "LLM_API_KEY",
+        "DEEPSEEK_API_KEY",
+        "OPENAI_API_KEY",
+    )
 
 
 def _infer_provider(base_url: str) -> str:
@@ -24,12 +43,7 @@ def _infer_provider(base_url: str) -> str:
 
 
 def get_llm_settings() -> Dict[str, str]:
-    api_key = _first_non_empty(
-        "OPENAI_COMPAT_API_KEY",
-        "LLM_API_KEY",
-        "DEEPSEEK_API_KEY",
-        "OPENAI_API_KEY",
-    )
+    api_key = _get_api_key()
     base_url = _first_non_empty(
         "OPENAI_COMPAT_BASE_URL",
         "LLM_BASE_URL",
@@ -53,7 +67,7 @@ def get_llm_settings() -> Dict[str, str]:
         else:
             reasoning_model = chat_model
 
-    timeout_s = int(os.getenv("LLM_TIMEOUT_S", "90") or "90")
+    timeout_s = int(os.getenv("LLM_TIMEOUT_S", "120") or "120")  # 推理模型需要更长时间
     return {
         "api_key": api_key,
         "base_url": base_url,

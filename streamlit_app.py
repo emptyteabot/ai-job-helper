@@ -255,17 +255,26 @@ h1 {
 # 配置 API Key - 从 Streamlit Secrets 读取
 try:
     # 优先使用 DeepSeek API
+    deepseek_keys = st.secrets.get("DEEPSEEK_API_KEYS", [])
     deepseek_key = st.secrets.get("DEEPSEEK_API_KEY", "")
-    if deepseek_key:
+
+    if deepseek_keys:
+        # 多个 Key 轮换使用
+        import random
+        os.environ['OPENAI_API_KEY'] = random.choice(deepseek_keys)
+        os.environ['DEEPSEEK_API_KEYS'] = ','.join(deepseek_keys)  # 传递所有 Key
+    elif deepseek_key:
         os.environ['OPENAI_API_KEY'] = deepseek_key
-        os.environ['OPENAI_BASE_URL'] = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-        # 使用 deepseek-chat 模型（避免 reasoner 的限流）
-        os.environ['DEEPSEEK_MODEL'] = "deepseek-chat"
-        os.environ['DEEPSEEK_REASONING_MODEL'] = "deepseek-chat"
     else:
         # 备用 OpenAI API
         os.environ['OPENAI_API_KEY'] = st.secrets.get("OPENAI_API_KEY", "")
         os.environ['OPENAI_BASE_URL'] = st.secrets.get("OPENAI_BASE_URL", "https://oneapi.gemiaude.com/v1")
+
+    if deepseek_keys or deepseek_key:
+        os.environ['OPENAI_BASE_URL'] = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
+        # 使用推理模型 deepseek-reasoner
+        os.environ['DEEPSEEK_MODEL'] = st.secrets.get("DEEPSEEK_MODEL", "deepseek-reasoner")
+        os.environ['DEEPSEEK_REASONING_MODEL'] = st.secrets.get("DEEPSEEK_REASONING_MODEL", "deepseek-reasoner")
 
     if not os.environ['OPENAI_API_KEY']:
         st.error("⚠️ 请在 Streamlit Cloud Secrets 中配置 API Key")

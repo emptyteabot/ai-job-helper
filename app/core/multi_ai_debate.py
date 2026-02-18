@@ -116,10 +116,17 @@ class MultiAIDebateEngine:
         try:
             import time
             max_retries = 3
-            retry_delay = 2
+            retry_delay = 3
 
             for attempt in range(max_retries):
                 try:
+                    # 每次重试重新获取 client（可能会轮换到不同的 Key）
+                    if attempt > 0:
+                        self.llm_client = get_sync_llm_client()
+                        settings = get_llm_settings()
+                        self.reasoning_model = settings["reasoning_model"]
+                        print(f"重试 {attempt + 1}/{max_retries}，使用新的 API Key...")
+
                     response = self.llm_client.chat.completions.create(
                         model=self.reasoning_model,
                         messages=[{"role": "user", "content": prompt}],
@@ -141,18 +148,18 @@ class MultiAIDebateEngine:
                     }
                 except Exception as e:
                     error_msg = str(e)
-                    if "governor" in error_msg.lower() or "rate" in error_msg.lower():
+                    if "governor" in error_msg.lower() or "rate" in error_msg.lower() or "429" in error_msg:
                         if attempt < max_retries - 1:
                             print(f"限流错误，{retry_delay}秒后重试... (尝试 {attempt + 1}/{max_retries})")
                             time.sleep(retry_delay)
-                            retry_delay *= 2  # 指数退避
+                            retry_delay += 2  # 递增延迟
                             continue
                     raise
 
             # 所有重试都失败
             return {
                 "role": role_info['name'],
-                "output": f"AI思考出错: 请求频率过高，请稍后再试",
+                "output": f"AI思考出错: 所有 API Key 都达到限流，请稍后再试",
                 "reasoning": ""
             }
         except Exception as e:

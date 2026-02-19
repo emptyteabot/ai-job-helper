@@ -599,16 +599,19 @@ with tab3:
         col1, col2 = st.columns(2)
         with col1:
             feishu_user_id = st.text_input(
-                "你的飞书用户 ID",
-                placeholder="ou_xxx 或你的邮箱",
-                help="在飞书中找到你的用户 ID"
+                "你的飞书邮箱或 open_id",
+                placeholder="your@company.com 或 ou_xxx",
+                help="输入你的飞书邮箱（推荐）或 open_id"
             )
+            st.caption("⚠️ 不支持手机号，请使用飞书邮箱")
         with col2:
             platform = st.selectbox("投递平台", ["Boss直聘", "实习僧", "牛客网"])
 
         if st.button("🚀 发送投递任务到飞书", type="primary", use_container_width=True):
             if not feishu_user_id:
-                st.warning("😅 请输入飞书用户 ID")
+                st.warning("😅 请输入飞书邮箱或 open_id")
+            elif feishu_user_id.isdigit():
+                st.error("❌ 不支持手机号！请使用飞书邮箱（如：your@company.com）")
             else:
                 with st.spinner("📤 正在发送到飞书机器人..."):
                     try:

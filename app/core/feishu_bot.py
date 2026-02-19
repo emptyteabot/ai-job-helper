@@ -43,8 +43,15 @@ class FeishuBot:
         else:
             raise Exception(f"获取 token 失败: {data}")
 
-    def send_message(self, receive_id: str, msg_type: str, content: Dict[str, Any]) -> Dict[str, Any]:
-        """发送消息"""
+    def send_message(self, receive_id: str, msg_type: str, content: Dict[str, Any], receive_id_type: str = "open_id") -> Dict[str, Any]:
+        """发送消息
+
+        Args:
+            receive_id: 接收者 ID
+            msg_type: 消息类型
+            content: 消息内容
+            receive_id_type: ID 类型，可选：open_id, user_id, union_id, email, chat_id
+        """
 
         token = self.get_tenant_access_token()
 
@@ -55,8 +62,17 @@ class FeishuBot:
             "Content-Type": "application/json"
         }
 
+        # 自动判断 receive_id 类型
+        if "@" in receive_id:
+            receive_id_type = "email"
+        elif receive_id.startswith("ou_"):
+            receive_id_type = "open_id"
+        elif receive_id.isdigit() and len(receive_id) == 11:
+            # 手机号，需要先转换为 open_id
+            raise Exception("不支持手机号，请使用飞书邮箱或 open_id")
+
         params = {
-            "receive_id_type": "open_id"  # 或 "user_id", "union_id", "email", "chat_id"
+            "receive_id_type": receive_id_type
         }
 
         payload = {

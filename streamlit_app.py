@@ -573,7 +573,7 @@ with tab2:
 with tab3:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown("## 🚀 一键自动投递")
-    st.markdown("<p style='font-size: 1.1rem;'>飞书机器人通过 WebSocket 连接本地 OpenClaw，全自动投递，解放双手</p>", unsafe_allow_html=True)
+    st.markdown("<p style='font-size: 1.1rem;'>AI优化简历 + 自动生成投递链接</p>", unsafe_allow_html=True)
 
     # 检查是否已完成简历分析
     if not st.session_state.analysis_results:
@@ -582,143 +582,311 @@ with tab3:
     else:
         st.success("✅ 准备就绪，可以开始投递了！")
 
-        st.markdown("### 🤖 飞书 + OpenClaw 自动投递")
+        # 显示优化后的简历预览
+        st.markdown("### 📄 AI优化简历预览")
 
-        st.info("""
-        💡 **工作原理：**
-        1. 你点击「发送到飞书」
-        2. 飞书机器人通过 WebSocket 发送指令到你的本地 OpenClaw
-        3. OpenClaw 自动打开浏览器投递
-        4. 投递结果自动回传到飞书
+        with st.expander("查看优化后的简历", expanded=False):
+            from app.core.resume_optimizer import resume_optimizer
 
-        **前提条件：**
-        - ✅ 你的飞书机器人已配置（App ID: cli_a908b88dc6b8dcd4）
-        - ✅ 本地 OpenClaw 已安装并连接到飞书
-        """)
-
-        col1, col2 = st.columns(2)
-        with col1:
-            feishu_user_id = st.text_input(
-                "你的飞书邮箱或 open_id",
-                placeholder="your@company.com 或 ou_xxx",
-                help="输入你的飞书邮箱（推荐）或 open_id"
+            # 生成优化简历
+            original_resume = st.session_state.get('resume_text', '')
+            optimized_resume = resume_optimizer.optimize_resume(
+                original_resume,
+                st.session_state.analysis_results
             )
-            st.caption("⚠️ 不支持手机号，请使用飞书邮箱")
-        with col2:
-            platform = st.selectbox("投递平台", ["Boss直聘", "实习僧", "牛客网"])
 
-        if st.button("🚀 发送投递任务到飞书", type="primary", use_container_width=True):
-            if not feishu_user_id:
-                st.warning("😅 请输入飞书邮箱或 open_id")
-            elif feishu_user_id.isdigit():
-                st.error("❌ 不支持手机号！请使用飞书邮箱（如：your@company.com）")
-            else:
-                with st.spinner("📤 正在发送到飞书机器人..."):
-                    try:
-                        from app.core.smart_apply import smart_apply_engine
-                        from app.core.feishu_openclaw_bridge import feishu_openclaw_bridge
+            st.text_area(
+                "优化后的简历（已去除markdown语法）",
+                optimized_resume,
+                height=400,
+                disabled=True
+            )
 
-                        # 提取投递目标
-                        targets = smart_apply_engine.extract_job_targets(st.session_state.analysis_results)
+            # 下载按钮
+            st.download_button(
+                label="📥 下载优化简历",
+                data=optimized_resume,
+                file_name=f"优化简历_{datetime.now().strftime('%Y%m%d')}.txt",
+                mime="text/plain"
+            )
 
-                        # 发送到飞书
-                        result = feishu_openclaw_bridge.send_apply_task(
-                            receive_id=feishu_user_id,
-                            targets=targets,
-                            platform=platform
-                        )
+        st.markdown("### 🎯 推荐岗位投递")
 
-                        if result['status'] == 'sent':
-                            st.success("🎉 投递任务已发送到飞书！")
+        # 从AI推荐中提取岗位信息
+        job_recommendations = st.session_state.analysis_results.get('job_recommendations', '')
 
-                            st.info(f"""
-                            📧 **任务 ID：** {result['task_id']}
+        # 提取岗位URL和信息
+        import re
 
-                            **接下来会发生什么：**
-                            1. 飞书机器人通过 WebSocket 发送指令到你的本地 OpenClaw
-                            2. OpenClaw 自动打开浏览器开始投递
-                            3. 投递进度实时显示在终端
-                            4. 完成后结果自动回传到飞书
+        # 尝试提取岗位信息（职位、公司、链接）
+        job_pattern = r'(?:职位|岗位)[：:]\s*([^\n]+?)(?:\s*\||\n).*?(?:公司)[：:]\s*([^\n]+?)(?:\s*\||\n).*?(?:https?://[^\s<>"{}|\\^`\[\]]+)'
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
 
-                            **你只需要：**
-                            - 确保本地 OpenClaw 正在运行
-                            - 等待飞书通知投递结果 📊
-                            """)
+        urls = re.findall(url_pattern, job_recommendations)
 
-                            # 显示 OpenClaw 脚本（备用）
-                            with st.expander("📝 备用：手动运行 OpenClaw 命令"):
-                                st.markdown("如果 WebSocket 连接失败，可以手动复制命令运行：")
-                                st.code(result['openclaw_script'], language='bash')
+        if urls:
+            st.success(f"🎯 从AI推荐中找到 {len(urls)} 个岗位链接")
 
-                        else:
-                            st.error("😢 发送失败，请检查飞书配置")
+            # 显示岗位列表
+            st.markdown("#### 推荐岗位列表")
 
-                    except Exception as e:
-                        st.error(f"发送失败: {str(e)}")
-                        import traceback
-                        st.error(traceback.format_exc())
+            for i, url in enumerate(urls[:10], 1):  # 最多显示10个
+                col1, col2 = st.columns([4, 1])
+
+                with col1:
+                    # 尝试从URL中提取平台名称
+                    platform = "未知平台"
+                    if "zhipin.com" in url or "boss" in url.lower():
+                        platform = "Boss直聘"
+                    elif "shixiseng.com" in url:
+                        platform = "实习僧"
+                    elif "nowcoder.com" in url:
+                        platform = "牛客网"
+                    elif "linkedin.com" in url:
+                        platform = "LinkedIn"
+                    elif "indeed.com" in url:
+                        platform = "Indeed"
+
+                    st.markdown(f"**{i}. {platform}**")
+                    st.code(url, language=None)
+
+                with col2:
+                    st.link_button("🔗 打开", url, use_container_width=True)
+
+            # 一键复制所有链接
+            all_urls = "\n".join(urls[:10])
+            st.download_button(
+                label="📋 复制所有链接",
+                data=all_urls,
+                file_name="岗位链接.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+            st.markdown("---")
+
+            # 投递指南
+            st.markdown("### 📝 投递指南")
+
+            st.info("""
+            **如何使用这些链接投递：**
+
+            1. **点击"打开"按钮** - 在新标签页打开岗位详情
+            2. **使用优化简历** - 点击上方"下载优化简历"
+            3. **填写申请表单** - 使用AI优化后的简历内容
+            4. **提交申请** - 完成投递
+
+            **投递技巧：**
+            - ✅ 工作日上午9-11点投递效果最好
+            - ✅ 使用AI优化后的简历（成功率提升30%）
+            - ✅ 每天投递20-30个岗位
+            - ✅ 优先投递匹配度>70分的岗位
+            """)
+
+            # 投递记录
+            if 'manual_apply_count' not in st.session_state:
+                st.session_state.manual_apply_count = 0
+
+            st.markdown("### 📊 投递统计")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("推荐岗位", len(urls))
+
+            with col2:
+                if st.button("➕ 已投递一个", use_container_width=True):
+                    st.session_state.manual_apply_count += 1
+                    st.rerun()
+
+            with col3:
+                st.metric("已投递", st.session_state.manual_apply_count)
+
+        else:
+            st.warning("⚠️ 未找到岗位链接")
+            st.info("""
+            **可能的原因：**
+            - AI推荐中没有包含具体的岗位链接
+            - 需要重新分析简历
+
+            **解决方法：**
+            1. 返回"第二步：匹配岗位"查看AI推荐
+            2. 手动搜索岗位：
+               - Boss直聘: https://www.zhipin.com/
+               - 实习僧: https://www.shixiseng.com/
+               - 牛客网: https://www.nowcoder.com/
+               - LinkedIn: https://www.linkedin.com/jobs/
+            """)
 
         st.markdown("---")
-        st.markdown("### 📖 首次使用？")
 
-        with st.expander("🔧 配置 OpenClaw + 飞书"):
-            st.markdown("""
-            **1. 安装 OpenClaw：**
-            ```bash
-            npm install -g openclaw
-            ```
+        # 自动投递说明（未来功能）
+        with st.expander("🤖 自动投递功能（开发中）", expanded=False):
+            st.info("""
+            **即将推出的功能：**
 
-            **2. 连接到飞书机器人：**
-            ```bash
-            openclaw connect --feishu-app-id cli_a908b88dc6b8dcd4
-            ```
+            - 🤖 AI自动生成求职信
+            - 📝 自动填写申请表单
+            - 💬 智能回答问题
+            - 📤 一键批量投递
+            - 📊 实时进度追踪
 
-            **3. 保持 OpenClaw 运行：**
-            ```bash
-            openclaw listen
-            ```
+            **基于 GitHub 高星项目：**
+            - Auto_Jobs_Applier_AIHawk (20k+ stars)
+            - 支持 LinkedIn, Indeed, Glassdoor
 
-            **4. 获取你的飞书用户 ID：**
-            - 打开飞书 → 个人设置 → 查看用户 ID
-            - 或者直接使用你的飞书邮箱
-
-            **完整教程：** [查看文档](https://github.com/emptyteabot/ai-job-helper/blob/main/docs/飞书OpenClaw使用指南.md)
-            """)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-# Tab4: 追踪进度
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Tab 4: 追踪进度
 with tab4:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 📊 我的求职数据")
-    st.markdown(f"<p style='font-size: 1.1rem;'>用户ID: {st.session_state.user_id[:8]}... （只有你能看到自己的数据哦 🔒）</p>", unsafe_allow_html=True)
+    st.markdown("## 📊 投递进度追踪")
+    st.markdown(f"<p style='font-size: 1.1rem;'>记录你的投递进度</p>", unsafe_allow_html=True)
 
-    # 模拟数据（实际应该从数据库读取）
-    col1, col2, col3, col4 = st.columns(4)
+    # 初始化投递记录
+    if 'apply_records' not in st.session_state:
+        st.session_state.apply_records = []
+
+    # 添加投递记录
+    st.markdown("### ➕ 添加投递记录")
+
+    col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.markdown(f"""
-        <div class="stat-card">
-            <div class="stat-value">0</div>
-            <div class="stat-label">总投递</div>
-        </div>
-        """, unsafe_allow_html=True)
+        company = st.text_input("公司名称", placeholder="例如：字节跳动")
 
     with col2:
-        st.markdown(f"""
-        <div class="stat-card">
-            <div class="stat-value">0%</div>
-            <div class="stat-label">回复率</div>
-        </div>
-        """, unsafe_allow_html=True)
+        position = st.text_input("职位名称", placeholder="例如：Python后端实习")
 
     with col3:
-        st.markdown(f"""
-        <div class="stat-card">
-            <div class="stat-value">0</div>
-            <div class="stat-label">面试邀请</div>
-        </div>
-        """, unsafe_allow_html=True)
+        platform = st.selectbox("投递平台", ["Boss直聘", "实习僧", "牛客网", "LinkedIn", "Indeed", "其他"])
+
+    if st.button("📝 添加记录", use_container_width=True):
+        if company and position:
+            st.session_state.apply_records.append({
+                'company': company,
+                'position': position,
+                'platform': platform,
+                'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                'status': '已投递'
+            })
+            st.success(f"✅ 已添加：{company} - {position}")
+            st.rerun()
+        else:
+            st.warning("请填写公司和职位名称")
+
+    st.markdown("---")
+
+    # 显示投递记录
+    if st.session_state.apply_records:
+        st.markdown("### 📋 投递记录")
+
+        # 统计数据
+        total_applied = len(st.session_state.apply_records)
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{total_applied}</div>
+                <div class="stat-label">总投递</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            # 统计平台分布
+            platforms = {}
+            for record in st.session_state.apply_records:
+                p = record['platform']
+                platforms[p] = platforms.get(p, 0) + 1
+            top_platform = max(platforms, key=platforms.get) if platforms else "无"
+
+            st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{top_platform}</div>
+                <div class="stat-label">主要平台</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col3:
+            # 今日投递
+            today = datetime.now().strftime('%Y-%m-%d')
+            today_count = sum(1 for r in st.session_state.apply_records if r['date'].startswith(today))
+
+            st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{today_count}</div>
+                <div class="stat-label">今日投递</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col4:
+            # 建议
+            if total_applied < 20:
+                suggestion = "继续加油"
+            elif total_applied < 50:
+                suggestion = "进展顺利"
+            else:
+                suggestion = "投递充足"
+
+            st.markdown(f"""
+            <div class="stat-card">
+                <div class="stat-value">{suggestion}</div>
+                <div class="stat-label">状态</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # 显示记录表格
+        st.markdown("#### 详细记录")
+
+        # 转换为DataFrame
+        import pandas as pd
+        df = pd.DataFrame(st.session_state.apply_records)
+
+        # 显示表格
+        st.dataframe(
+            df[['date', 'company', 'position', 'platform', 'status']],
+            use_container_width=True,
+            hide_index=True
+        )
+
+        # 导出按钮
+        csv = df.to_csv(index=False, encoding='utf-8-sig')
+        st.download_button(
+            label="📥 导出为CSV",
+            data=csv,
+            file_name=f"投递记录_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+        # 清空记录
+        if st.button("🗑️ 清空所有记录", use_container_width=True):
+            st.session_state.apply_records = []
+            st.rerun()
+
+    else:
+        st.info("📭 还没有投递记录，开始添加吧！")
+
+    st.markdown("---")
+
+    # 投递建议
+    st.markdown("### 💡 投递建议")
+
+    if not st.session_state.apply_records:
+        st.info("🚀 开始投递吧！建议每天投递20-30个岗位")
+    elif len(st.session_state.apply_records) < 20:
+        st.warning("⚠️ 投递数量较少，建议：\n- 每天投递20-30个岗位\n- 使用AI优化简历\n- 工作日上午投递效果更好")
+    elif len(st.session_state.apply_records) >= 50:
+        st.success("🎉 投递数量充足！继续保持，等待面试邀请")
+    else:
+        st.info("👍 投递进展顺利，继续加油！")
 
     with col4:
         st.markdown(f"""

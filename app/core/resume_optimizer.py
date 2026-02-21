@@ -25,28 +25,50 @@ class ResumeOptimizer:
         Returns:
             优化后的纯文本简历
         """
-        # 提取AI建议的优化内容
+        if not original_resume:
+            return "请先上传简历"
+
+        # 去除markdown语法
+        clean_resume = self._remove_markdown(original_resume)
+
+        # 提取AI建议
         resume_optimization = analysis_results.get('resume_optimization', '')
         career_analysis = analysis_results.get('career_analysis', '')
 
-        # 从AI建议中提取STAR法则重写的经历
-        optimized_experiences = self._extract_star_experiences(resume_optimization)
+        # 构建优化简历
+        parts = []
 
-        # 从职业分析中提取核心竞争力
-        core_competencies = self._extract_core_competencies(career_analysis)
+        # 1. 原始简历（去除markdown）
+        parts.append("=" * 60)
+        parts.append("AI 优化简历")
+        parts.append("=" * 60)
+        parts.append("")
+        parts.append(clean_resume)
+        parts.append("")
 
-        # 从岗位匹配中提取关键词
-        keywords = self._extract_keywords(resume_optimization)
+        # 2. AI 优化建议
+        if resume_optimization:
+            parts.append("-" * 60)
+            parts.append("【AI 优化建议】")
+            parts.append("-" * 60)
+            parts.append(self._remove_markdown(resume_optimization))
+            parts.append("")
 
-        # 构建优化后的简历
-        optimized_resume = self._build_optimized_resume(
-            original_resume,
-            optimized_experiences,
-            core_competencies,
-            keywords
-        )
+        # 3. 职业分析
+        if career_analysis:
+            parts.append("-" * 60)
+            parts.append("【职业分析】")
+            parts.append("-" * 60)
+            parts.append(self._remove_markdown(career_analysis))
+            parts.append("")
 
-        return optimized_resume
+        # 4. 生成时间
+        parts.append("-" * 60)
+        parts.append(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        parts.append("由 AI 求职助手自动生成")
+        parts.append("-" * 60)
+
+        return "\n".join(parts)
 
     def _extract_star_experiences(self, resume_optimization: str) -> list:
         """从AI建议中提取STAR法则重写的经历"""

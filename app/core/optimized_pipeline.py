@@ -147,31 +147,13 @@ class OptimizedJobPipeline:
     def _search_real_jobs(self, keywords: str, location: str = "北京") -> str:
         """实时搜索真实岗位信息"""
         try:
-            # 使用 DeepSeek 的联网搜索能力
-            search_prompt = f"""请实时搜索以下岗位信息（必须是2026年2月最新发布的真实岗位）：
+            from app.core.job_searcher import job_searcher
 
-关键词：{keywords}
-地点：{location}
+            # 使用真实的岗位搜索
+            jobs = job_searcher.search_jobs(keywords, location, limit=5)
 
-搜索平台：Boss直聘、实习僧、牛客网、拉勾网
-
-请返回5个真实岗位，格式如下：
-1. 职位名称 | 公司名称 | 薪资范围 | 投递链接
-   要求：xxx
-   匹配度：xx%
-
-注意：必须是真实存在的岗位，不要编造。如果搜索不到，请说明原因。"""
-
-            response = self.llm_client.chat.completions.create(
-                model=self.reasoning_model,
-                messages=[
-                    {"role": "system", "content": "你是一个实时岗位搜索助手，必须联网搜索真实的招聘信息。"},
-                    {"role": "user", "content": search_prompt}
-                ],
-                temperature=0.3
-            )
-
-            return response.choices[0].message.content or "搜索失败"
+            # 格式化输出
+            return job_searcher.format_jobs_for_display(jobs)
 
         except Exception as e:
             return f"⚠️ 实时搜索失败: {str(e)}\n将使用AI推荐岗位..."

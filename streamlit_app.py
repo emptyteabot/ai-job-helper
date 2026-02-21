@@ -618,125 +618,187 @@ with tab3:
         # 提取岗位URL和信息
         import re
 
-        # 尝试提取岗位信息（职位、公司、链接）
-        job_pattern = r'(?:职位|岗位)[：:]\s*([^\n]+?)(?:\s*\||\n).*?(?:公司)[：:]\s*([^\n]+?)(?:\s*\||\n).*?(?:https?://[^\s<>"{}|\\^`\[\]]+)'
+        # 尝试提取岗位信息
         url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-
         urls = re.findall(url_pattern, job_recommendations)
 
-        if urls:
-            st.success(f"🎯 从AI推荐中找到 {len(urls)} 个岗位链接")
+        # 从岗位搜索结果中提取结构化数据
+        from app.core.job_searcher import job_searcher
 
-            # 显示岗位列表
-            st.markdown("#### 推荐岗位列表")
+        # 提取关键词
+        keywords = "Python实习"  # 默认关键词
+        if '关键词' in job_recommendations or 'keywords' in job_recommendations.lower():
+            kw_match = re.search(r'(?:关键词|keywords)[：:]\s*([^\n]+)', job_recommendations, re.IGNORECASE)
+            if kw_match:
+                keywords = kw_match.group(1).strip()
 
-            for i, url in enumerate(urls[:10], 1):  # 最多显示10个
-                col1, col2 = st.columns([4, 1])
+        # 搜索岗位
+        jobs = job_searcher.search_jobs(keywords, "北京", limit=10)
 
-                with col1:
-                    # 尝试从URL中提取平台名称
-                    platform = "未知平台"
-                    if "zhipin.com" in url or "boss" in url.lower():
-                        platform = "Boss直聘"
-                    elif "shixiseng.com" in url:
-                        platform = "实习僧"
-                    elif "nowcoder.com" in url:
-                        platform = "牛客网"
-                    elif "linkedin.com" in url:
-                        platform = "LinkedIn"
-                    elif "indeed.com" in url:
-                        platform = "Indeed"
+        if jobs or urls:
+            st.success(f"🎯 找到 {len(jobs)} 个推荐岗位")
 
-                    st.markdown(f"**{i}. {platform}**")
-                    st.code(url, language=None)
+            # 自动投递按钮
+            st.markdown("#### 🤖 AI 自动投递")
 
-                with col2:
-                    st.link_button("🔗 打开", url, use_container_width=True)
+            col1, col2 = st.columns(2)
 
-            # 一键复制所有链接
-            all_urls = "\n".join(urls[:10])
-            st.download_button(
-                label="📋 复制所有链接",
-                data=all_urls,
-                file_name="岗位链接.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
+            with col1:
+                auto_apply_count = st.number_input(
+                    "投递数量",
+                    min_value=1,
+                    max_value=len(jobs) if jobs else 10,
+                    value=min(5, len(jobs)) if jobs else 5,
+                    help="建议每次投递5-10个岗位"
+                )
+
+            with col2:
+                st.metric("可投递岗位", len(jobs) if jobs else len(urls))
+
+            if st.button("🚀 开始自动投递", type="primary", use_container_width=True):
+                with st.spinner("🤖 AI 正在自动投递..."):
+                    try:
+                        from app.core.auto_apply_engine import get_auto_apply_engine
+                        from app.core.optimized_pipeline import OptimizedJobPipeline
+
+                        # 获取引擎
+                        pipeline = OptimizedJobPipeline()
+                        engine = get_auto_apply_engine(
+                            pipeline.llm_client,
+                            pipeline.reasoning_model
+                        )
+
+                        # 准备用户信息
+                        user_info = {
+                            'name': '求职者',  # 可以从简历中提取
+                            'email': 'example@email.com',
+                            'phone': '13800138000'
+                        }
+
+                        # 进度显示
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+
+                        def progress_callback(current, total, message):
+                            progress_bar.progress(current / total)
+                            status_text.text(f"{message} ({current}/{total})")
+
+                        # 执行自动投递
+                        original_resume = st.session_state.get('resume_text', '')
+
+                        results = engine.auto_apply_jobs(
+                            jobs=jobs[:auto_apply_count],
+                            resume_text=original_resume,
+                            user_info=user_info,
+                            progress_callback=progress_callback
+                        )
+
+                        # 显示结果
+                        progress_bar.progress(1.0)
+                        status_text.empty()
+
+                        st.success(f"🎉 投递完成！")
+
+                        col1, col2, col3 = st.columns(3)
+
+                        with col1:
+                            st.metric("总投递", results['total'])
+
+                        with col2:
+                            st.metric("成功", results['success'], delta=f"+{results['success']}")
+
+                        with col3:
+                            st.metric("失败", results['failed'], delta=f"-{results['failed']}" if results['failed'] > 0 else None)
+
+                        # 显示详细结果
+                        with st.expander("查看详细结果", expanded=True):
+                            for detail in results['details']:
+                                if detail['status'] == 'success':
+                                    st.success(f"✅ {detail['job']} @ {detail['company']}")
+                                    if 'cover_letter' in detail:
+                                        st.text(f"求职信: {detail['cover_letter']}")
+                                else:
+                                    st.error(f"❌ {detail['job']} @ {detail['company']}: {detail.get('error', '未知错误')}")
+
+                        # 保存到投递记录
+                        if 'apply_records' not in st.session_state:
+                            st.session_state.apply_records = []
+
+                        for detail in results['details']:
+                            if detail['status'] == 'success':
+                                st.session_state.apply_records.append({
+                                    'company': detail['company'],
+                                    'position': detail['job'],
+                                    'platform': 'AI自动投递',
+                                    'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                                    'status': '已投递'
+                                })
+
+                    except Exception as e:
+                        st.error(f"自动投递失败: {str(e)}")
+                        import traceback
+                        st.error(traceback.format_exc())
 
             st.markdown("---")
 
-            # 投递指南
-            st.markdown("### 📝 投递指南")
+            # 显示岗位列表
+            st.markdown("#### 📋 岗位列表")
 
-            st.info("""
-            **如何使用这些链接投递：**
+            for i, job in enumerate(jobs[:10], 1):
+                with st.expander(f"{i}. {job['title']} @ {job['company']}", expanded=False):
+                    col1, col2 = st.columns([3, 1])
 
-            1. **点击"打开"按钮** - 在新标签页打开岗位详情
-            2. **使用优化简历** - 点击上方"下载优化简历"
-            3. **填写申请表单** - 使用AI优化后的简历内容
-            4. **提交申请** - 完成投递
+                    with col1:
+                        st.markdown(f"**薪资:** {job['salary']}")
+                        st.markdown(f"**地点:** {job['location']}")
+                        st.markdown(f"**描述:** {job['description']}")
 
-            **投递技巧：**
-            - ✅ 工作日上午9-11点投递效果最好
-            - ✅ 使用AI优化后的简历（成功率提升30%）
-            - ✅ 每天投递20-30个岗位
-            - ✅ 优先投递匹配度>70分的岗位
-            """)
-
-            # 投递记录
-            if 'manual_apply_count' not in st.session_state:
-                st.session_state.manual_apply_count = 0
-
-            st.markdown("### 📊 投递统计")
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("推荐岗位", len(urls))
-
-            with col2:
-                if st.button("➕ 已投递一个", use_container_width=True):
-                    st.session_state.manual_apply_count += 1
-                    st.rerun()
-
-            with col3:
-                st.metric("已投递", st.session_state.manual_apply_count)
+                    with col2:
+                        st.link_button("🔗 打开", job['url'], use_container_width=True)
 
         else:
-            st.warning("⚠️ 未找到岗位链接")
+            st.warning("⚠️ 未找到岗位")
             st.info("""
             **可能的原因：**
-            - AI推荐中没有包含具体的岗位链接
             - 需要重新分析简历
 
             **解决方法：**
-            1. 返回"第二步：匹配岗位"查看AI推荐
-            2. 手动搜索岗位：
+            1. 返回"第一步：分析简历"重新分析
+            2. 或手动搜索岗位：
                - Boss直聘: https://www.zhipin.com/
                - 实习僧: https://www.shixiseng.com/
                - 牛客网: https://www.nowcoder.com/
-               - LinkedIn: https://www.linkedin.com/jobs/
             """)
 
         st.markdown("---")
 
-        # 自动投递说明（未来功能）
-        with st.expander("🤖 自动投递功能（开发中）", expanded=False):
-            st.info("""
-            **即将推出的功能：**
+        # 投递指南
+        st.markdown("### 📝 投递指南")
 
-            - 🤖 AI自动生成求职信
-            - 📝 自动填写申请表单
-            - 💬 智能回答问题
-            - 📤 一键批量投递
-            - 📊 实时进度追踪
+        st.info("""
+        **AI 自动投递功能：**
 
-            **基于 GitHub 高星项目：**
-            - Auto_Jobs_Applier_AIHawk (20k+ stars)
-            - 支持 LinkedIn, Indeed, Glassdoor
+        ✅ **已实现：**
+        - 🤖 AI 自动生成个性化求职信
+        - 💬 智能回答申请表单问题
+        - 📊 实时进度显示
+        - 📈 投递结果统计
 
-            敬请期待！
-            """)
+        ⚠️ **限制：**
+        - 目前为模拟投递（80%成功率）
+        - 实际投递需要浏览器自动化或平台API
+        - Streamlit Cloud 不支持运行浏览器
+
+        **如需真实自动投递：**
+        1. 下载本地版本
+        2. 安装 AIHawk 项目
+        3. 运行本地服务
+
+        **投递技巧：**
+        - ✅ 每次投递5-10个岗位
+        - ✅ 使用AI优化后的简历
+        - ✅ 工作日上午9-11点投递效果最好
+        """)
 
     st.markdown('</div>', unsafe_allow_html=True)
 

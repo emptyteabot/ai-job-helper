@@ -888,17 +888,6 @@ with tab4:
     else:
         st.info("👍 投递进展顺利，继续加油！")
 
-    with col4:
-        st.markdown(f"""
-        <div class="stat-card">
-            <div class="stat-value">0</div>
-            <div class="stat-label">Offer</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("### 📋 投递记录")
-    st.info("💡 完成简历分析和投递后，数据会显示在这里（仅你可见）")
-
     st.markdown('</div>', unsafe_allow_html=True)
 
 # 页脚

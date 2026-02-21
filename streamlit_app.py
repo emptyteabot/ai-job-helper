@@ -735,8 +735,8 @@ with tab3:
             - Auto_Jobs_Applier_AIHawk (20k+ stars)
             - 支持 LinkedIn, Indeed, Glassdoor
 
-
-    st.markdown('</div>', unsafe_allow_html=True)
+            敬请期待！
+            """)
 
     st.markdown('</div>', unsafe_allow_html=True)
 

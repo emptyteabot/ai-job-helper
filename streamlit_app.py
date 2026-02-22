@@ -1,964 +1,416 @@
 """
-AI求职助手 - Streamlit 完整版
-参考 auto_apply_panel.html 和 home.html 设计
-整合真实数据：OpenClaw + 邮件通知
+AI 求职助手 - Streamlit 云端版
+集成自动投递功能
 """
 import streamlit as st
-import sys
-import os
-import io
 import requests
-import pandas as pd
 import time
 from datetime import datetime
-import uuid
 
-# 添加项目根目录到路径
-sys.path.insert(0, os.path.dirname(__file__))
+# ==================== 配置 ====================
+
+# 后端 API 地址（通过 ngrok 内网穿透）
+# 启动 ngrok 后，将这里的地址替换成你的 ngrok 地址
+API_URL = "https://unleisured-polly-welcomingly.ngrok-free.dev"  # ✅ 你的 ngrok 地址
+
+# ==================== 页面配置 ====================
 
 st.set_page_config(
-    page_title="AI求职助手",
-    page_icon="✨",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    page_title="AI 求职助手",
+    page_icon="🚀",
+    layout="wide"
 )
 
-# 全局样式 - Gemini 风格
-from ui_styles_gemini import GEMINI_STYLE
-st.markdown(GEMINI_STYLE, unsafe_allow_html=True)
+# ==================== 样式 ====================
 
-# 配置 API Key - 从 Streamlit Secrets 读取
-try:
-    # 优先使用 DeepSeek API
-    deepseek_keys = st.secrets.get("DEEPSEEK_API_KEYS", [])
-    deepseek_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #1890ff;
+        margin-bottom: 0.5rem;
+    }
+    .sub-header {
+        font-size: 1.2rem;
+        color: #666;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+    }
+    .success-log {
+        background: #f6ffed;
+        border-left: 4px solid #52c41a;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 4px;
+    }
+    .error-log {
+        background: #fff2f0;
+        border-left: 4px solid #ff4d4f;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        border-radius: 4px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-    if deepseek_keys:
-        # 多个 Key 轮换使用
-        import random
-        os.environ['OPENAI_API_KEY'] = random.choice(deepseek_keys)
-        os.environ['DEEPSEEK_API_KEYS'] = ','.join(deepseek_keys)  # 传递所有 Key
-    elif deepseek_key:
-        os.environ['OPENAI_API_KEY'] = deepseek_key
-    else:
-        # 备用 OpenAI API
-        os.environ['OPENAI_API_KEY'] = st.secrets.get("OPENAI_API_KEY", "")
-        os.environ['OPENAI_BASE_URL'] = st.secrets.get("OPENAI_BASE_URL", "https://oneapi.gemiaude.com/v1")
+# ==================== 工具函数 ====================
 
-    if deepseek_keys or deepseek_key:
-        os.environ['OPENAI_BASE_URL'] = st.secrets.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-        # 使用推理模型 deepseek-reasoner
-        os.environ['DEEPSEEK_MODEL'] = st.secrets.get("DEEPSEEK_MODEL", "deepseek-reasoner")
-        os.environ['DEEPSEEK_REASONING_MODEL'] = st.secrets.get("DEEPSEEK_REASONING_MODEL", "deepseek-reasoner")
-
-    if not os.environ['OPENAI_API_KEY']:
-        st.error("⚠️ 请在 Streamlit Cloud Secrets 中配置 API Key")
-        st.info("Settings → Secrets → 添加:\nDEEPSEEK_API_KEY = \"sk-xxx\"\nDEEPSEEK_BASE_URL = \"https://api.deepseek.com\"")
-except Exception as e:
-    st.error(f"API Key 配置错误: {str(e)}")
-
-# 后端 API 地址
-BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
-
-# 文件解析函数（省略，与之前相同）
-def parse_uploaded_file(uploaded_file):
-    """解析上传的文件"""
+def check_backend_status():
+    """检查后端服务是否可用"""
     try:
-        file_content = uploaded_file.read()
-        file_ext = os.path.splitext(uploaded_file.name)[1].lower()
-        resume_text = ""
+        response = requests.get(f"{API_URL}/health", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
 
-        if file_ext == '.txt':
-            try:
-                resume_text = file_content.decode('utf-8')
-            except:
-                resume_text = file_content.decode('gbk', errors='ignore')
-
-        elif file_ext == '.pdf':
-            import PyPDF2
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-            for page in pdf_reader.pages:
-                text = page.extract_text()
-                if text:
-                    resume_text += text + "\n"
-
-        elif file_ext in ['.docx', '.doc']:
-            from docx import Document
-            doc = Document(io.BytesIO(file_content))
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    resume_text += paragraph.text + "\n"
-
-        return resume_text.strip() if resume_text else None
-
+def login_user(phone: str, code: str = "123456"):
+    """用户登录/注册"""
+    try:
+        # 先尝试登录
+        response = requests.post(
+            f"{API_URL}/api/auth/login",
+            json={"phone": phone, "code": code},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                return data
+        
+        # 如果登录失败，尝试注册
+        response = requests.post(
+            f"{API_URL}/api/auth/register",
+            json={"phone": phone, "code": code, "nickname": phone},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                return data
+        
+        return None
     except Exception as e:
-        st.error(f"文件解析失败: {str(e)}")
+        st.error(f"登录失败: {str(e)}")
         return None
 
-# 简历分析函数（流式显示 + 伪进度条）
-def analyze_resume_streaming(resume_text, progress_placeholder=None, result_containers=None):
-    """简历分析 - 流式显示每个 Agent 的结果 + 伪进度条"""
+def upgrade_plan(token: str, plan: str):
+    """升级套餐"""
     try:
-        from app.core.optimized_pipeline import OptimizedJobPipeline
-        from app.components.progress import FakeProgressBar
-        import time
-        import threading
-
-        if progress_placeholder:
-            progress_placeholder.info("🔄 初始化 AI 引擎...")
-
-        pipeline = OptimizedJobPipeline()
-
-        # 创建结果字典
-        results = {}
-
-        # Agent 1: 职业分析
-        try:
-            if progress_placeholder:
-                progress_placeholder.info("🤖 职业分析师正在深度思考...")
-
-            # 创建伪进度条
-            fake_progress = FakeProgressBar(total_time=30.0)
-            progress_bar = st.progress(0)
-
-            # 在后台线程中更新伪进度
-            def update_fake_progress():
-                for i in range(95):  # 到 95%
-                    progress_bar.progress(i / 100)
-                    time.sleep(0.3)
-
-            thread = threading.Thread(target=update_fake_progress, daemon=True)
-            thread.start()
-
-            start_time = time.time()
-            career_analysis = pipeline._ai_think(
-                "career_analyst",
-                f"请分析以下简历：\n\n{resume_text}"
-            )
-            results['career_analysis'] = career_analysis
-
-            # 完成进度条
-            progress_bar.progress(1.0)
-
-            # 立即显示结果
-            if result_containers and 'career' in result_containers:
-                result_containers['career'].markdown(career_analysis)
-
-            if progress_placeholder:
-                elapsed = time.time() - start_time
-                progress_placeholder.success(f"✅ 职业分析完成！耗时 {elapsed:.1f} 秒")
-                time.sleep(0.5)
-        except Exception as e:
-            progress_bar.progress(1.0)
-            if result_containers and 'career' in result_containers:
-                result_containers['career'].error(f"❌ 职业分析失败: {str(e)}")
-            if progress_placeholder:
-                progress_placeholder.warning(f"⚠️ 职业分析跳过，继续下一步...")
-            career_analysis = "分析失败"
-
-        # Agent 2: 岗位匹配
-        try:
-            if progress_placeholder:
-                progress_placeholder.info("💼 岗位匹配专家正在工作...")
-
-            progress_bar2 = st.progress(0)
-
-            def update_fake_progress2():
-                for i in range(95):
-                    progress_bar2.progress(i / 100)
-                    time.sleep(0.4)
-
-            thread2 = threading.Thread(target=update_fake_progress2, daemon=True)
-            thread2.start()
-
-            start_time = time.time()
-            job_and_resume = pipeline._ai_think(
-                "job_matcher",
-                f"简历：\n{resume_text}\n\n职业分析：\n{career_analysis}"
-            )
-            results['job_recommendations'] = job_and_resume
-            results['resume_optimization'] = job_and_resume
-
-            progress_bar2.progress(1.0)
-
-            # 立即显示结果
-            if result_containers and 'job' in result_containers:
-                result_containers['job'].markdown(job_and_resume)
-
-            if progress_placeholder:
-                elapsed = time.time() - start_time
-                progress_placeholder.success(f"✅ 岗位匹配完成！耗时 {elapsed:.1f} 秒")
-                time.sleep(0.5)
-        except Exception as e:
-            progress_bar2.progress(1.0)
-            if result_containers and 'job' in result_containers:
-                result_containers['job'].error(f"❌ 岗位匹配失败: {str(e)}")
-            if progress_placeholder:
-                progress_placeholder.warning(f"⚠️ 岗位匹配跳过，继续下一步...")
-
-        # Agent 3: 面试辅导
-        try:
-            if progress_placeholder:
-                progress_placeholder.info("🎤 面试辅导专家正在准备...")
-
-            progress_bar3 = st.progress(0)
-
-            def update_fake_progress3():
-                for i in range(95):
-                    progress_bar3.progress(i / 100)
-                    time.sleep(0.3)
-
-            thread3 = threading.Thread(target=update_fake_progress3, daemon=True)
-            thread3.start()
-
-            start_time = time.time()
-            interview_prep = pipeline._ai_think(
-                "interview_coach",
-                f"简历：\n{resume_text}\n\n职业分析：\n{results.get('career_analysis', '无')}\n\n岗位匹配：\n{results.get('job_recommendations', '无')}"
-            )
-            results['interview_preparation'] = interview_prep
-            results['mock_interview'] = interview_prep
-
-            progress_bar3.progress(1.0)
-
-            # 立即显示结果
-            if result_containers and 'interview' in result_containers:
-                result_containers['interview'].markdown(interview_prep)
-
-            if progress_placeholder:
-                elapsed = time.time() - start_time
-                progress_placeholder.success(f"✅ 面试准备完成！耗时 {elapsed:.1f} 秒")
-                time.sleep(0.5)
-        except Exception as e:
-            progress_bar3.progress(1.0)
-            if result_containers and 'interview' in result_containers:
-                result_containers['interview'].error(f"❌ 面试准备失败: {str(e)}")
-            if progress_placeholder:
-                progress_placeholder.warning(f"⚠️ 面试准备跳过，继续下一步...")
-            interview_prep = "分析失败"
-
-        # Agent 4: 质量审核
-        try:
-            if progress_placeholder:
-                progress_placeholder.info("✅ 质量审核官正在检查...")
-
-            progress_bar4 = st.progress(0)
-
-            def update_fake_progress4():
-                for i in range(95):
-                    progress_bar4.progress(i / 100)
-                    time.sleep(0.2)
-
-            thread4 = threading.Thread(target=update_fake_progress4, daemon=True)
-            thread4.start()
-
-            start_time = time.time()
-            quality_audit = pipeline._ai_think(
-                "quality_auditor",
-                f"职业分析：\n{results.get('career_analysis', '无')}\n\n岗位匹配：\n{results.get('job_recommendations', '无')}\n\n面试准备：\n{results.get('interview_preparation', '无')}"
-            )
-            results['skill_gap_analysis'] = quality_audit
-            results['quality_audit'] = quality_audit
-
-            progress_bar4.progress(1.0)
-
-            # 立即显示结果
-            if result_containers and 'quality' in result_containers:
-                result_containers['quality'].markdown(quality_audit)
-
-            if progress_placeholder:
-                elapsed = time.time() - start_time
-                progress_placeholder.success(f"✅ 质量审核完成！耗时 {elapsed:.1f} 秒")
-        except Exception as e:
-            progress_bar4.progress(1.0)
-            if result_containers and 'quality' in result_containers:
-                result_containers['quality'].error(f"❌ 质量审核失败: {str(e)}")
-            if progress_placeholder:
-                progress_placeholder.warning(f"⚠️ 质量审核跳过")
-
-        return results
-
+        response = requests.post(
+            f"{API_URL}/api/user/upgrade",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"plan": plan},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            return data
+        return None
     except Exception as e:
-        if progress_placeholder:
-            progress_placeholder.error(f"❌ 分析失败: {str(e)}")
-        import traceback
-        st.error(traceback.format_exc())
+        st.error(f"升级失败: {str(e)}")
         return None
 
-# 初始化 session state
-if 'user_id' not in st.session_state:
-    st.session_state.user_id = str(uuid.uuid4())
-if 'analysis_results' not in st.session_state:
-    st.session_state.analysis_results = None
-if 'show_welcome' not in st.session_state:
-    st.session_state.show_welcome = True
+def submit_apply_task(token: str, keyword: str, city: str, max_count: int, resume_text: str):
+    """提交投递任务（同步版本）"""
+    try:
+        response = requests.post(
+            f"{API_URL}/api/apply/boss/batch",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "keyword": keyword,
+                "city": city,
+                "max_count": max_count,
+                "greeting_template": "您好，我对{position}岗位很感兴趣，期待与您沟通！"
+            },
+            timeout=300  # 5 分钟超时
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        st.error(f"投递失败: {str(e)}")
+        return None
 
-# 欢迎页面
-if st.session_state.show_welcome:
-    # Hero - 超大渐变背景
-    st.markdown('''
-    <div class="hero" style="min-height: 80vh; display: flex; align-items: center; justify-content: center;">
-        <div style="max-width: 900px; margin: 0 auto;">
-            <div class="hero-badge">✨ 由 DeepSeek AI 驱动</div>
-            <h1 style="font-size: 4.5rem; margin-bottom: 1.5rem;">AI 驱动的智能求职平台</h1>
-            <div class="hero-subtitle" style="font-size: 1.5rem; margin-bottom: 3rem;">
-                4 个 AI Agent 协作分析简历，精准匹配岗位，自动投递<br>让求职效率提升 10 倍
-            </div>
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
+# ==================== 主界面 ====================
 
-    # 居中按钮
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("🚀 立即开始", type="primary", use_container_width=True, key="start_app"):
-            st.session_state.show_welcome = False
-            st.rerun()
+st.markdown('<div class="main-header">🚀 AI 求职助手 - 云端版</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">自动搜索岗位并批量投递，AI 生成个性化求职信</div>', unsafe_allow_html=True)
 
-    # 特性展示
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("## 为什么选择我们？")
-    st.markdown("<p style='text-align: center; color: var(--text-secondary); font-size: 1.25rem; margin-bottom: 3rem;'>AI 多角色协作，让求职更智能、更高效</p>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">🤖</div>
-            <h3>4-AI 协作引擎</h3>
-            <p>职业分析师、岗位匹配专家、面试辅导教练、质量审核官协同工作</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">🚀</div>
-            <h3>飞书 + OpenClaw</h3>
-            <p>集成飞书机器人和 OpenClaw，一键自动投递 Boss直聘、实习僧</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with col2:
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">🎯</div>
-            <h3>智能精准匹配</h3>
-            <p>基于简历深度分析，AI 自动提取关键词、技能、地点，精准匹配岗位</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">🎤</div>
-            <h3>面试全程辅导</h3>
-            <p>AI 面试教练提供专业建议，针对目标岗位准备常见问题</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with col3:
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">⚡</div>
-            <h3>流式实时显示</h3>
-            <p>每个 AI Agent 完成后立即显示结果，伪进度条减少等待焦虑</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="font-size: 3rem; margin-bottom: 1rem;">✨</div>
-            <h3>Gemini 风格 UI</h3>
-            <p>蓝紫粉渐变色、玻璃态设计、流畅动画，现代化界面</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    # 工作流程
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("## 简单 3 步，开启智能求职")
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="width: 50px; height: 50px; background: var(--gemini-gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 500; margin: 0 auto 1rem;">1</div>
-            <h3>上传简历</h3>
-            <p>支持 PDF、Word、文本</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with col2:
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="width: 50px; height: 50px; background: var(--gemini-gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 500; margin: 0 auto 1rem;">2</div>
-            <h3>AI 分析</h3>
-            <p>4 个 Agent 协作分析</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    with col3:
-        st.markdown('''
-        <div class="card" style="text-align: center;">
-            <div style="width: 50px; height: 50px; background: var(--gemini-gradient); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; font-weight: 500; margin: 0 auto 1rem;">3</div>
-            <h3>自动投递</h3>
-            <p>飞书 + OpenClaw 一键投递</p>
-        </div>
-        ''', unsafe_allow_html=True)
-
-    # 底部 CTA
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("🚀 免费开始使用", type="primary", use_container_width=True, key="start_app_bottom"):
-            st.session_state.show_welcome = False
-            st.rerun()
-
+# 检查后端状态
+if not check_backend_status():
+    st.error("⚠️ 后端服务未启动或无法连接")
+    st.info("""
+    请确保：
+    1. 已启动后端服务（双击 `启动云端后端.bat`）
+    2. 已启动 ngrok（`ngrok http 8765`）
+    3. 已将 ngrok 地址填入代码的 API_URL
+    """)
     st.stop()
 
-# 主应用（原有代码）
-# 顶部导航
-st.markdown('''
-<div class="top">
-    <div class="brand">
-        <div class="dot"></div>
-        <span>AI求职助手</span>
-    </div>
-</div>
-''', unsafe_allow_html=True)
+st.success("✅ 后端服务连接正常")
 
-# Hero - Gemini 风格
-st.markdown('''
-<div class="hero">
-    <div class="hero-badge">✨ AI 驱动 · 智能求职助手</div>
-    <h1>找实习，让 AI 帮你</h1>
-    <div class="hero-subtitle">4 位 AI 专家深度分析，精准推荐，自动投递</div>
-</div>
-''', unsafe_allow_html=True)
+# ==================== 用户登录 ====================
 
-# 标签页 - 按照求职 SOP 顺序
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📝 第一步：分析简历",
-    "🎯 第二步：匹配岗位",
-    "🚀 第三步：自动投递",
-    "📊 第四步：追踪进度"
-])
-
-# Tab1: 简历分析
-with tab1:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 📝 先让 AI 看看你的简历")
-    st.markdown("<p style='font-size: 1.1rem;'>上传简历，4 位 AI 专家帮你深度分析，找出亮点和改进空间</p>", unsafe_allow_html=True)
-
-    method = st.radio("选择上传方式", ["✍️ 直接粘贴文本", "📎 上传文件（PDF/Word）"], horizontal=True, label_visibility="collapsed")
-
-    if method == "✍️ 直接粘贴":
-        resume_text = st.text_area("把简历内容粘贴到这里吧 👇", height=200, placeholder="粘贴你的简历内容...", label_visibility="collapsed")
-
-        if resume_text and st.button("✨ 开始分析", type="primary", key="analyze_text"):
-            if len(resume_text.strip()) < 50:
-                st.warning("😅 简历内容有点少哦，建议至少 50 字以上")
+if 'token' not in st.session_state:
+    st.subheader("📱 登录 / 注册")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        phone = st.text_input("手机号", placeholder="请输入手机号")
+        
+        st.info("💡 开发环境提示：验证码自动填充为 123456，直接点击登录即可")
+        
+        if st.button("登录 / 注册", type="primary", use_container_width=True):
+            if phone:
+                with st.spinner("登录中..."):
+                    result = login_user(phone)
+                    if result:
+                        st.session_state['token'] = result['token']
+                        st.session_state['user'] = result['user']
+                        st.success("✅ 登录成功！")
+                        st.rerun()
+                    else:
+                        st.error("❌ 登录失败，请重试")
             else:
-                # 创建进度显示区域
-                progress_placeholder = st.empty()
-
-                # 创建结果显示区域（提前创建，流式显示）
-                st.markdown("### 📊 分析结果（实时更新）")
-
-                result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "🎤 面试准备", "✅ 质量审核"])
-
-                result_containers = {
-                    'career': result_tabs[0].empty(),
-                    'job': result_tabs[1].empty(),
-                    'interview': result_tabs[2].empty(),
-                    'quality': result_tabs[3].empty()
-                }
-
-                # 开始分析（流式显示）
-                import time
-                start_time = time.time()
-
-                results = analyze_resume_streaming(resume_text, progress_placeholder, result_containers)
-
-                elapsed = time.time() - start_time
-                progress_placeholder.success(f"🎉 全部完成！总耗时 {elapsed:.1f} 秒")
-
-                if results:
-                    st.session_state.analysis_results = results
-
-    else:
-        uploaded_file = st.file_uploader("选择你的简历文件 📄", type=["pdf", "doc", "docx", "txt"], label_visibility="collapsed")
-
-        if uploaded_file:
-            if st.button("✨ 开始分析", type="primary", key="analyze_file"):
-                with st.spinner("🔄 正在读取文件..."):
-                    resume_text = parse_uploaded_file(uploaded_file)
-
-                if resume_text:
-                    progress_placeholder = st.empty()
-
-                    # 创建结果展示区域（每个 Agent 完成后立即显示）
-                    result_tabs = st.tabs(["🎯 职业分析", "💼 岗位推荐", "🎤 面试准备", "✅ 质量审核"])
-
-                    result_containers = {
-                        'career': result_tabs[0].empty(),
-                        'job': result_tabs[1].empty(),
-                        'interview': result_tabs[2].empty(),
-                        'quality': result_tabs[3].empty()
-                    }
-
-                    # 开始分析（流式显示）
-                    import time
-                    start_time = time.time()
-
-                    results = analyze_resume_streaming(resume_text, progress_placeholder, result_containers)
-
-                    elapsed = time.time() - start_time
-                    progress_placeholder.success(f"🎉 全部完成！总耗时 {elapsed:.1f} 秒")
-
-                    if results:
-                        st.session_state.analysis_results = results
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Tab2: 查看分析结果
-with tab2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 🎯 AI 帮你找到最匹配的岗位")
-    st.markdown("<p style='font-size: 1.1rem;'>基于简历分析，AI 已经帮你筛选出最适合的岗位和关键词</p>", unsafe_allow_html=True)
-
-    # 检查是否已完成简历分析
-    if not st.session_state.analysis_results:
-        st.warning("⚠️ 请先完成第一步：分析简历")
-        st.info("💡 完成简历分析后，AI 会自动推荐最匹配的岗位")
-    else:
-        st.success("✅ 简历分析已完成，查看 AI 推荐")
-
-        # 显示 AI 推荐的投递策略
-        from app.core.smart_apply import smart_apply_engine
-
-        # 提取投递目标
-        targets = smart_apply_engine.extract_job_targets(st.session_state.analysis_results)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("### 🎯 推荐关键词")
-            st.markdown("<p style='font-size: 0.95rem; color: var(--text-secondary);'>AI 从你的简历中提取的核心技能</p>", unsafe_allow_html=True)
-            for keyword in targets['keywords'][:5]:
-                st.markdown(f"- `{keyword}`")
-
-            st.markdown("### 📍 推荐地点")
-            st.markdown("<p style='font-size: 0.95rem; color: var(--text-secondary);'>根据你的意向和市场需求</p>", unsafe_allow_html=True)
-            for location in targets['locations'][:3]:
-                st.markdown(f"- {location}")
-
-        with col2:
-            st.markdown("### 💼 推荐岗位")
-            st.markdown("<p style='font-size: 0.95rem; color: var(--text-secondary);'>最适合你的岗位类型</p>", unsafe_allow_html=True)
-            for pos in targets['positions'][:3]:
-                st.markdown(f"- **{pos['title']}** ({pos.get('company', '多家公司')})")
-
-            st.markdown("### 💰 薪资范围")
-            st.markdown("<p style='font-size: 0.95rem; color: var(--text-secondary);'>市场平均水平</p>", unsafe_allow_html=True)
-            salary = targets['salary_range']
-            st.markdown(f"- {salary['min']}-{salary['max']} 元/月")
-
-        st.markdown("---")
-        st.info("💡 **下一步：** 点击「第三步：自动投递」开始投递")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Tab3: 自动投递
-with tab3:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 🚀 一键自动投递")
-    st.markdown("<p style='font-size: 1.1rem;'>AI优化简历 + 自动生成投递链接</p>", unsafe_allow_html=True)
-
-    # 检查是否已完成简历分析
-    if not st.session_state.analysis_results:
-        st.warning("⚠️ 请先完成前两步：分析简历 → 查看匹配岗位")
-        st.info("💡 完成后才能开始自动投递")
-    else:
-        st.success("✅ 准备就绪，可以开始投递了！")
-
-        # 显示优化后的简历预览
-        st.markdown("### 📄 AI优化简历预览")
-
-        with st.expander("查看优化后的简历", expanded=False):
-            from app.core.resume_optimizer import resume_optimizer
-
-            # 生成优化简历
-            original_resume = st.session_state.get('resume_text', '')
-            optimized_resume = resume_optimizer.optimize_resume(
-                original_resume,
-                st.session_state.analysis_results
-            )
-
-            st.text_area(
-                "优化后的简历（已去除markdown语法）",
-                optimized_resume,
-                height=400,
-                disabled=True
-            )
-
-            # 下载按钮
-            st.download_button(
-                label="📥 下载优化简历",
-                data=optimized_resume,
-                file_name=f"优化简历_{datetime.now().strftime('%Y%m%d')}.txt",
-                mime="text/plain"
-            )
-
-        st.markdown("### 🎯 推荐岗位投递")
-
-        # 从AI推荐中提取岗位信息
-        job_recommendations = st.session_state.analysis_results.get('job_recommendations', '')
-
-        # 提取岗位URL和信息
-        import re
-
-        # 尝试提取岗位信息
-        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
-        urls = re.findall(url_pattern, job_recommendations)
-
-        # 从岗位搜索结果中提取结构化数据
-        from app.core.job_searcher import job_searcher
-
-        # 提取关键词
-        keywords = "Python实习"  # 默认关键词
-        if '关键词' in job_recommendations or 'keywords' in job_recommendations.lower():
-            kw_match = re.search(r'(?:关键词|keywords)[：:]\s*([^\n]+)', job_recommendations, re.IGNORECASE)
-            if kw_match:
-                keywords = kw_match.group(1).strip()
-
-        # 搜索岗位
-        jobs = job_searcher.search_jobs(keywords, "北京", limit=10)
-
-        if jobs or urls:
-            st.success(f"🎯 找到 {len(jobs)} 个推荐岗位")
-
-            # 自动投递按钮
-            st.markdown("#### 🤖 AI 自动投递")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                auto_apply_count = st.number_input(
-                    "投递数量",
-                    min_value=1,
-                    max_value=len(jobs) if jobs else 10,
-                    value=min(5, len(jobs)) if jobs else 5,
-                    help="建议每次投递5-10个岗位"
-                )
-
-            with col2:
-                st.metric("可投递岗位", len(jobs) if jobs else len(urls))
-
-            if st.button("🚀 开始自动投递", type="primary", use_container_width=True):
-                with st.spinner("🤖 AI 正在自动投递..."):
-                    try:
-                        from app.core.auto_apply_engine import get_auto_apply_engine
-                        from app.core.optimized_pipeline import OptimizedJobPipeline
-
-                        # 获取引擎
-                        pipeline = OptimizedJobPipeline()
-                        engine = get_auto_apply_engine(
-                            pipeline.llm_client,
-                            pipeline.reasoning_model
-                        )
-
-                        # 准备用户信息
-                        user_info = {
-                            'name': '求职者',  # 可以从简历中提取
-                            'email': 'example@email.com',
-                            'phone': '13800138000'
-                        }
-
-                        # 进度显示
-                        progress_bar = st.progress(0)
-                        status_text = st.empty()
-
-                        def progress_callback(current, total, message):
-                            progress_bar.progress(current / total)
-                            status_text.text(f"{message} ({current}/{total})")
-
-                        # 执行自动投递
-                        original_resume = st.session_state.get('resume_text', '')
-
-                        results = engine.auto_apply_jobs(
-                            jobs=jobs[:auto_apply_count],
-                            resume_text=original_resume,
-                            user_info=user_info,
-                            progress_callback=progress_callback
-                        )
-
-                        # 显示结果
-                        progress_bar.progress(1.0)
-                        status_text.empty()
-
-                        st.success(f"🎉 投递完成！")
-
-                        col1, col2, col3 = st.columns(3)
-
-                        with col1:
-                            st.metric("总投递", results['total'])
-
-                        with col2:
-                            st.metric("成功", results['success'], delta=f"+{results['success']}")
-
-                        with col3:
-                            st.metric("失败", results['failed'], delta=f"-{results['failed']}" if results['failed'] > 0 else None)
-
-                        # 显示详细结果
-                        with st.expander("查看详细结果", expanded=True):
-                            for detail in results['details']:
-                                if detail['status'] == 'success':
-                                    st.success(f"✅ {detail['job']} @ {detail['company']}")
-                                    if 'cover_letter' in detail:
-                                        st.text(f"求职信: {detail['cover_letter']}")
-                                else:
-                                    st.error(f"❌ {detail['job']} @ {detail['company']}: {detail.get('error', '未知错误')}")
-
-                        # 保存到投递记录
-                        if 'apply_records' not in st.session_state:
-                            st.session_state.apply_records = []
-
-                        for detail in results['details']:
-                            if detail['status'] == 'success':
-                                st.session_state.apply_records.append({
-                                    'company': detail['company'],
-                                    'position': detail['job'],
-                                    'platform': 'AI自动投递',
-                                    'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                                    'status': '已投递'
-                                })
-
-                    except Exception as e:
-                        st.error(f"自动投递失败: {str(e)}")
-                        import traceback
-                        st.error(traceback.format_exc())
-
-            st.markdown("---")
-
-            # 显示岗位列表
-            st.markdown("#### 📋 岗位列表")
-
-            for i, job in enumerate(jobs[:10], 1):
-                with st.expander(f"{i}. {job['title']} @ {job['company']}", expanded=False):
-                    col1, col2 = st.columns([3, 1])
-
-                    with col1:
-                        st.markdown(f"**薪资:** {job['salary']}")
-                        st.markdown(f"**地点:** {job['location']}")
-                        st.markdown(f"**描述:** {job['description']}")
-
-                    with col2:
-                        st.link_button("🔗 打开", job['url'], use_container_width=True)
-
-        else:
-            st.warning("⚠️ 未找到岗位")
-            st.info("""
-            **可能的原因：**
-            - 需要重新分析简历
-
-            **解决方法：**
-            1. 返回"第一步：分析简历"重新分析
-            2. 或手动搜索岗位：
-               - Boss直聘: https://www.zhipin.com/
-               - 实习僧: https://www.shixiseng.com/
-               - 牛客网: https://www.nowcoder.com/
-            """)
-
-        st.markdown("---")
-
-        # 投递指南
-        st.markdown("### 📝 投递指南")
-
+                st.warning("请输入手机号")
+    
+    with col2:
         st.info("""
-        **AI 自动投递功能：**
-
-        ✅ **已实现：**
-        - 🤖 AI 自动生成个性化求职信
-        - 💬 智能回答申请表单问题
-        - 📊 实时进度显示
-        - 📈 投递结果统计
-
-        ⚠️ **限制：**
-        - 目前为模拟投递（80%成功率）
-        - 实际投递需要浏览器自动化或平台API
-        - Streamlit Cloud 不支持运行浏览器
-
-        **如需真实自动投递：**
-        1. 下载本地版本
-        2. 安装 AIHawk 项目
-        3. 运行本地服务
-
-        **投递技巧：**
-        - ✅ 每次投递5-10个岗位
-        - ✅ 使用AI优化后的简历
-        - ✅ 工作日上午9-11点投递效果最好
+        **新用户福利**
+        
+        注册即送 5 次免费投递
+        
+        **套餐价格**
+        - 基础版：¥19.9/月
+        - 专业版：¥39.9/月
+        - 年费版：¥199/年
         """)
 
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Tab 4: 追踪进度
-with tab4:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("## 📊 投递进度追踪")
-    st.markdown(f"<p style='font-size: 1.1rem;'>记录你的投递进度</p>", unsafe_allow_html=True)
-
-    # 初始化投递记录
-    if 'apply_records' not in st.session_state:
-        st.session_state.apply_records = []
-
-    # 添加投递记录
-    st.markdown("### ➕ 添加投递记录")
-
-    col1, col2, col3 = st.columns(3)
-
+else:
+    # 已登录，显示主界面
+    user = st.session_state['user']
+    
+    # ==================== 用户信息卡片 ====================
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        company = st.text_input("公司名称", placeholder="例如：字节跳动")
-
+        st.markdown(f"""
+        <div class="metric-card">
+            <div style="font-size: 0.9rem; opacity: 0.9;">当前套餐</div>
+            <div style="font-size: 1.8rem; font-weight: bold; margin-top: 0.5rem;">
+                {user.get('plan', 'free').upper()}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     with col2:
-        position = st.text_input("职位名称", placeholder="例如：Python后端实习")
-
+        st.markdown(f"""
+        <div class="metric-card">
+            <div style="font-size: 0.9rem; opacity: 0.9;">剩余次数</div>
+            <div style="font-size: 1.8rem; font-weight: bold; margin-top: 0.5rem;">
+                {user.get('remaining_quota', 0)} 次
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
     with col3:
-        platform = st.selectbox("投递平台", ["Boss直聘", "实习僧", "牛客网", "LinkedIn", "Indeed", "其他"])
-
-    if st.button("📝 添加记录", use_container_width=True):
-        if company and position:
-            st.session_state.apply_records.append({
-                'company': company,
-                'position': position,
-                'platform': platform,
-                'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
-                'status': '已投递'
-            })
-            st.success(f"✅ 已添加：{company} - {position}")
+        st.markdown(f"""
+        <div class="metric-card">
+            <div style="font-size: 0.9rem; opacity: 0.9;">手机号</div>
+            <div style="font-size: 1.2rem; font-weight: bold; margin-top: 0.5rem;">
+                {user.get('phone', '')}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        if st.button("🔄 刷新信息", use_container_width=True):
             st.rerun()
-        else:
-            st.warning("请填写公司和职位名称")
-
+        if st.button("🚪 退出登录", use_container_width=True):
+            del st.session_state['token']
+            del st.session_state['user']
+            st.rerun()
+    
     st.markdown("---")
-
-    # 显示投递记录
-    if st.session_state.apply_records:
-        st.markdown("### 📋 投递记录")
-
-        # 统计数据
-        total_applied = len(st.session_state.apply_records)
-
-        col1, col2, col3, col4 = st.columns(4)
-
+    
+    # ==================== 升级套餐 ====================
+    
+    with st.expander("💎 升级套餐", expanded=False):
+        col1, col2, col3 = st.columns(3)
+        
         with col1:
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-value">{total_applied}</div>
-                <div class="stat-label">总投递</div>
-            </div>
-            """, unsafe_allow_html=True)
-
+            st.markdown("""
+            **基础版**
+            
+            ¥19.9/月
+            
+            - 每天 30 次投递
+            - AI 生成求职信
+            - 投递记录管理
+            """)
+            if st.button("升级到基础版", key="upgrade_basic"):
+                result = upgrade_plan(st.session_state['token'], 'basic')
+                if result and result.get('success'):
+                    st.session_state['user'] = result['user']
+                    st.success("✅ 升级成功！")
+                    st.rerun()
+        
         with col2:
-            # 统计平台分布
-            platforms = {}
-            for record in st.session_state.apply_records:
-                p = record['platform']
-                platforms[p] = platforms.get(p, 0) + 1
-            top_platform = max(platforms, key=platforms.get) if platforms else "无"
-
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-value">{top_platform}</div>
-                <div class="stat-label">主要平台</div>
-            </div>
-            """, unsafe_allow_html=True)
-
+            st.markdown("""
+            **专业版** 🔥
+            
+            ¥39.9/月
+            
+            - 每天 100 次投递
+            - 优先投递
+            - 简历优化建议
+            - 数据分析报告
+            """)
+            if st.button("升级到专业版", key="upgrade_pro"):
+                result = upgrade_plan(st.session_state['token'], 'pro')
+                if result and result.get('success'):
+                    st.session_state['user'] = result['user']
+                    st.success("✅ 升级成功！")
+                    st.rerun()
+        
         with col3:
-            # 今日投递
-            today = datetime.now().strftime('%Y-%m-%d')
-            today_count = sum(1 for r in st.session_state.apply_records if r['date'].startswith(today))
-
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-value">{today_count}</div>
-                <div class="stat-label">今日投递</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with col4:
-            # 建议
-            if total_applied < 20:
-                suggestion = "继续加油"
-            elif total_applied < 50:
-                suggestion = "进展顺利"
-            else:
-                suggestion = "投递充足"
-
-            st.markdown(f"""
-            <div class="stat-card">
-                <div class="stat-value">{suggestion}</div>
-                <div class="stat-label">状态</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown("---")
-
-        # 显示记录表格
-        st.markdown("#### 详细记录")
-
-        # 转换为DataFrame
-        import pandas as pd
-        df = pd.DataFrame(st.session_state.apply_records)
-
-        # 显示表格
-        st.dataframe(
-            df[['date', 'company', 'position', 'platform', 'status']],
-            use_container_width=True,
-            hide_index=True
-        )
-
-        # 导出按钮
-        csv = df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            label="📥 导出为CSV",
-            data=csv,
-            file_name=f"投递记录_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-
-        # 清空记录
-        if st.button("🗑️ 清空所有记录", use_container_width=True):
-            st.session_state.apply_records = []
-            st.rerun()
-
-    else:
-        st.info("📭 还没有投递记录，开始添加吧！")
-
+            st.markdown("""
+            **年费版** ⭐
+            
+            ¥199/年
+            
+            - 无限次投递
+            - 所有功能
+            - 专属客服
+            - 优先更新
+            """)
+            if st.button("升级到年费版", key="upgrade_yearly"):
+                result = upgrade_plan(st.session_state['token'], 'yearly')
+                if result and result.get('success'):
+                    st.session_state['user'] = result['user']
+                    st.success("✅ 升级成功！")
+                    st.rerun()
+        
+        st.info("💡 开发环境提示：点击升级按钮即可模拟升级，无需实际支付")
+    
     st.markdown("---")
+    
+    # ==================== 自动投递表单 ====================
+    
+    st.subheader("🎯 自动投递")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        keyword = st.text_input("🔍 搜索关键词", placeholder="例如：Python实习、前端开发", value="Python实习")
+        city = st.text_input("📍 城市", placeholder="例如：北京、上海、全国", value="北京")
+        max_count = st.number_input("📊 投递数量", min_value=1, max_value=50, value=5)
+        resume_text = st.text_area("📄 简历内容", placeholder="粘贴你的简历内容...", height=200)
+    
+    with col2:
+        st.info("""
+        **使用说明**
+        
+        1. 输入关键词和城市
+        2. 设置投递数量
+        3. 粘贴简历内容
+        4. 点击开始投递
+        
+        **注意事项**
+        
+        - 每次投递消耗 1 次额度
+        - 建议先测试 3-5 个
+        - 投递间隔 3-6 秒
+        """)
+    
+    # 投递按钮
+    if st.button("🚀 开始自动投递", type="primary", use_container_width=True):
+        # 检查额度
+        if user.get('remaining_quota', 0) <= 0:
+            st.error("❌ 投递次数已用完，请升级套餐")
+        elif not resume_text.strip():
+            st.warning("⚠️ 请输入简历内容")
+        else:
+            # 开始投递
+            st.info(f"🔄 正在投递 {max_count} 个岗位，请稍候...")
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            with st.spinner("投递中..."):
+                result = submit_apply_task(
+                    st.session_state['token'],
+                    keyword,
+                    city,
+                    max_count,
+                    resume_text
+                )
+                
+                progress_bar.progress(100)
+                
+                if result:
+                    st.success(f"✅ 投递完成！成功 {result.get('success', 0)} 个，失败 {result.get('failed', 0)} 个")
+                    
+                    # 显示投递日志
+                    if 'details' in result:
+                        st.subheader("📋 投递日志")
+                        for detail in result['details']:
+                            if detail['status'] == 'success':
+                                st.markdown(f"""
+                                <div class="success-log">
+                                    ✅ <strong>{detail['job']}</strong> - {detail['company']}
+                                </div>
+                                """, unsafe_allow_html=True)
+                            else:
+                                st.markdown(f"""
+                                <div class="error-log">
+                                    ❌ <strong>{detail['job']}</strong> - {detail['company']}
+                                </div>
+                                """, unsafe_allow_html=True)
+                    
+                    # 刷新用户信息
+                    st.info("🔄 刷新页面查看最新额度")
+                else:
+                    st.error("❌ 投递失败，请重试")
+    
+    st.markdown("---")
+    
+    # ==================== 使用统计 ====================
+    
+    st.subheader("📊 使用统计")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("今日投递", "0 个")
+    
+    with col2:
+        st.metric("本周投递", "0 个")
+    
+    with col3:
+        st.metric("总投递", "0 个")
+    
+    st.info("💡 投递记录功能开发中...")
 
-    # 投递建议
-    st.markdown("### 💡 投递建议")
+# ==================== 页脚 ====================
 
-    if not st.session_state.apply_records:
-        st.info("🚀 开始投递吧！建议每天投递20-30个岗位")
-    elif len(st.session_state.apply_records) < 20:
-        st.warning("⚠️ 投递数量较少，建议：\n- 每天投递20-30个岗位\n- 使用AI优化简历\n- 工作日上午投递效果更好")
-    elif len(st.session_state.apply_records) >= 50:
-        st.success("🎉 投递数量充足！继续保持，等待面试邀请")
-    else:
-        st.info("👍 投递进展顺利，继续加油！")
-
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# 页脚
-st.markdown('''
-<div class="footer">
-    <p>💼 祝你找到心仪的实习，加油鸭！</p>
-    <p style="margin-top:12px">
-        <a href="https://github.com/emptyteabot/ai-job-helper">GitHub 开源</a>
-        <a href="https://github.com/GodsScion/Auto_job_applier_linkedIn">参考项目</a>
-    </p>
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #999; padding: 2rem 0;">
+    <p>AI 求职助手 v2.0 | 让找工作更简单</p>
+    <p>GitHub: <a href="https://github.com/emptyteabot/ai-job-helper" target="_blank">emptyteabot/ai-job-helper</a></p>
 </div>
-''', unsafe_allow_html=True)
+""", unsafe_allow_html=True)

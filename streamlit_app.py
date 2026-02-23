@@ -19,30 +19,30 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Material Design + Google 风格 CSS
+# Gemini 渐变 + OpenAI 打字机风格 CSS
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=SF+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-    --google-blue: #4285f4;
-    --google-red: #ea4335;
-    --google-yellow: #fbbc04;
-    --google-green: #34a853;
-    --purple: #9c27b0;
-    --deep-purple: #673ab7;
+    --gemini-purple: #8e44ad;
+    --gemini-blue: #3498db;
+    --gemini-pink: #e91e63;
+    --openai-green: #10a37f;
+    --openai-dark: #202123;
     --shadow-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
     --shadow-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
     --shadow-3: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
     --shadow-4: 0 14px 28px rgba(0,0,0,0.25), 0 10px 10px rgba(0,0,0,0.22);
 }
 
-/* 全局背景渐变动画 */
+/* 全局背景 Gemini 渐变动画 */
 .stApp {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
     background-size: 400% 400%;
     animation: gradientShift 15s ease infinite;
-    font-family: 'Roboto', sans-serif;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 16px;
 }
 
 @keyframes gradientShift {
@@ -51,16 +51,18 @@ st.markdown("""
     100% { background-position: 0% 50%; }
 }
 
-/* Hero 区域 */
+/* Hero 区域 - OpenAI 风格 */
 .hero-section {
-    background: linear-gradient(135deg, rgba(66, 133, 244, 0.95) 0%, rgba(156, 39, 176, 0.95) 100%);
+    background: linear-gradient(135deg, rgba(16, 163, 127, 0.95) 0%, rgba(142, 68, 173, 0.95) 100%);
     border-radius: 24px;
-    padding: 48px 32px;
-    margin: 24px 0;
+    padding: 64px 48px;
+    margin: 24px auto;
+    max-width: 1200px;
     box-shadow: var(--shadow-4);
     position: relative;
     overflow: hidden;
     animation: fadeInUp 0.8s ease-out;
+    text-align: center;
 }
 
 .hero-section::before {
@@ -80,24 +82,27 @@ st.markdown("""
 }
 
 .hero-title {
-    font-family: 'Google Sans', sans-serif;
-    font-size: 48px;
-    font-weight: 700;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 64px;
+    font-weight: 600;
     color: white;
-    margin: 0;
+    margin: 0 auto;
     text-shadow: 0 2px 4px rgba(0,0,0,0.2);
     position: relative;
     z-index: 1;
     animation: slideInLeft 0.8s ease-out;
+    letter-spacing: -1px;
 }
 
 .hero-subtitle {
-    font-size: 20px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 24px;
     color: rgba(255,255,255,0.9);
-    margin-top: 16px;
+    margin-top: 24px;
     position: relative;
     z-index: 1;
     animation: slideInLeft 1s ease-out;
+    letter-spacing: 0.5px;
 }
 
 .hero-badge {
@@ -119,12 +124,13 @@ st.markdown("""
     50% { transform: scale(1.05); }
 }
 
-/* Material Design 卡片 */
+/* Material Design 卡片 - 居中大字体 */
 .material-card {
     background: white;
     border-radius: 16px;
-    padding: 24px;
-    margin: 16px 0;
+    padding: 32px;
+    margin: 24px auto;
+    max-width: 1200px;
     box-shadow: var(--shadow-2);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     animation: fadeInUp 0.6s ease-out;
@@ -135,139 +141,80 @@ st.markdown("""
     transform: translateY(-4px);
 }
 
-/* 胶囊按钮 */
-.pill-button {
-    display: inline-block;
-    background: linear-gradient(135deg, var(--google-blue) 0%, var(--deep-purple) 100%);
-    color: white;
-    padding: 12px 32px;
-    border-radius: 999px;
-    font-weight: 500;
-    text-decoration: none;
-    box-shadow: var(--shadow-2);
-    transition: all 0.3s ease;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
+.material-card h3, .material-card h4 {
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 28px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 24px;
 }
 
-.pill-button:hover {
+/* Streamlit 组件覆盖 - 打字机风格 */
+.stButton > button {
+    background: linear-gradient(135deg, var(--openai-green) 0%, var(--gemini-purple) 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px 40px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    box-shadow: var(--shadow-2);
+    transition: all 0.3s ease;
+    letter-spacing: 0.5px;
+}
+
+.stButton > button:hover {
     box-shadow: var(--shadow-3);
     transform: translateY(-2px);
 }
 
-/* 品牌点动画 */
-.brand-dot {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--google-blue);
-    margin-right: 8px;
-    animation: pulse 2s ease-in-out infinite;
-    box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7);
-}
-
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(66, 133, 244, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(66, 133, 244, 0);
-    }
-}
-
-/* 步骤指示器 */
-.step-indicator {
-    display: flex;
-    justify-content: space-between;
-    margin: 32px 0;
-    padding: 0 16px;
-}
-
-.step {
-    flex: 1;
-    text-align: center;
-    position: relative;
-}
-
-.step-circle {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: white;
-    border: 3px solid #e0e0e0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0 auto 8px;
-    font-weight: 700;
-    color: #9e9e9e;
-    transition: all 0.3s ease;
-}
-
-.step.active .step-circle {
-    background: linear-gradient(135deg, var(--google-blue), var(--purple));
-    border-color: var(--google-blue);
-    color: white;
-    box-shadow: var(--shadow-2);
-    animation: scaleIn 0.5s ease-out;
-}
-
-.step.done .step-circle {
-    background: var(--google-green);
-    border-color: var(--google-green);
-    color: white;
-}
-
-@keyframes scaleIn {
-    from { transform: scale(0.8); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
-
-/* 工作卡片 */
-.job-card {
-    background: white;
+.stTextArea textarea, .stTextInput input, .stNumberInput input {
     border-radius: 12px;
-    padding: 20px;
-    margin: 12px 0;
-    box-shadow: var(--shadow-1);
+    border: 2px solid #e0e0e0;
     transition: all 0.3s ease;
-    border-left: 4px solid var(--google-blue);
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 16px;
+    padding: 12px;
 }
 
-.job-card:hover {
-    box-shadow: var(--shadow-3);
-    transform: translateX(4px);
+.stTextArea textarea:focus, .stTextInput input:focus, .stNumberInput input:focus {
+    border-color: var(--openai-green);
+    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
 }
 
-.job-title {
-    font-size: 18px;
-    font-weight: 700;
-    color: #202124;
-    margin-bottom: 8px;
-}
-
-.job-company {
-    font-size: 14px;
-    color: #5f6368;
-    margin-bottom: 12px;
-}
-
-.job-link {
+/* 标签 */
+.tag {
     display: inline-block;
-    color: var(--google-blue);
-    text-decoration: none;
-    font-weight: 500;
-    transition: all 0.2s ease;
+    background: linear-gradient(135deg, rgba(16, 163, 127, 0.1), rgba(142, 68, 173, 0.1));
+    color: var(--gemini-purple);
+    padding: 6px 16px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 4px;
+    font-family: 'SF Mono', 'Courier New', monospace;
 }
 
-.job-link:hover {
-    color: var(--deep-purple);
-    text-decoration: underline;
+/* 成功/失败日志 - 打字机风格 */
+.success-log {
+    background: #f6ffed;
+    border-left: 4px solid #10a37f;
+    padding: 1.2rem;
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 16px;
+}
+
+.error-log {
+    background: #fff2f0;
+    border-left: 4px solid #ff4d4f;
+    padding: 1.2rem;
+    margin: 0.5rem 0;
+    border-radius: 8px;
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 16px;
 }
 
 /* 动画 */
@@ -293,67 +240,29 @@ st.markdown("""
     }
 }
 
-/* Streamlit 组件覆盖 */
-.stButton > button {
-    background: linear-gradient(135deg, var(--google-blue) 0%, var(--deep-purple) 100%);
-    color: white;
-    border: none;
-    border-radius: 999px;
-    padding: 12px 32px;
-    font-weight: 500;
-    box-shadow: var(--shadow-2);
-    transition: all 0.3s ease;
-}
-
-.stButton > button:hover {
-    box-shadow: var(--shadow-3);
-    transform: translateY(-2px);
-}
-
-.stTextArea textarea, .stTextInput input, .stNumberInput input {
-    border-radius: 12px;
-    border: 2px solid #e0e0e0;
-    transition: all 0.3s ease;
-}
-
-.stTextArea textarea:focus, .stTextInput input:focus, .stNumberInput input:focus {
-    border-color: var(--google-blue);
-    box-shadow: 0 0 0 3px rgba(66, 133, 244, 0.1);
-}
-
-/* 标签 */
-.tag {
-    display: inline-block;
-    background: linear-gradient(135deg, rgba(66, 133, 244, 0.1), rgba(156, 39, 176, 0.1));
-    color: var(--deep-purple);
-    padding: 4px 12px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    margin: 4px;
-}
-
-/* 成功/失败日志 */
-.success-log {
-    background: #f6ffed;
-    border-left: 4px solid #52c41a;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    border-radius: 8px;
-}
-
-.error-log {
-    background: #fff2f0;
-    border-left: 4px solid #ff4d4f;
-    padding: 1rem;
-    margin: 0.5rem 0;
-    border-radius: 8px;
-}
-
 /* 隐藏 Streamlit 默认元素 */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* 全局文字大小 */
+.stMarkdown, .stText, p, div {
+    font-size: 18px;
+    line-height: 1.6;
+}
+
+/* Tab 标签样式 */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    justify-content: center;
+}
+
+.stTabs [data-baseweb="tab"] {
+    font-family: 'SF Mono', 'Courier New', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 12px 24px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -430,15 +339,39 @@ with tab1:
         col_btn1, col_btn2, col_btn3 = st.columns(3)
 
         with col_btn1:
-            if st.button("🚀 开始分析", use_container_width=True):
+            if st.button("🚀 开始分析", use_container_width=True, key="analyze_btn"):
                 if not st.session_state.resume_text:
                     st.error("请先上传或粘贴简历！")
                 else:
-                    st.session_state.step = 2
-                    st.info("💡 简历分析功能开发中...")
+                    with st.spinner("🤖 AI 正在分析您的简历..."):
+                        try:
+                            response = requests.post(
+                                f"{BACKEND_URL}/api/analysis/resume",
+                                json={
+                                    "resume_text": st.session_state.resume_text,
+                                    "analysis_type": "full"
+                                },
+                                timeout=120
+                            )
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get('success'):
+                                    st.session_state.analysis_result = data.get('results', {})
+                                    st.session_state.step = 2
+                                    st.success("✅ 分析完成！")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ 分析失败: {data.get('message', '未知错误')}")
+                            else:
+                                st.error(f"❌ 服务器错误: HTTP {response.status_code}")
+                        except requests.exceptions.Timeout:
+                            st.error("❌ 分析超时，请稍后重试")
+                        except Exception as e:
+                            st.error(f"❌ 分析失败: {str(e)}")
 
         with col_btn2:
-            if st.button("📝 加载示例", use_container_width=True):
+            if st.button("📝 加载示例", use_container_width=True, key="load_example_btn"):
                 st.session_state.resume_text = """陈盈桦
 AI-Native 应用工程师
 
@@ -455,7 +388,7 @@ AI-Native 应用工程师
                 st.rerun()
 
         with col_btn3:
-            if st.button("🔄 重置", use_container_width=True):
+            if st.button("🔄 重置", use_container_width=True, key="reset_btn"):
                 st.session_state.resume_text = ""
                 st.session_state.analysis_result = None
                 st.session_state.step = 0
@@ -463,93 +396,250 @@ AI-Native 应用工程师
 
     with col2:
         st.markdown("### 📊 分析结果")
-        st.info("👈 请先上传简历并点击「开始分析」")
+        
+        if st.session_state.analysis_result:
+            results = st.session_state.analysis_result
+            
+            # 职业分析
+            if 'career_analysis' in results:
+                with st.expander("🎯 职业分析", expanded=True):
+                    st.markdown(results['career_analysis'])
+            
+            # 岗位推荐
+            if 'job_recommendations' in results:
+                with st.expander("💼 岗位推荐", expanded=True):
+                    st.markdown(results['job_recommendations'])
+            
+            # 面试辅导
+            if 'interview_preparation' in results:
+                with st.expander("🎤 面试辅导", expanded=True):
+                    st.markdown(results['interview_preparation'])
+            
+            # 质量审核
+            if 'quality_audit' in results:
+                with st.expander("✅ 质量审核", expanded=True):
+                    st.markdown(results['quality_audit'])
+        else:
+            st.info("👈 请先上传简历并点击「开始分析」")
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 with tab2:
     st.markdown('<div class="material-card">', unsafe_allow_html=True)
-    st.markdown("### 🚀 自动投递功能")
+    st.markdown("### 🚀 Boss 直聘自动投递")
     
-    col1, col2 = st.columns([2, 1])
+    # 初始化 session state
+    if 'login_step' not in st.session_state:
+        st.session_state.login_step = 0  # 0: 未登录, 1: 等待验证码, 2: 已登录
+    if 'phone' not in st.session_state:
+        st.session_state.phone = ""
     
-    with col1:
-        keyword = st.text_input("🔍 搜索关键词", placeholder="例如：Python实习、前端开发", value="Python实习")
-        city = st.text_input("📍 城市", placeholder="例如：北京、上海、全国", value="北京")
-        max_count = st.number_input("📊 投递数量", min_value=1, max_value=50, value=5)
-        resume_text = st.text_area("📄 简历内容", placeholder="粘贴你的简历内容...", height=200, value=st.session_state.resume_text)
-    
-    with col2:
-        st.info("""
-        **使用说明**
+    # 步骤 1：输入手机号
+    if st.session_state.login_step == 0:
+        st.markdown("#### 📱 步骤 1：登录 Boss 直聘")
         
-        1. 输入关键词和城市
-        2. 设置投递数量
-        3. 粘贴简历内容
-        4. 点击开始投递
+        col1, col2 = st.columns([2, 1])
         
-        **注意事项**
-        
-        - 建议先测试 3-5 个
-        - 投递间隔 3-6 秒
-        - 自动生成求职信
-        """)
-    
-    # 投递按钮
-    if st.button("🚀 开始自动投递", type="primary", use_container_width=True):
-        if not resume_text.strip():
-            st.warning("⚠️ 请输入简历内容")
-        else:
-            # 开始投递
-            st.info(f"🔄 正在投递 {max_count} 个岗位，请稍候...")
+        with col1:
+            phone = st.text_input("手机号", placeholder="请输入11位手机号", max_chars=11, key="phone_input")
             
-            progress_bar = st.progress(0)
-            
-            try:
-                # 调用后端 API
-                response = requests.post(
-                    f"{BACKEND_URL}/api/apply/boss/batch",
-                    json={
-                        "keyword": keyword,
-                        "city": city,
-                        "max_count": max_count,
-                        "greeting_template": "您好，我对{position}岗位很感兴趣，期待与您沟通！"
-                    },
-                    timeout=300
-                )
-                
-                progress_bar.progress(100)
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    st.success(f"✅ 投递完成！成功 {result.get('success', 0)} 个，失败 {result.get('failed', 0)} 个")
-                    
-                    # 显示投递日志
-                    if 'details' in result:
-                        st.markdown("### 📋 投递日志")
-                        for detail in result['details']:
-                            if detail.get('status') == 'success':
-                                st.markdown(f"""
-                                <div class="success-log">
-                                    ✅ <strong>{detail.get('job', '未知职位')}</strong> - {detail.get('company', '未知公司')}
-                                </div>
-                                """, unsafe_allow_html=True)
-                            else:
-                                st.markdown(f"""
-                                <div class="error-log">
-                                    ❌ <strong>{detail.get('job', '未知职位')}</strong> - {detail.get('company', '未知公司')}<br>
-                                    原因: {detail.get('error', '未知错误')}
-                                </div>
-                                """, unsafe_allow_html=True)
+            if st.button("🔐 获取验证码", type="primary", use_container_width=True):
+                if not phone or len(phone) != 11:
+                    st.error("❌ 请输入正确的手机号")
                 else:
-                    st.error(f"❌ 投递失败: HTTP {response.status_code}")
+                    with st.spinner("正在获取验证码..."):
+                        try:
+                            response = requests.post(
+                                f"{BACKEND_URL}/api/simple-apply/init-login",
+                                json={"phone": phone},
+                                timeout=30
+                            )
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get('success'):
+                                    st.session_state.phone = phone
+                                    st.session_state.login_step = 1
+                                    st.success(f"✅ {data.get('message')}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {data.get('message', '获取验证码失败')}")
+                            else:
+                                st.error(f"❌ 服务器错误: HTTP {response.status_code}")
+                        except Exception as e:
+                            st.error(f"❌ 连接失败: {str(e)}")
+        
+        with col2:
+            st.info("""
+            **说明**
+            
+            1. 输入手机号
+            2. 后端自动打开浏览器
+            3. 自动填写手机号
+            4. 自动获取验证码
+            5. 等待短信验证码
+            """)
+    
+    # 步骤 2：输入验证码
+    elif st.session_state.login_step == 1:
+        st.markdown("#### 🔑 步骤 2：输入验证码")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.info(f"📱 验证码已发送到 {st.session_state.phone}")
+            
+            code = st.text_input("验证码", placeholder="请输入6位验证码", max_chars=6, key="code_input")
+            
+            col_btn1, col_btn2 = st.columns(2)
+            
+            with col_btn1:
+                if st.button("✅ 确认登录", type="primary", use_container_width=True):
+                    if not code or len(code) != 6:
+                        st.error("❌ 请输入6位验证码")
+                    else:
+                        with st.spinner("正在登录..."):
+                            try:
+                                response = requests.post(
+                                    f"{BACKEND_URL}/api/simple-apply/verify-code",
+                                    json={"phone": st.session_state.phone, "code": code},
+                                    timeout=30
+                                )
+                                
+                                if response.status_code == 200:
+                                    data = response.json()
+                                    if data.get('success'):
+                                        st.session_state.login_step = 2
+                                        st.success(f"✅ {data.get('message')}")
+                                        st.rerun()
+                                    else:
+                                        st.error(f"❌ {data.get('message', '登录失败')}")
+                                else:
+                                    st.error(f"❌ 服务器错误: HTTP {response.status_code}")
+                            except Exception as e:
+                                st.error(f"❌ 连接失败: {str(e)}")
+            
+            with col_btn2:
+                if st.button("🔙 返回", use_container_width=True):
+                    st.session_state.login_step = 0
+                    st.rerun()
+        
+        with col2:
+            st.info("""
+            **说明**
+            
+            1. 查收短信验证码
+            2. 输入验证码
+            3. 后端自动填写并登录
+            4. 登录成功后开始投递
+            """)
+    
+    # 步骤 3：开始投递
+    elif st.session_state.login_step == 2:
+        st.success(f"✅ 已登录：{st.session_state.phone}")
+        
+        if st.button("🔓 退出登录", key="logout_btn"):
+            st.session_state.login_step = 0
+            st.session_state.phone = ""
+            st.rerun()
+        
+        st.markdown("---")
+        st.markdown("#### 🎯 开始投递")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            keyword = st.text_input("🔍 搜索关键词", placeholder="例如：Python工程师", value="Python工程师", key="keyword_input")
+            city = st.text_input("📍 城市", placeholder="例如：北京、上海", value="北京", key="city_input")
+            max_count = st.number_input("📊 投递数量", min_value=1, max_value=50, value=10, key="count_input")
+            resume_text = st.text_area("📄 简历内容", placeholder="粘贴你的简历内容...", height=200, value=st.session_state.resume_text, key="resume_input")
+        
+        with col2:
+            st.info("""
+            **使用说明**
+            
+            1. 输入关键词和城市
+            2. 设置投递数量
+            3. 粘贴简历内容
+            4. 点击开始投递
+            
+            **注意事项**
+            
+            - 建议先测试 5-10 个
+            - 投递间隔 5 秒
+            - 自动生成求职信
+            """)
+        
+        # 投递按钮
+        if st.button("🚀 开始自动投递", type="primary", use_container_width=True, key="apply_btn"):
+            if not resume_text.strip():
+                st.warning("⚠️ 请输入简历内容")
+            else:
+                # 开始投递
+                st.info(f"🔄 正在投递 {max_count} 个岗位，请稍候...")
+                
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                try:
+                    # 调用后端 API
+                    response = requests.post(
+                        f"{BACKEND_URL}/api/simple-apply/apply",
+                        json={
+                            "phone": st.session_state.phone,
+                            "resume_text": resume_text,
+                            "job_keyword": keyword,
+                            "city": city,
+                            "count": max_count
+                        },
+                        timeout=600  # 10分钟超时
+                    )
                     
-            except requests.exceptions.Timeout:
-                st.error("❌ 请求超时，请检查后端服务是否正常运行")
-            except requests.exceptions.ConnectionError:
-                st.error("❌ 无法连接到后端服务，请确保后端已启动并且 ngrok 地址正确")
-            except Exception as e:
-                st.error(f"❌ 投递失败: {str(e)}")
+                    progress_bar.progress(100)
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        if result.get('success'):
+                            st.success(f"✅ {result.get('message')}")
+                            
+                            # 显示统计
+                            col_stat1, col_stat2, col_stat3 = st.columns(3)
+                            with col_stat1:
+                                st.metric("总数", result.get('total', 0))
+                            with col_stat2:
+                                st.metric("成功", result.get('success_count', 0), delta=None, delta_color="normal")
+                            with col_stat3:
+                                st.metric("失败", result.get('failed_count', 0), delta=None, delta_color="inverse")
+                            
+                            # 显示投递日志
+                            if 'details' in result and result['details']:
+                                st.markdown("### 📋 投递日志")
+                                for detail in result['details']:
+                                    if detail.get('success'):
+                                        st.markdown(f"""
+                                        <div class="success-log">
+                                            ✅ <strong>{detail.get('job_title', '未知职位')}</strong> - {detail.get('company', '未知公司')}
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"""
+                                        <div class="error-log">
+                                            ❌ <strong>{detail.get('job_title', '未知职位')}</strong> - {detail.get('company', '未知公司')}
+                                        </div>
+                                        """, unsafe_allow_html=True)
+                        else:
+                            st.warning(f"⚠️ {result.get('message', '未找到符合条件的岗位')}")
+                    else:
+                        error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
+                        st.error(f"❌ 投递失败: {error_data.get('detail', f'HTTP {response.status_code}')}")
+                        
+                except requests.exceptions.Timeout:
+                    st.error("❌ 请求超时，投递可能仍在进行中，请稍后查看投递记录")
+                except requests.exceptions.ConnectionError:
+                    st.error("❌ 无法连接到后端服务，请确保后端已启动并且 ngrok 地址正确")
+                except Exception as e:
+                    st.error(f"❌ 投递失败: {str(e)}")
     
     st.markdown('</div>', unsafe_allow_html=True)
 

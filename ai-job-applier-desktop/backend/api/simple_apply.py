@@ -13,24 +13,24 @@ from pathlib import Path
 import urllib.parse
 import random
 
-# 添加自动投简历项目到路径
-current_dir = Path(__file__).parent.parent.parent
-auto_apply_path = current_dir / "自动投简历"
+# 导入 BossApplier
+logger = logging.getLogger(__name__)
 
-if auto_apply_path.exists():
-    sys.path.insert(0, str(auto_apply_path))
+try:
+    # 从 backend.automation 导入
+    from backend.automation.boss_applier import BossApplier
+    logger.info("成功加载 BossApplier from backend.automation")
+except Exception as e:
     try:
-        from app.services.auto_apply.boss_applier import BossApplier
-        logger = logging.getLogger(__name__)
-        logger.info(f"成功加载 BossApplier from {auto_apply_path}")
-    except Exception as e:
+        # 尝试相对导入
+        import sys
+        current_dir = Path(__file__).parent.parent
+        sys.path.insert(0, str(current_dir))
+        from automation.boss_applier import BossApplier
+        logger.info("成功加载 BossApplier from automation")
+    except Exception as e2:
         BossApplier = None
-        logger = logging.getLogger(__name__)
-        logger.error(f"加载 BossApplier 失败: {e}")
-else:
-    BossApplier = None
-    logger = logging.getLogger(__name__)
-    logger.warning(f"未找到自动投简历项目: {auto_apply_path}")
+        logger.error(f"加载 BossApplier 失败: {e}, {e2}")
 
 router = APIRouter(prefix="/api/simple-apply", tags=["无脑投递"])
 
@@ -145,12 +145,16 @@ async def init_login(request: LoginRequest):
         logger.info(f"用户 {request.phone} 开始初始化登录...")
         
         # 初始化浏览器
-        if not await applier._init_browser():
+        init_result = await applier._init_browser()
+        if not init_result:
             raise HTTPException(status_code=500, detail="浏览器初始化失败")
         
         # 访问登录页
         logger.info("正在访问登录页...")
-        await applier.page.goto(applier.login_url, wait_until='networkidle')
+        try:
+            await applier.page.goto(applier.login_url, wait_until='networkidle', timeout=30000)
+        except:
+            await applier.page.goto(applier.login_url, timeout=30000)
         await asyncio.sleep(2)
         
         # 点击手机号登录

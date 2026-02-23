@@ -5,22 +5,18 @@ import {
   DashboardOutlined,
   FileTextOutlined,
   SearchOutlined,
-  SendOutlined,
   HistoryOutlined,
   LoginOutlined,
   RobotOutlined,
-  ThunderboltOutlined,
   CloudOutlined,
   RocketOutlined,
 } from '@ant-design/icons';
 import Dashboard from './pages/Dashboard';
 import ResumeUploadSimple from './pages/ResumeUploadSimple';
 import JobSearch from './pages/JobSearch';
-import AutoApply from './pages/AutoApply';
 import Records from './pages/Records';
 import Login from './pages/Login';
 import ResumeAnalysis from './pages/ResumeAnalysis';
-import SmartApply from './pages/SmartApply';
 import OpenClawSearch from './pages/OpenClawSearch';
 import BossAutoApply from './pages/BossAutoApply';
 
@@ -52,16 +48,7 @@ const AppContent: React.FC = () => {
         { key: '/openclaw-search', icon: <CloudOutlined />, label: 'OpenClaw' },
       ]
     },
-    {
-      key: 'apply-group',
-      icon: <SendOutlined />,
-      label: '投递',
-      children: [
-        { key: '/boss-auto-apply', icon: <RocketOutlined />, label: 'Boss 自动投递' },
-        { key: '/apply', label: '自动投递' },
-        { key: '/smart-apply', icon: <ThunderboltOutlined />, label: '智能投递' },
-      ]
-    },
+    { key: '/boss-auto-apply', icon: <RocketOutlined />, label: '自动投递' },
     { key: '/records', icon: <HistoryOutlined />, label: '投递记录' },
   ];
 
@@ -108,8 +95,6 @@ const AppContent: React.FC = () => {
             <Route path="/search" element={<JobSearch />} />
             <Route path="/openclaw-search" element={<OpenClawSearch />} />
             <Route path="/boss-auto-apply" element={<BossAutoApply />} />
-            <Route path="/apply" element={<AutoApply />} />
-            <Route path="/smart-apply" element={<SmartApply />} />
             <Route path="/records" element={<Records />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

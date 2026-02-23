@@ -15,7 +15,9 @@ from api import (
     analysis,
     openclaw,
     smart_apply,
-    feishu
+    feishu,
+    boss_applier_api,
+    simple_apply
 )
 
 # 加载环境变量
@@ -52,6 +54,8 @@ app.include_router(analysis.router)
 app.include_router(openclaw.router)
 app.include_router(smart_apply.router)
 app.include_router(feishu.router)
+app.include_router(boss_applier_api.router)
+app.include_router(simple_apply.router)
 
 @app.get("/")
 async def root():

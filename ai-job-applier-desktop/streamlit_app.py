@@ -1,7 +1,9 @@
 """
 AI求职助手 - Gemini + Material Design 风格
 酷炫的渐变、动画和现代设计
+最后更新: 2026-02-24 09:26:36
 """
+
 import streamlit as st
 import requests
 import json

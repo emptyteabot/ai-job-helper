@@ -1,9 +1,7 @@
 """
 AI求职助手 - Gemini + Material Design 风格
 酷炫的渐变、动画和现代设计
-最后更新: 2026-02-24 09:26:36
 """
-
 import streamlit as st
 import requests
 import json
@@ -247,10 +245,16 @@ st.markdown("""
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* 全局文字大小 */
+/* 全局文字大小 - 全部白色 */
 .stMarkdown, .stText, p, div {
     font-size: 18px;
     line-height: 1.6;
+    color: white !important;
+}
+
+/* 步骤指示器文字白色 */
+.step-indicator div {
+    color: white !important;
 }
 
 /* Tab 标签样式 */
@@ -296,7 +300,7 @@ for i, step_name in enumerate(steps, 1):
     step_html += f'''
     <div class="step {status}">
         <div class="step-circle">{i}</div>
-        <div style="font-size: 14px; color: #5f6368; font-weight: 500;">{step_name}</div>
+        <div style="font-size: 14px; color: white; font-weight: 500;">{step_name}</div>
     </div>
     '''
 step_html += '</div>'
@@ -428,13 +432,177 @@ AI-Native 应用工程师
 
 with tab2:
     st.markdown('<div class="material-card">', unsafe_allow_html=True)
-    st.markdown("### 🚀 Boss 直聘自动投递")
+    
+    # Credits 购买区域
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 20px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 16px; margin-bottom: 32px;">
+        <h2 style="color: white; font-size: 36px; margin-bottom: 16px;">💎 选择您的投递套餐</h2>
+        <p style="color: rgba(255,255,255,0.9); font-size: 18px;">一次付费，后台自动投递，完成后邮件通知</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 定价卡片
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div style="background: white; padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="font-size: 14px; color: #666; margin-bottom: 8px;">体验包</div>
+            <div style="font-size: 32px; font-weight: bold; color: #333; margin-bottom: 4px;">¥19.9</div>
+            <div style="font-size: 24px; color: #10a37f; font-weight: bold; margin-bottom: 16px;">50个岗位</div>
+            <div style="font-size: 12px; color: #999;">¥0.40/个</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("选择体验包", key="buy_50", use_container_width=True):
+            st.session_state.selected_package = {"name": "体验包", "credits": 50, "price": 19.9}
+    
+    with col2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #10a37f 0%, #667eea 100%); padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 4px 12px rgba(16,163,127,0.3); position: relative;">
+            <div style="position: absolute; top: -10px; right: 10px; background: #ff4d4f; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px;">🔥 最热</div>
+            <div style="font-size: 14px; color: rgba(255,255,255,0.9); margin-bottom: 8px;">标准包</div>
+            <div style="font-size: 32px; font-weight: bold; color: white; margin-bottom: 4px;">¥39.9</div>
+            <div style="font-size: 24px; color: white; font-weight: bold; margin-bottom: 16px;">150个岗位</div>
+            <div style="font-size: 12px; color: rgba(255,255,255,0.8);">¥0.27/个</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("选择标准包", key="buy_150", use_container_width=True, type="primary"):
+            st.session_state.selected_package = {"name": "标准包", "credits": 150, "price": 39.9}
+    
+    with col3:
+        st.markdown("""
+        <div style="background: white; padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="font-size: 14px; color: #666; margin-bottom: 8px;">专业包</div>
+            <div style="font-size: 32px; font-weight: bold; color: #333; margin-bottom: 4px;">¥69.9</div>
+            <div style="font-size: 24px; color: #10a37f; font-weight: bold; margin-bottom: 16px;">300个岗位</div>
+            <div style="font-size: 12px; color: #999;">¥0.23/个</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("选择专业包", key="buy_300", use_container_width=True):
+            st.session_state.selected_package = {"name": "专业包", "credits": 300, "price": 69.9}
+    
+    with col4:
+        st.markdown("""
+        <div style="background: white; padding: 24px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <div style="font-size: 14px; color: #666; margin-bottom: 8px;">旗舰包</div>
+            <div style="font-size: 32px; font-weight: bold; color: #333; margin-bottom: 4px;">¥129.9</div>
+            <div style="font-size: 24px; color: #10a37f; font-weight: bold; margin-bottom: 16px;">700个岗位</div>
+            <div style="font-size: 12px; color: #999;">¥0.19/个</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("选择旗舰包", key="buy_700", use_container_width=True):
+            st.session_state.selected_package = {"name": "旗舰包", "credits": 700, "price": 129.9}
+    
+    # 如果选择了套餐，显示购买表单
+    if 'selected_package' in st.session_state:
+        st.markdown("---")
+        pkg = st.session_state.selected_package
+        
+        st.success(f"✅ 已选择：{pkg['name']} - {pkg['credits']}个岗位 - ¥{pkg['price']}")
+        
+        col_form1, col_form2 = st.columns([2, 1])
+        
+        with col_form1:
+            st.markdown("### 📝 填写投递信息")
+            
+            email = st.text_input("📧 邮箱", placeholder="接收投递结果通知", key="email_input")
+            resume_text = st.text_area("📄 简历内容", placeholder="粘贴您的简历...", height=200, value=st.session_state.resume_text, key="resume_buy_input")
+            keyword = st.text_input("🔍 岗位关键词", placeholder="例如：Python工程师", value="Python工程师", key="keyword_buy_input")
+            city = st.text_input("📍 城市", placeholder="例如：北京", value="北京", key="city_buy_input")
+            
+            st.markdown("### 💳 支付方式")
+            payment_method = st.radio("", ["支付宝", "微信支付"], horizontal=True, key="payment_method")
+            
+            if st.button("🚀 立即购买并开始投递", type="primary", use_container_width=True, key="confirm_buy"):
+                if not email or not resume_text:
+                    st.error("❌ 请填写邮箱和简历内容")
+                else:
+                    with st.spinner("正在创建订单..."):
+                        try:
+                            # 调用后端创建订单
+                            response = requests.post(
+                                f"{BACKEND_URL}/api/credits/purchase",
+                                json={
+                                    "email": email,
+                                    "package": pkg['name'],
+                                    "credits": pkg['credits'],
+                                    "price": pkg['price'],
+                                    "payment_method": payment_method,
+                                    "resume_text": resume_text,
+                                    "job_keyword": keyword,
+                                    "city": city
+                                },
+                                timeout=30
+                            )
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                if data.get('success'):
+                                    st.success("✅ 订单创建成功！")
+                                    st.info(f"""
+                                    📧 投递任务已加入队列
+                                    
+                                    - 投递数量：{pkg['credits']} 个岗位
+                                    - 预计时间：{pkg['credits'] * 5 // 60} 分钟
+                                    - 通知邮箱：{email}
+                                    
+                                    您可以关闭此页面，完成后会发送邮件通知！
+                                    """)
+                                    
+                                    # 显示支付二维码（模拟）
+                                    st.markdown(f"""
+                                    <div style="text-align: center; padding: 32px; background: white; border-radius: 12px; margin-top: 16px;">
+                                        <h3 style="color: #333;">扫码支付 ¥{pkg['price']}</h3>
+                                        <div style="width: 200px; height: 200px; background: #f0f0f0; margin: 16px auto; display: flex; align-items: center; justify-content: center; border-radius: 8px;">
+                                            <p style="color: #999;">支付二维码</p>
+                                        </div>
+                                        <p style="color: #666; font-size: 14px;">使用{payment_method}扫码支付</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                else:
+                                    st.error(f"❌ {data.get('message', '创建订单失败')}")
+                            else:
+                                st.error(f"❌ 服务器错误: HTTP {response.status_code}")
+                        except Exception as e:
+                            st.error(f"❌ 连接失败: {str(e)}")
+        
+        with col_form2:
+            st.markdown("### ✨ 服务说明")
+            st.info("""
+            **购买后流程**
+            
+            1. ✅ 支付完成
+            2. 🤖 后台自动投递
+            3. 📸 记录投递截图
+            4. 📧 邮件发送结果
+            
+            **邮件包含**
+            
+            - 投递成功数量
+            - 投递失败原因
+            - 所有投递截图
+            - PDF 详细报告
+            
+            **注意事项**
+            
+            - 付款后可关闭页面
+            - 投递失败自动退款
+            - 7×24小时自动执行
+            """)
     
     # 初始化 session state
     if 'login_step' not in st.session_state:
-        st.session_state.login_step = 0  # 0: 未登录, 1: 等待验证码, 2: 已登录
+        st.session_state.login_step = 0
     if 'phone' not in st.session_state:
         st.session_state.phone = ""
+    
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; padding: 20px; background: rgba(255,255,255,0.1); border-radius: 12px; margin-top: 32px;">
+        <h3 style="color: white;">🎯 或使用传统方式（需登录）</h3>
+        <p style="color: rgba(255,255,255,0.8);">适合需要实时查看投递进度的用户</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # 步骤 1：输入手机号
     if st.session_state.login_step == 0:

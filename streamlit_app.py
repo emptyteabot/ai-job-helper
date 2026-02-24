@@ -245,11 +245,22 @@ st.markdown("""
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* 全局文字大小 - 全部白色 */
+/* 全局文字大小 */
 .stMarkdown, .stText, p, div {
     font-size: 18px;
     line-height: 1.6;
+}
+
+/* 背景区域文字白色 */
+.hero-section, .hero-section *, 
+div[style*="background: linear-gradient"] *,
+div[style*="background: rgba(255,255,255,0.1)"] * {
     color: white !important;
+}
+
+/* 卡片内容黑色 */
+.material-card, .material-card * {
+    color: #333 !important;
 }
 
 /* 步骤指示器文字白色 */
@@ -325,6 +336,13 @@ with tab1:
         )
 
         if uploaded_file:
+            # 读取文件内容
+            if uploaded_file.type == "text/plain":
+                st.session_state.resume_text = uploaded_file.read().decode("utf-8")
+            else:
+                # PDF/DOCX 需要解析，暂时提示用户粘贴
+                st.warning("⚠️ PDF/DOCX 文件需要解析，请直接粘贴简历文本")
+            
             st.success(f"✅ 已上传: {uploaded_file.name}")
             st.session_state.step = max(st.session_state.step, 1)
 

@@ -1,0 +1,722 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI求职助手 | 全功能工作台</title>
+  <style>
+    :root {
+      --bg: #f4f8ff;
+      --card: #ffffff;
+      --line: #d8e2f2;
+      --text: #0f172a;
+      --muted: #475569;
+      --main: #0b69ff;
+      --ok: #0f7b3c;
+      --err: #b42318;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 6% -16%, #dcecff, transparent 42%),
+        radial-gradient(circle at 110% -24%, #dcfff4, transparent 42%),
+        var(--bg);
+      padding: 14px;
+    }
+    .wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 10px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 8px 24px rgba(18, 64, 129, 0.08);
+    }
+    h1 { font-size: 26px; margin-bottom: 6px; }
+    h2 { font-size: 18px; margin-bottom: 8px; }
+    p { color: var(--muted); font-size: 13px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea {
+      width: 100%;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea { min-height: 112px; resize: vertical; }
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    button.main { background: var(--main); border-color: var(--main); color: #fff; }
+    .status {
+      display: flex;
+      justify-content: space-between;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    .ok { color: var(--ok); }
+    .err { color: var(--err); }
+    .pill {
+      display: inline-block;
+      border: 1px solid #bfd7ff;
+      background: #edf4ff;
+      color: #1e4e8c;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 12px;
+    }
+    .box {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #f8fbff;
+      padding: 8px;
+      margin-top: 8px;
+    }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .jobs { display: grid; gap: 6px; max-height: 260px; overflow: auto; margin-top: 8px; }
+    .job {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 12px;
+      background: #fff;
+    }
+    .job b { display: block; margin-bottom: 3px; }
+    .job a { color: var(--main); word-break: break-all; text-decoration: none; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 6px;
+      text-align: left;
+      word-break: break-word;
+    }
+    th { background: #f4f9ff; }
+    .mini { font-size: 12px; color: var(--muted); }
+    .tight input { min-width: 180px; flex: 1; }
+    @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="card">
+      <h1>简历输入 -> 分析引擎 -> Skills图谱 -> 渲染 -> 岗位 -> 投递</h1>
+      <p>这是统一工作台。默认海投策略已启用（多平台fallback + 大批量投递）。</p>
+      <div class="row">
+        <a href="/app">工作台</a>
+        <span class="pill">策略: HAITOU v1</span>
+      </div>
+      <div class="status"><span id="sText">就绪</span><span id="sFlag" class="ok">READY</span></div>
+    </section>
+
+    <section class="card">
+      <h2>1) 上传/粘贴简历</h2>
+      <p>支持 PDF/DOCX/DOC/TXT/MD/图片，PDF自动 force_ocr=1。</p>
+      <div class="row">
+        <input id="file" type="file" accept=".pdf,.doc,.docx,.txt,.md,.markdown,.jpg,.jpeg,.png,.bmp,.gif" />
+        <button id="up">上传并解析</button>
+        <button id="sample">示例简历</button>
+        <button id="clear">清空</button>
+      </div>
+      <textarea id="resume" placeholder="简历文本"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>2) 分析引擎（市场引擎 + 多Agent）</h2>
+      <div class="row">
+        <select id="engine">
+          <option value="market">市场引擎（稳定）</option>
+          <option value="multi-agent">多Agent深度分析</option>
+        </select>
+        <button id="analyze" class="main">开始分析</button>
+        <button id="analyzeMulti">只跑多Agent</button>
+        <button id="dl">下载分析JSON</button>
+        <span id="provider" class="pill">来源: -</span>
+      </div>
+      <div class="grid">
+        <div class="box"><b>职业分析</b><pre id="career">-</pre></div>
+        <div class="box"><b>岗位推荐文本</b><pre id="jobrec">-</pre></div>
+        <div class="box"><b>优化后简历</b><pre id="resumeOut">-</pre></div>
+        <div class="box"><b>面试准备/模拟</b><pre id="interview">-</pre></div>
+      </div>
+      <div class="box"><b>Skills图谱</b><pre id="skillsOut">-</pre></div>
+      <div class="jobs" id="jobsA"></div>
+    </section>
+
+    <section class="card">
+      <h2>3) 结构化 + 碎片补充</h2>
+      <div class="row">
+        <button id="structure" class="main">结构化简历</button>
+        <span class="pill">Profile: <span id="pid">-</span></span>
+      </div>
+      <div class="grid">
+        <div>
+          <label>碎片内容</label>
+          <textarea id="frag" placeholder="例如：做过推荐系统召回、排序链路。"></textarea>
+          <label>板块(可选)</label>
+          <input id="section" type="text" placeholder="experience/projects/skills" />
+          <div class="row"><button id="merge">合并碎片</button></div>
+        </div>
+        <div class="box"><b>结构化JSON预览</b><pre id="profile">-</pre></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4) 模板渲染导出</h2>
+      <div class="row">
+        <select id="tpl"></select>
+        <select id="fmt"><option value="pdf">pdf</option><option value="html">html</option></select>
+        <button id="render" class="main">生成文件</button>
+        <a id="download" href="#" target="_blank" rel="noopener noreferrer">下载</a>
+      </div>
+      <p id="renderMeta">未生成</p>
+    </section>
+
+    <section class="card">
+      <h2>5) 岗位检索</h2>
+      <div class="row">
+        <input id="kw" type="text" value="python,fastapi,后端" />
+        <input id="city" type="text" value="上海" />
+        <input id="limit" type="number" value="8" min="1" max="30" />
+        <button id="search">搜索岗位</button>
+      </div>
+      <div class="jobs" id="jobsB"></div>
+    </section>
+
+    <section class="card">
+      <h2>6) 批量邮件投递（建议先开 dry-run）</h2>
+      <div class="grid">
+        <div>
+          <div class="row">
+            <select id="preset"></select>
+            <select id="emailTpl"></select>
+          </div>
+          <div class="row">
+            <input id="host" type="text" placeholder="smtp host" />
+            <input id="port" type="number" placeholder="port" />
+          </div>
+          <div class="row">
+            <input id="user" type="text" placeholder="发件邮箱" />
+            <input id="pass" type="password" placeholder="SMTP授权码/密码" />
+          </div>
+          <div class="row">
+            <label><input id="tls" type="checkbox" checked /> TLS</label>
+            <label><input id="dry" type="checkbox" checked /> dry-run</label>
+          </div>
+          <label>联系人（每行：email,name,company,job_title）</label>
+          <textarea id="contacts">hr1@example.com,张三,示例公司,后端工程师
+hr2@example.com,李四,AI公司,AI工程师</textarea>
+          <label>标题模板</label>
+          <input id="subject" type="text" value="应聘咨询 - {candidate_name}" />
+          <label>正文模板(HTML，可空)</label>
+          <textarea id="body" placeholder="空则用系统默认模板"></textarea>
+          <div class="row">
+            <input id="hLimit" type="number" value="30" min="1" max="300" />
+            <input id="dLimit" type="number" value="100" min="1" max="1000" />
+            <button id="send" class="main">发送批量邮件</button>
+          </div>
+        </div>
+        <div>
+          <div class="box"><b>发送结果</b><pre id="mailOut">-</pre></div>
+          <div class="box"><b>历史</b><div id="history"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>7) GitHub高星自动投递（AIHawk集成）</h2>
+      <p>这里是高星模块入口。若 AIHawk 缺插件，会自动切到内置多平台自动投递。</p>
+      <div class="row">
+        <button id="ghHealth">检查AIHawk能力</button>
+        <button id="ghStart" class="main">启动高星任务</button>
+        <button id="ghStatus">刷新任务状态</button>
+      </div>
+      <div class="row">
+        <input id="ghKeywords" type="text" placeholder="关键词，逗号分隔" value="Python,AI,后端" />
+        <input id="ghLocations" type="text" placeholder="城市，逗号分隔" value="上海,北京" />
+        <input id="ghMax" type="number" min="1" max="100" value="80" readonly />
+      </div>
+      <div class="row">
+        <label><input id="ghFallback" type="checkbox" checked disabled /> 海投策略固定开启</label>
+        <label><input id="ghHeadless" type="checkbox" checked disabled /> 无头模式固定开启</label>
+        <label><input id="ghUseAI" type="checkbox" checked /> AI自动回答</label>
+      </div>
+      <div class="row">
+        <span class="mini">fallback平台：</span>
+        <label><input id="ghPlBoss" type="checkbox" checked disabled /> boss</label>
+        <label><input id="ghPlZhilian" type="checkbox" checked disabled /> zhilian</label>
+        <label><input id="ghPlLinkedin" type="checkbox" checked disabled /> linkedin</label>
+      </div>
+      <div class="grid">
+        <div class="box">
+          <b>BOSS 凭据</b>
+          <div class="row tight">
+            <input id="ghBossPhone" type="text" placeholder="手机号(必填才可启用 boss)" />
+          </div>
+        </div>
+        <div class="box">
+          <b>智联凭据</b>
+          <div class="row tight">
+            <input id="ghZhilianUser" type="text" placeholder="账号" />
+            <input id="ghZhilianPass" type="password" placeholder="密码" />
+          </div>
+        </div>
+        <div class="box">
+          <b>LinkedIn 凭据</b>
+          <div class="row tight">
+            <input id="ghLinkedinEmail" type="text" placeholder="邮箱" />
+            <input id="ghLinkedinPass" type="password" placeholder="密码" />
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <input id="ghCodeTask" type="text" placeholder="任务ID（可空，默认用当前GitHub任务）" />
+        <input id="ghSmsCode" type="text" placeholder="短信验证码" />
+        <button id="ghSubmitCode">提交验证码继续任务</button>
+        <button id="ghResendCode">重发验证码</button>
+      </div>
+      <div class="box"><b>能力检测</b><pre id="ghHealthOut">-</pre></div>
+      <div class="box"><b>任务状态</b><pre id="ghTaskOut">-</pre></div>
+      <div class="box"><b>最近任务</b><pre id="ghHistoryOut">-</pre></div>
+    </section>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const S = { pid: "", presets: {}, ghTaskId: "" };
+
+    function status(text, kind) {
+      $("sText").textContent = text;
+      $("sFlag").textContent = (kind || "info").toUpperCase();
+      $("sFlag").className = kind === "ok" ? "ok" : kind === "err" ? "err" : "";
+    }
+
+    const j = (x) => {
+      try { return JSON.stringify(x, null, 2); } catch { return String(x || ""); }
+    };
+
+    async function api(url, opt = {}, timeout = 45000) {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), timeout);
+      try {
+        const r = await fetch(url, { ...opt, signal: c.signal });
+        const txt = await r.text();
+        let d = {};
+        try { d = txt ? JSON.parse(txt) : {}; }
+        catch { throw new Error("返回非JSON: " + txt.slice(0, 120)); }
+        if (!r.ok) throw new Error(d.detail || d.error || d.message || ("HTTP " + r.status));
+        return d;
+      } finally { clearTimeout(t); }
+    }
+
+    function mustResume() {
+      const t = $("resume").value.trim();
+      if (!t) throw new Error("请先上传或粘贴简历");
+      return t;
+    }
+
+    function renderJobs(el, arr) {
+      if (!Array.isArray(arr) || !arr.length) {
+        el.innerHTML = "<div class='job'>暂无岗位数据</div>";
+        return;
+      }
+      el.innerHTML = arr.map((x) => {
+        const title = x.title || x.job_title || "未知岗位";
+        const company = x.company || "未知公司";
+        const loc = x.location || "-";
+        const link = x.link || x.apply_url || "";
+        const p = x.platform || x.provider || "-";
+        const sal = x.salary || x.salary_range || "";
+        return `<div class='job'><b>${title}</b><div>${company} | ${loc}${sal ? " | " + sal : ""}</div><div>来源: ${p}</div>${link ? `<a href='${link}' target='_blank' rel='noopener noreferrer'>打开岗位链接</a>` : "<span>无链接</span>"}</div>`;
+      }).join("");
+    }
+
+    function parseContacts(text) {
+      return String(text || "").split(/\r?\n/).map(x => x.trim()).filter(Boolean).map((row) => {
+        const p = row.split(",").map(x => (x || "").trim());
+        return { email: p[0] || "", name: p[1] || "", company: p[2] || "", job_title: p[3] || "" };
+      }).filter(x => x.email.includes("@"));
+    }
+
+    function parseCsvList(text) {
+      return String(text || "")
+        .split(/[,\n]/)
+        .map(x => x.trim())
+        .filter(Boolean);
+    }
+
+    function selectedGhPlatforms() {
+      return ["boss", "zhilian", "linkedin"];
+    }
+
+    function fillProcessOutput(d) {
+      $("career").textContent = d.career_analysis || "-";
+      $("jobrec").textContent = d.job_recommendations || "-";
+      $("resumeOut").textContent = d.optimized_resume || "-";
+      $("interview").textContent = [d.interview_prep || "", d.mock_interview || ""].filter(Boolean).join("\n\n") || "-";
+      $("provider").textContent = "来源: " + (d.job_provider_mode || d.engine_mode || "-");
+      renderJobs($("jobsA"), d.recommended_jobs || []);
+      if (d.skills_graph) {
+        $("skillsOut").textContent = j(d.skills_graph);
+      }
+    }
+
+    async function analyzeByEngine(engine) {
+      const resume = mustResume();
+      const endpoint = engine === "multi-agent" ? "/api/process/multi-agent" : "/api/process";
+      status("分析中...", "");
+      const d = await api(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume })
+      }, 240000);
+      if (!d.success) throw new Error(d.error || "分析失败");
+      fillProcessOutput(d);
+      if (!d.skills_graph) {
+        const sk = await api("/api/skills/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resume_text: resume })
+        }, 90000);
+        $("skillsOut").textContent = j(sk.skills_graph || sk);
+      }
+      status("分析完成", "ok");
+    }
+
+    async function upload() {
+      const f = $("file").files && $("file").files[0];
+      if (!f) throw new Error("请先选择文件");
+      const fd = new FormData();
+      fd.append("file", f);
+      if ((f.name || "").toLowerCase().endsWith(".pdf")) fd.append("force_ocr", "1");
+      status("上传解析中...", "");
+      const d = await api("/api/upload", { method: "POST", body: fd }, 120000);
+      if (!d.success) throw new Error(d.error || "上传失败");
+      $("resume").value = d.resume_text || "";
+      status("上传成功: " + (d.filename || f.name), "ok");
+    }
+
+    async function structure() {
+      const resume = mustResume();
+      status("结构化中...", "");
+      const d = await api("/api/resume/structure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_text: resume })
+      }, 120000);
+      if (!d.success) throw new Error(d.error || "结构化失败");
+      const p = d.profile || {};
+      S.pid = p.profile_id || "";
+      $("pid").textContent = S.pid || "-";
+      $("profile").textContent = j(p.resume_json || p);
+      status("结构化完成(" + (d.source || "unknown") + ")", "ok");
+    }
+
+    async function merge() {
+      if (!S.pid) throw new Error("请先结构化简历");
+      const t = $("frag").value.trim();
+      if (!t) throw new Error("碎片内容为空");
+      status("碎片合并中...", "");
+      const d = await api(`/api/resume/profiles/${S.pid}/fragment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fragment_text: t, section: $("section").value.trim() || null })
+      }, 120000);
+      if (!d.success) throw new Error(d.error || "合并失败");
+      $("profile").textContent = j((d.profile || {}).resume_json || d.profile || {});
+      status("碎片合并完成", "ok");
+    }
+
+    async function renderResume() {
+      if (!S.pid) throw new Error("请先结构化简历");
+      status("渲染中...", "");
+      const d = await api("/api/resume/render", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profile_id: S.pid, template: $("tpl").value, format: $("fmt").value })
+      }, 120000);
+      if (!d.success) throw new Error(d.error || "渲染失败");
+      const doc = d.document || {};
+      $("download").href = doc.download_url || "#";
+      $("renderMeta").textContent = `doc_id=${doc.doc_id || "-"} format=${doc.format || "-"} size=${doc.file_size || "-"}`;
+      status("渲染完成", "ok");
+    }
+
+    async function searchJobs() {
+      status("岗位检索中...", "");
+      const qs = new URLSearchParams({
+        keywords: $("kw").value.trim(),
+        location: $("city").value.trim(),
+        limit: String(parseInt($("limit").value || "8", 10) || 8),
+        allow_portal_fallback: "true"
+      });
+      const d = await api("/api/jobs/search?" + qs.toString(), {}, 120000);
+      if (!d.success) throw new Error(d.error || "检索失败");
+      renderJobs($("jobsB"), d.jobs || []);
+      status("岗位检索完成(" + (d.provider_mode || "-") + ")", "ok");
+    }
+
+    function applyPreset(name) {
+      const p = S.presets[name] || {};
+      $("host").value = p.host || "";
+      $("port").value = p.port || "";
+      $("tls").checked = !!p.use_tls;
+    }
+
+    async function sendEmailBatch() {
+      if (!S.pid) throw new Error("请先结构化简历");
+      const payload = {
+        smtp: {
+          host: $("host").value.trim(),
+          port: parseInt($("port").value || "0", 10),
+          username: $("user").value.trim(),
+          password: $("pass").value,
+          use_tls: $("tls").checked,
+        },
+        contacts: parseContacts($("contacts").value),
+        profile_id: S.pid,
+        template: $("emailTpl").value,
+        dry_run: $("dry").checked,
+        subject_template: $("subject").value.trim() || undefined,
+        body_template: $("body").value.trim() || undefined,
+        max_hourly: parseInt($("hLimit").value || "30", 10),
+        max_daily: parseInt($("dLimit").value || "100", 10),
+        attach_pdf: true,
+      };
+      if (!payload.smtp.host || !payload.smtp.port || !payload.smtp.username || !payload.smtp.password) {
+        throw new Error("SMTP参数不完整");
+      }
+      if (!payload.contacts.length) throw new Error("联系人为空/格式错误");
+      status("批量投递中...", "");
+      const d = await api("/api/email/send-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }, 180000);
+      if (!d.success) throw new Error(d.error || "发送失败");
+      $("mailOut").textContent = j(d.result || d);
+      await loadEmailHistory();
+      status("批量投递完成", "ok");
+    }
+
+    async function loadEmailHistory() {
+      const d = await api("/api/email/history?limit=8");
+      const arr = Array.isArray(d.items) ? d.items : [];
+      if (!arr.length) { $("history").innerHTML = "暂无历史"; return; }
+      $("history").innerHTML = `<table><thead><tr><th>时间</th><th>收件人</th><th>状态</th><th>错误</th></tr></thead><tbody>${arr.map(x => `<tr><td>${x.created_at || "-"}</td><td>${x.recipient_email || "-"}</td><td>${x.status || "-"}</td><td>${x.error_message || "-"}</td></tr>`).join("")}</tbody></table>`;
+    }
+
+    async function ghHealth() {
+      const d = await api("/api/github-auto-apply/health", {}, 60000);
+      const cap = d.capability || {};
+      $("ghHealthOut").textContent = j(cap);
+      const canRun = !!cap.can_run;
+      const canPrepare = !!cap.can_prepare;
+      if (canRun) {
+        status("AIHawk可直接运行", "ok");
+      } else if (canPrepare) {
+        status("AIHawk可准备配置，运行将走fallback", "");
+      } else {
+        status("AIHawk环境不完整，需先修复依赖", "err");
+      }
+    }
+
+    async function ghStart() {
+      const resume = mustResume();
+      const fallbackPlatforms = selectedGhPlatforms();
+      const payload = {
+        resume_text: resume,
+        keywords: parseCsvList($("ghKeywords").value),
+        locations: parseCsvList($("ghLocations").value),
+        max_count: 80,
+        profile_id: S.pid || undefined,
+        enable_fallback_auto_apply: true,
+        fallback_platforms: fallbackPlatforms,
+        headless: true,
+        use_ai_answers: $("ghUseAI").checked,
+        boss_phone: $("ghBossPhone").value.trim() || undefined,
+        zhilian_username: $("ghZhilianUser").value.trim() || undefined,
+        zhilian_password: $("ghZhilianPass").value || undefined,
+        linkedin_email: $("ghLinkedinEmail").value.trim() || undefined,
+        linkedin_password: $("ghLinkedinPass").value || undefined,
+        boss_config: {
+          phone: $("ghBossPhone").value.trim() || undefined,
+        },
+        zhilian_config: {
+          username: $("ghZhilianUser").value.trim() || undefined,
+          password: $("ghZhilianPass").value || undefined,
+        },
+        linkedin_config: {
+          email: $("ghLinkedinEmail").value.trim() || undefined,
+          password: $("ghLinkedinPass").value || undefined,
+        },
+      };
+      status("启动高星任务中...", "");
+      const d = await api("/api/github-auto-apply/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }, 90000);
+      S.ghTaskId = d.task_id || "";
+      $("ghTaskOut").textContent = j(d);
+      await ghStatus();
+      status("高星任务已启动", "ok");
+    }
+
+    async function ghStatus() {
+      if (!S.ghTaskId) {
+        const h = await api("/api/github-auto-apply/history?limit=1", {}, 60000);
+        const first = (h.tasks || [])[0] || {};
+        if (first.task_id) S.ghTaskId = first.task_id;
+      }
+      if (S.ghTaskId) {
+        const d = await api(`/api/github-auto-apply/status/${S.ghTaskId}`, {}, 60000);
+        $("ghTaskOut").textContent = j(d);
+      }
+      const his = await api("/api/github-auto-apply/history?limit=5", {}, 60000);
+      $("ghHistoryOut").textContent = j(his.tasks || []);
+    }
+
+    async function ghSubmitCode() {
+      const code = ($("ghSmsCode").value || "").trim();
+      if (!code) throw new Error("请填写短信验证码");
+      const taskId = ($("ghCodeTask").value || "").trim();
+      const payload = taskId
+        ? { task_id: taskId, code }
+        : { gh_task_id: S.ghTaskId || undefined, code };
+      status("提交验证码中...", "");
+      const d = await api("/api/auto-apply/boss/submit-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }, 60000);
+      $("ghTaskOut").textContent = j(d);
+      status("验证码已提交，任务继续执行", "ok");
+      await ghStatus();
+    }
+
+    async function ghResendCode() {
+      const taskId = ($("ghCodeTask").value || "").trim();
+      const payload = taskId
+        ? { task_id: taskId }
+        : { gh_task_id: S.ghTaskId || undefined };
+      status("请求重发验证码中...", "");
+      const d = await api("/api/auto-apply/boss/resend-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      }, 60000);
+      $("ghTaskOut").textContent = j(d);
+      status("已请求重发验证码", "ok");
+      await ghStatus();
+    }
+
+    async function boot() {
+      status("初始化中...", "");
+
+      $("up").onclick = () => run(upload);
+      $("sample").onclick = () => {
+        $("resume").value = [
+          "Yinghua Chen",
+          "AI Engineer",
+          "Skills: Python, FastAPI, React, SQL, Docker",
+          "Experience: Built resume/job automation workflows, prompt engineering, and data pipelines."
+        ].join("\n");
+        status("示例已填充", "ok");
+      };
+      $("clear").onclick = () => {
+        $("resume").value = "";
+        $("frag").value = "";
+        S.pid = "";
+        $("pid").textContent = "-";
+        $("profile").textContent = "-";
+        $("skillsOut").textContent = "-";
+        status("已清空", "ok");
+      };
+
+      $("analyze").onclick = () => run(() => analyzeByEngine($("engine").value === "multi-agent" ? "multi-agent" : "market"));
+      $("analyzeMulti").onclick = () => run(() => analyzeByEngine("multi-agent"));
+      $("structure").onclick = () => run(structure);
+      $("merge").onclick = () => run(merge);
+      $("render").onclick = () => run(renderResume);
+      $("search").onclick = () => run(searchJobs);
+      $("send").onclick = () => run(sendEmailBatch);
+      $("ghHealth").onclick = () => run(ghHealth);
+      $("ghStart").onclick = () => run(ghStart);
+      $("ghStatus").onclick = () => run(ghStatus);
+      $("ghSubmitCode").onclick = () => run(ghSubmitCode);
+      $("ghResendCode").onclick = () => run(ghResendCode);
+
+      $("dl").onclick = () => {
+        const txt = j({
+          career: $("career").textContent,
+          job_recommendations: $("jobrec").textContent,
+          optimized_resume: $("resumeOut").textContent,
+          interview: $("interview").textContent,
+          skills_graph: $("skillsOut").textContent,
+        });
+        const b = new Blob([txt], { type: "application/json;charset=utf-8" });
+        const u = URL.createObjectURL(b);
+        const a = document.createElement("a");
+        a.href = u;
+        a.download = "analysis-result.json";
+        a.click();
+        URL.revokeObjectURL(u);
+      };
+
+      let ts = ["classic", "modern", "minimal"];
+      try {
+        const tp = await api("/api/resume/templates");
+        if (Array.isArray(tp.templates) && tp.templates.length) ts = tp.templates;
+      } catch (e) {
+        console.warn("load templates failed", e);
+      }
+      $("tpl").innerHTML = ts.map(x => `<option value='${x}'>${x}</option>`).join("");
+      $("emailTpl").innerHTML = ts.map(x => `<option value='${x}'>${x}</option>`).join("");
+
+      try {
+        const ep = await api("/api/email/presets");
+        S.presets = ep.presets || {};
+      } catch (e) {
+        console.warn("load email presets failed", e);
+        S.presets = {};
+      }
+      const names = Object.keys(S.presets);
+      if (names.length) {
+        $("preset").innerHTML = names.map(x => `<option value='${x}'>${x}</option>`).join("");
+        applyPreset(names[0]);
+        $("preset").onchange = () => applyPreset($("preset").value);
+      } else {
+        $("preset").innerHTML = "<option value=''>无预设</option>";
+      }
+
+      await Promise.allSettled([loadEmailHistory(), ghHealth(), ghStatus()]);
+      status("就绪", "ok");
+    }
+
+    async function run(fn) {
+      try { await fn(); }
+      catch (e) { status((e && e.message) || "失败", "err"); }
+    }
+
+    boot().catch((e) => status((e && e.message) || "初始化失败", "err"));
+  </script>
+</body>
+</html>

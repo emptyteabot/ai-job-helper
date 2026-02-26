@@ -4,11 +4,14 @@ Boss直聘自动投递器
 """
 
 import asyncio
+import os
 import random
+import re
 import time
 import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from pathlib import Path
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 
 try:
@@ -47,6 +50,10 @@ class BossApplier(BaseApplier):
         self.base_url = "https://www.zhipin.com"
         self.login_url = "https://login.zhipin.com/"
         self.jobs_url = "https://www.zhipin.com/web/geek/job"
+        self.storage_state_path = str(Path(".cache/sessions/boss_storage_state.json"))
+        self.sms_code_fetcher = self.config.get("sms_code_fetcher") if callable(self.config.get("sms_code_fetcher")) else None
+        self.control_action_fetcher = self.config.get("control_action_fetcher") if callable(self.config.get("control_action_fetcher")) else None
+        self.progress_hook = self.config.get("progress_hook") if callable(self.config.get("progress_hook")) else None
 
         # 反爬虫配置
         self.user_agents = [
@@ -54,6 +61,17 @@ class BossApplier(BaseApplier):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         ]
+
+    def _report_progress(self, stage: str, message: str, extra: Optional[Dict[str, Any]] = None):
+        if not self.progress_hook:
+            return
+        payload = {"stage": stage, "message": message}
+        if isinstance(extra, dict):
+            payload.update(extra)
+        try:
+            self.progress_hook(payload)
+        except Exception:
+            pass
 
     async def _init_browser(self):
         """初始化浏览器（带反检测）"""
@@ -74,17 +92,22 @@ class BossApplier(BaseApplier):
             )
 
             # 创建上下文（伪造指纹）
-            self.context = await self.browser.new_context(
-                user_agent=random.choice(self.user_agents),
-                viewport={'width': 1920, 'height': 1080},
-                locale='zh-CN',
-                timezone_id='Asia/Shanghai',
-                permissions=['geolocation'],
-                geolocation={'latitude': 39.9042, 'longitude': 116.4074},  # 北京
-            )
+            context_kwargs: Dict[str, Any] = {
+                "user_agent": random.choice(self.user_agents),
+                "viewport": {'width': 1920, 'height': 1080},
+                "locale": 'zh-CN',
+                "timezone_id": 'Asia/Shanghai',
+                "permissions": ['geolocation'],
+                "geolocation": {'latitude': 39.9042, 'longitude': 116.4074},  # 北京
+            }
+            if os.path.exists(self.storage_state_path):
+                context_kwargs["storage_state"] = self.storage_state_path
+            self.context = await self.browser.new_context(**context_kwargs)
 
             # 创建页面
             self.page = await self.context.new_page()
+            self.page.set_default_timeout(int(self.config.get("timeout_ms", 30000)))
+            self.page.set_default_navigation_timeout(int(self.config.get("navigation_timeout_ms", 60000)))
 
             # 应用 Stealth 模式（终极反检测）
             await stealth_async(self.page)
@@ -179,18 +202,27 @@ class BossApplier(BaseApplier):
         Returns:
             bool: 登录是否成功
         """
-        return asyncio.run(self._async_login(phone))
+        # Boss 这里把第二个参数复用为短信验证码，保持接口兼容
+        sms_code = str(password or self.config.get("sms_code") or "").strip() or None
+        return asyncio.run(self._async_login(phone, sms_code=sms_code))
 
-    async def _async_login(self, phone: str) -> bool:
+    async def _async_login(self, phone: str, sms_code: Optional[str] = None) -> bool:
         """异步登录"""
         try:
             # 初始化浏览器
             if not await self._init_browser():
                 return False
 
+            # 优先尝试复用历史登录态，避免每次都发验证码。
+            if await self._try_reuse_session():
+                logger.info("复用 Boss 登录态成功")
+                self._report_progress("login_success", "已复用登录态，无需验证码")
+                return True
+
             # 访问登录页
             logger.info("正在访问登录页...")
-            await self.page.goto(self.login_url, wait_until='networkidle')
+            self._report_progress("login_open", "正在打开 Boss 登录页")
+            await self.page.goto(self.login_url, wait_until='domcontentloaded', timeout=60000)
             await self._random_delay(1, 2)
 
             # 点击手机号登录
@@ -203,7 +235,9 @@ class BossApplier(BaseApplier):
 
             # 输入手机号
             logger.info("输入手机号...")
-            phone_input = await self.page.wait_for_selector('input[placeholder*="手机号"]', timeout=5000)
+            phone_input = await self._find_phone_input()
+            if not phone_input:
+                raise RuntimeError("未找到手机号输入框")
             await phone_input.click()
             await self._random_delay(0.3, 0.6)
 
@@ -215,22 +249,62 @@ class BossApplier(BaseApplier):
 
             # 点击获取验证码
             logger.info("点击获取验证码...")
-            code_button = await self.page.wait_for_selector('button:has-text("获取验证码")', timeout=5000)
-            await code_button.click()
-
-            # 处理滑块验证码（如果有）
             await self._handle_slider_captcha()
+            await self._click_get_sms_code_button()
+            await self._handle_slider_captcha()
+            try:
+                await self._check_sms_send_feedback()
+            except Exception as sms_err:
+                logger.warning(f"验证码发送反馈异常: {sms_err}")
+                self._report_progress("sms_send_failed", f"验证码发送可能失败: {sms_err}")
 
-            # 等待用户输入验证码
-            logger.info("=" * 50)
-            logger.info("请在浏览器中输入短信验证码，然后点击登录")
-            logger.info("等待登录完成...")
-            logger.info("=" * 50)
+            self._report_progress(
+                "waiting_sms_code",
+                "验证码已发送，请提交短信验证码",
+                {"need_sms_code": True, "task_id": str(self.config.get("task_id") or "")},
+            )
+
+            sms_code_text = str(sms_code or "").strip()
+            if not sms_code_text and self.sms_code_fetcher:
+                wait_seconds = max(15, int(self.config.get("verification_wait_seconds", 180)))
+                deadline = time.time() + wait_seconds
+                while time.time() < deadline:
+                    if self.control_action_fetcher:
+                        action = str(self.control_action_fetcher() or "").strip().lower()
+                        if action == "resend_sms":
+                            try:
+                                await self._resend_sms_code()
+                            except Exception as resend_err:
+                                logger.warning(f"重发验证码失败: {resend_err}")
+                                self._report_progress("sms_send_failed", f"重发失败: {resend_err}")
+                    fetched = self.sms_code_fetcher()
+                    if fetched:
+                        sms_code_text = str(fetched).strip()
+                        break
+                    await asyncio.sleep(1.5)
+
+            if sms_code_text:
+                if not await self._fill_sms_code_and_submit(sms_code_text):
+                    logger.error("短信验证码填充或提交失败")
+                    return False
+            elif self.config.get("headless", False):
+                logger.error("当前为无头模式，且未提供短信验证码")
+                return False
+            else:
+                # 仅在有界面模式保留手动输入兜底
+                logger.info("=" * 50)
+                logger.info("请在浏览器中输入短信验证码，然后点击登录")
+                logger.info("等待登录完成...")
+                logger.info("=" * 50)
 
             # 等待登录成功（检测 URL 变化）
             try:
-                await self.page.wait_for_url(f"{self.base_url}/**", timeout=120000)
+                await asyncio.wait_for(
+                    self._wait_login_success(timeout_seconds=120),
+                    timeout=140,
+                )
                 logger.info("登录成功！")
+                self._report_progress("login_success", "Boss 登录成功")
 
                 # 保存 Cookies
                 await self._save_cookies()
@@ -239,11 +313,188 @@ class BossApplier(BaseApplier):
 
             except Exception as e:
                 logger.error(f"登录超时或失败: {e}")
+                self._report_progress("login_failed", f"Boss 登录失败: {str(e)}")
                 return False
 
         except Exception as e:
             logger.error(f"登录过程出错: {e}")
+            self._report_progress("login_failed", f"Boss 登录异常: {str(e)}")
             return False
+
+    async def _wait_login_success(self, timeout_seconds: int = 90):
+        deadline = time.time() + max(10, timeout_seconds)
+        while time.time() < deadline:
+            current_url = str(self.page.url or "")
+            if current_url.startswith(self.base_url) and "login.zhipin.com" not in current_url:
+                return
+            # 常见失败提示，尽快失败而不是长时间卡住
+            try:
+                err_tip = await self.page.query_selector(
+                    'text=验证码错误, text=验证码无效, text=验证失败, text=请重新获取验证码'
+                )
+                if err_tip:
+                    raise TimeoutError("验证码校验失败，请重新获取并提交验证码")
+            except TimeoutError:
+                raise
+            except Exception:
+                pass
+            await asyncio.sleep(1.5)
+        raise TimeoutError("等待 Boss 登录成功超时")
+
+    async def _fill_sms_code_and_submit(self, sms_code: str) -> bool:
+        code = "".join(ch for ch in str(sms_code) if ch.isdigit())
+        if len(code) < 4:
+            logger.error("短信验证码格式不合法")
+            return False
+
+        selectors = [
+            'input[placeholder*="验证码"]',
+            'input[placeholder*="校验码"]',
+            'input[name*="code"]',
+            'input[maxlength="6"]',
+        ]
+        code_input = None
+        for selector in selectors:
+            try:
+                code_input = await self.page.wait_for_selector(selector, timeout=4000)
+                if code_input:
+                    break
+            except Exception:
+                continue
+        if not code_input:
+            logger.error("未找到验证码输入框")
+            return False
+
+        await code_input.click()
+        await code_input.fill("")
+        for ch in code[:6]:
+            await code_input.type(ch, delay=random.randint(80, 180))
+        await self._random_delay(0.6, 1.2)
+
+        login_btn = None
+        btn_selectors = [
+            'button:has-text("登录")',
+            'button:has-text("登 录")',
+            '.btn-sign-in',
+            'button[type="submit"]',
+        ]
+        for selector in btn_selectors:
+            try:
+                login_btn = await self.page.query_selector(selector)
+                if login_btn:
+                    break
+            except Exception:
+                continue
+
+        if login_btn:
+            await login_btn.click()
+        else:
+            await code_input.press("Enter")
+        self._report_progress("sms_code_submitted", "验证码已提交，等待登录结果")
+        return True
+
+    async def _find_phone_input(self):
+        selectors = [
+            'input[placeholder*="手机号"]',
+            'input[placeholder*="手机号码"]',
+            'input[name*="phone"]',
+            'input[type="tel"]',
+        ]
+        for selector in selectors:
+            try:
+                el = await self.page.wait_for_selector(selector, timeout=3000)
+                if el:
+                    return el
+            except Exception:
+                continue
+        return None
+
+    async def _try_reuse_session(self) -> bool:
+        if not os.path.exists(self.storage_state_path):
+            return False
+        try:
+            await self.page.goto(self.base_url, wait_until='domcontentloaded', timeout=45000)
+            await self._random_delay(1, 1.8)
+            return await self._looks_logged_in()
+        except Exception:
+            return False
+
+    async def _looks_logged_in(self) -> bool:
+        current_url = str(self.page.url or "")
+        if current_url.startswith(self.base_url) and "login.zhipin.com" not in current_url:
+            # 页面提示“登录/注册”通常表示未登录
+            for selector in ('text=登录', 'text=注册', 'text=立即登录'):
+                try:
+                    login_hint = await self.page.query_selector(selector)
+                    if login_hint:
+                        return False
+                except Exception:
+                    continue
+            return True
+        return False
+
+    async def _click_get_sms_code_button(self):
+        selectors = [
+            'button:has-text("获取验证码")',
+            'button:has-text("发送验证码")',
+            'button:has-text("验证码")',
+            'a:has-text("获取验证码")',
+            'a:has-text("发送验证码")',
+            '.btn-sms',
+            '.sms-btn',
+            '[class*="sms"]',
+        ]
+        for selector in selectors:
+            try:
+                btn = await self.page.query_selector(selector)
+                if btn:
+                    await btn.click()
+                    return
+            except Exception:
+                continue
+
+        # 文案兜底
+        try:
+            nodes = await self.page.query_selector_all('button, a, span')
+            for node in nodes[:120]:
+                try:
+                    txt = (await node.inner_text() or "").strip()
+                    if "验证码" in txt and ("获取" in txt or "发送" in txt or "重发" in txt):
+                        await node.click()
+                        return
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        raise TimeoutError("未找到获取验证码按钮")
+
+    async def _resend_sms_code(self):
+        """在等待验证码阶段重发短信验证码。"""
+        logger.info("收到重发验证码指令，尝试点击重发")
+        await self._click_get_sms_code_button()
+        await self._handle_slider_captcha()
+        await self._check_sms_send_feedback()
+        self._report_progress("sms_resent", "验证码已重发，请查收短信")
+
+    async def _check_sms_send_feedback(self):
+        await self._random_delay(0.6, 1.1)
+        blocked_selectors = [
+            'text=操作过于频繁',
+            'text=请稍后再试',
+            'text=请求过于频繁',
+            'text=短信发送失败',
+            'text=请先完成验证',
+        ]
+        for selector in blocked_selectors:
+            try:
+                node = await self.page.query_selector(selector)
+                if node:
+                    msg = (await node.inner_text() or "").strip() or "验证码发送失败"
+                    raise RuntimeError(msg)
+            except RuntimeError:
+                raise
+            except Exception:
+                continue
 
     async def _handle_slider_captcha(self):
         """处理滑块验证码"""
@@ -325,7 +576,8 @@ class BossApplier(BaseApplier):
         """保存 Cookies"""
         try:
             cookies = await self.context.cookies()
-            # 这里简化处理，实际应该适配 SessionManager
+            os.makedirs(os.path.dirname(self.storage_state_path), exist_ok=True)
+            await self.context.storage_state(path=self.storage_state_path)
             logger.info(f"已保存 {len(cookies)} 个 Cookies")
         except Exception as e:
             logger.error(f"保存 Cookies 失败: {e}")
@@ -358,7 +610,7 @@ class BossApplier(BaseApplier):
             search_url = f"{self.jobs_url}?query={keywords}&city={location}"
 
             logger.info(f"搜索职位: {keywords} @ {location}")
-            await self.page.goto(search_url, wait_until='networkidle')
+            await self.page.goto(search_url, wait_until='domcontentloaded', timeout=60000)
             await self._random_delay(2, 3)
 
             # 应用筛选条件
@@ -491,7 +743,7 @@ class BossApplier(BaseApplier):
         try:
             # 打开职位详情页
             if job.get('url'):
-                await self.page.goto(job['url'], wait_until='networkidle')
+                await self.page.goto(job['url'], wait_until='domcontentloaded', timeout=60000)
             else:
                 # 如果有卡片元素，直接点击
                 if job.get('card_element'):

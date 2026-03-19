@@ -1,0 +1,4727 @@
+﻿"""
+AI求职助手 - Web界面
+一个漂亮的网页界面，让您直接在浏览器中使用
+"""
+
+from fastapi import FastAPI, Request, UploadFile, File, Form, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+import os
+import sys
+from typing import Optional, List, Dict, Any, Tuple
+import asyncio
+from datetime import datetime, timedelta
+from urllib.parse import quote_plus, urlparse, parse_qs, unquote, urlencode
+import re
+import html as html_lib
+import requests
+import logging
+import time
+import uuid
+import secrets
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from app.core.multi_ai_debate import JobApplicationPipeline
+from app.core.fast_ai_engine import fast_pipeline, HighPerformanceAIEngine
+from app.core.market_driven_engine import market_driven_pipeline
+from app.core.llm_client import get_public_llm_config
+from app.services.resume_analyzer import ResumeAnalyzer
+from app.services.real_job_service import RealJobService
+from app.services.business_service import BusinessService
+from app.services.resume_profile_service import ResumeProfileService
+from app.services.resume_render_service import ResumeRenderService
+from app.services.job_intelligence_service import JobIntelligenceService
+from app.services.interview_experience_service import InterviewExperienceService
+from app.services.interview_experience_collector_service import InterviewExperienceCollectorService
+from app.services.email_campaign_service import EmailCampaignService, SMTP_PRESETS
+from app.core.realtime_progress import progress_tracker
+
+app = FastAPI(title="AI求职助手")
+APP_BOOT_TS = datetime.now().isoformat()
+APP_BOOT_MONO = time.perf_counter()
+logger = logging.getLogger("ai_job_helper")
+if not logger.handlers:
+    logging.basicConfig(
+        level=os.getenv("APP_LOG_LEVEL", "INFO"),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
+# 使用市场驱动引擎
+market_engine = market_driven_pipeline
+
+# 挂载静态文件
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# 允许跨域
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    """Attach request id + process time headers for observability."""
+    rid = request.headers.get("x-request-id") or str(uuid.uuid4())
+    start = time.perf_counter()
+    request.state.request_id = rid
+    try:
+        response = await call_next(request)
+    except Exception as e:
+        took_ms = (time.perf_counter() - start) * 1000
+        logger.exception(
+            "request_failed path=%s method=%s rid=%s took_ms=%.1f err=%s",
+            request.url.path,
+            request.method,
+            rid,
+            took_ms,
+            str(e)[:300],
+        )
+        return JSONResponse(
+            {"success": False, "error": "internal_error", "request_id": rid},
+            status_code=500,
+            headers={"x-request-id": rid, "x-process-time-ms": f"{took_ms:.1f}"},
+        )
+
+    took_ms = (time.perf_counter() - start) * 1000
+    response.headers["x-request-id"] = rid
+    response.headers["x-process-time-ms"] = f"{took_ms:.1f}"
+    if request.url.path.startswith("/api"):
+        logger.info(
+            "request_done path=%s method=%s status=%s rid=%s took_ms=%.1f",
+            request.url.path,
+            request.method,
+            getattr(response, "status_code", 0),
+            rid,
+            took_ms,
+        )
+    return response
+
+# 全局变量
+pipeline = JobApplicationPipeline()
+analyzer = ResumeAnalyzer()
+real_job_service = RealJobService()  # 真实招聘数据服务
+business_service = BusinessService()
+resume_profile_service = ResumeProfileService()
+resume_render_service = ResumeRenderService()
+job_intelligence_service = JobIntelligenceService()
+interview_experience_service = InterviewExperienceService()
+interview_experience_collector_service = InterviewExperienceCollectorService()
+email_campaign_service = EmailCampaignService()
+
+# 云端岗位缓存（内存）
+cloud_jobs_cache: List[Dict[str, Any]] = []
+CN_JOB_DOMAINS = ("zhipin.com", "liepin.com", "zhaopin.com", "51job.com", "lagou.com")
+cloud_jobs_meta: Dict[str, Any] = {
+    "last_push_at": None,
+    "last_received": 0,
+    "last_new": 0,
+}
+recent_search_jobs: Dict[str, Dict[str, Any]] = {}
+
+
+def _api_success(payload: Dict[str, Any], status_code: int = 200) -> JSONResponse:
+    body = {"success": True}
+    body.update(payload or {})
+    return JSONResponse(body, status_code=status_code)
+
+
+def _api_error(message: str, status_code: int = 400, code: str = "bad_request") -> JSONResponse:
+    return JSONResponse(
+        {"success": False, "error": message, "code": code},
+        status_code=status_code,
+    )
+
+
+def _decode_text_file_bytes(content: bytes) -> str:
+    """Best-effort decode for uploaded txt files with mixed encodings."""
+    if not content:
+        return ""
+
+    candidates = [
+        "utf-8-sig",
+        "utf-16",
+        "utf-16le",
+        "utf-16be",
+        "gb18030",
+        "gbk",
+    ]
+
+    decoded = None
+    for enc in candidates:
+        try:
+            decoded = content.decode(enc)
+            break
+        except Exception:
+            continue
+
+    if decoded is None:
+        decoded = content.decode("utf-8", errors="ignore")
+
+    # Normalize common artifacts from wrong fallback decoding.
+    decoded = decoded.replace("\x00", "").replace("\ufeff", "")
+    decoded = decoded.replace("\r\n", "\n").replace("\r", "\n")
+    return decoded.strip()
+
+
+def _normalize_extracted_text(text: str) -> str:
+    if not text:
+        return ""
+    out = text.replace("\x00", "").replace("\ufeff", "")
+    out = out.replace("\r\n", "\n").replace("\r", "\n")
+    # Keep line breaks, but collapse excessive blank lines.
+    out = re.sub(r"\n{3,}", "\n\n", out)
+    return out.strip()
+
+
+def _text_quality_score(text: str) -> float:
+    """Heuristic score for extracted text readability (0.0 ~ 1.0)."""
+    t = _normalize_extracted_text(text)
+    if not t:
+        return 0.0
+
+    total = max(1, len(t))
+    printable = sum(1 for ch in t if ch.isprintable() or ch in "\n\t")
+    control = sum(1 for ch in t if (ord(ch) < 32 and ch not in "\n\t"))
+    replacement = t.count("\ufffd")
+    ascii_word = len(re.findall(r"[A-Za-z0-9]", t))
+    cjk = len(re.findall(r"[\u4e00-\u9fff]", t))
+
+    printable_ratio = printable / total
+    useful_ratio = min(1.0, (ascii_word + cjk) / total)
+    control_ratio = control / total
+    replacement_ratio = replacement / total
+    length_factor = min(1.0, total / 320.0)
+
+    score = (
+        0.45 * printable_ratio
+        + 0.30 * useful_ratio
+        + 0.25 * length_factor
+        - 0.70 * control_ratio
+        - 0.90 * replacement_ratio
+    )
+    return max(0.0, min(1.0, score))
+
+
+def _looks_like_mojibake(text: str) -> bool:
+    t = _normalize_extracted_text(text)
+    if not t:
+        return True
+    if ("\ufffd" in t) or ("\x00" in t):
+        return True
+    # Typical mojibake traces like 'ÿ', 'ð', etc.
+    latin_ext = len(re.findall(r"[\u00C0-\u024F]", t))
+    if latin_ext >= 2 and (latin_ext / max(1, len(t))) > 0.002:
+        return True
+    return False
+
+
+def _ocr_image_best_effort(image: Any) -> str:
+    """Run OCR with language fallback order."""
+    import pytesseract
+
+    for lang in ("chi_sim+eng", "chi_sim", "eng"):
+        try:
+            text = pytesseract.image_to_string(image, lang=lang)
+            text = _normalize_extracted_text(text)
+            if text:
+                return text
+        except Exception:
+            continue
+    return ""
+
+
+def _extract_pdf_text_pypdf2(content: bytes) -> str:
+    import io
+    import PyPDF2
+
+    reader = PyPDF2.PdfReader(io.BytesIO(content))
+    chunks: List[str] = []
+    for page in reader.pages:
+        txt = page.extract_text() or ""
+        if txt.strip():
+            chunks.append(txt)
+    return _normalize_extracted_text("\n".join(chunks))
+
+
+def _extract_pdf_text_pymupdf(content: bytes) -> str:
+    try:
+        import fitz  # PyMuPDF
+    except Exception:
+        return ""
+
+    doc = fitz.open(stream=content, filetype="pdf")
+    chunks: List[str] = []
+    try:
+        for page in doc:
+            txt = page.get_text("text") or ""
+            if txt.strip():
+                chunks.append(txt)
+    finally:
+        doc.close()
+    return _normalize_extracted_text("\n".join(chunks))
+
+
+def _extract_pdf_text_ocr(content: bytes, max_pages: int = 8) -> str:
+    """OCR fallback for scanned/garbled PDFs using PyMuPDF rasterization."""
+    try:
+        import fitz  # PyMuPDF
+        from PIL import Image
+    except Exception:
+        return ""
+
+    doc = fitz.open(stream=content, filetype="pdf")
+    chunks: List[str] = []
+    try:
+        limit = min(max_pages, doc.page_count)
+        for idx in range(limit):
+            page = doc.load_page(idx)
+            # 2x scale improves OCR precision for resumes.
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            mode = "RGB" if pix.n < 4 else "RGBA"
+            image = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+            txt = _ocr_image_best_effort(image)
+            if txt:
+                chunks.append(txt)
+    finally:
+        doc.close()
+    return _normalize_extracted_text("\n".join(chunks))
+
+
+def _extract_pdf_text_best_effort(content: bytes) -> Tuple[str, str]:
+    """Try text extraction first, then OCR fallback when quality is poor."""
+    candidates: List[Tuple[str, str]] = []
+
+    try:
+        txt = _extract_pdf_text_pypdf2(content)
+        if txt:
+            candidates.append(("pypdf2", txt))
+    except Exception as e:
+        logger.warning("pypdf2_extract_failed err=%s", str(e)[:200])
+
+    try:
+        txt = _extract_pdf_text_pymupdf(content)
+        if txt:
+            candidates.append(("pymupdf_text", txt))
+    except Exception as e:
+        logger.warning("pymupdf_extract_failed err=%s", str(e)[:200])
+
+    best_text = ""
+    best_source = ""
+    best_score = 0.0
+    for source, txt in candidates:
+        score = _text_quality_score(txt)
+        if score > best_score:
+            best_score = score
+            best_text = txt
+            best_source = source
+
+    # Always try OCR when available and prefer it for suspicious/low-quality extracted text.
+    try:
+        ocr_text = _extract_pdf_text_ocr(content)
+        ocr_score = _text_quality_score(ocr_text)
+        if ocr_text:
+            should_take_ocr = False
+            if not best_text:
+                should_take_ocr = True
+            elif _looks_like_mojibake(best_text):
+                should_take_ocr = True
+            elif ocr_score >= best_score + 0.06:
+                should_take_ocr = True
+            elif ocr_score >= max(0.45, best_score - 0.06) and len(ocr_text) >= len(best_text) * 0.6:
+                should_take_ocr = True
+
+            if should_take_ocr:
+                best_text = ocr_text
+                best_source = "ocr"
+                best_score = ocr_score
+    except Exception as e:
+        logger.warning("pdf_ocr_failed err=%s", str(e)[:200])
+
+    return _normalize_extracted_text(best_text), (best_source or "none")
+
+
+def _build_investor_readiness_snapshot() -> Dict[str, Any]:
+    """
+    Financing-oriented readiness snapshot.
+    Provides one consolidated view for product, traction, reliability and GTM.
+    """
+    metrics = business_service.metrics()
+    funnel = metrics.get("funnel", {})
+    leads = metrics.get("leads", {})
+    feedback = metrics.get("feedback", {})
+    stability = metrics.get("stability", {})
+
+    cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+    enterprise_on = bool(os.getenv("ENTERPRISE_JOB_API_URL", "").strip())
+    global_fallback_on = os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    uploads = int(funnel.get("uploads", 0) or 0)
+    process_runs = int(funnel.get("process_runs", 0) or 0)
+    searches = int(funnel.get("searches", 0) or 0)
+    applies = int(funnel.get("applies", 0) or 0)
+    api_errors = int(stability.get("api_errors", 0) or 0)
+
+    process_success_pct = float(funnel.get("process_success_pct", 0) or 0)
+    search_to_apply_pct = float(funnel.get("search_to_apply_pct", 0) or 0)
+
+    product_score = 100.0
+    if cfg_mode not in {"auto", "cloud", "baidu", "bing", "brave", "jooble", "openclaw", "enterprise_api"}:
+        product_score -= 25.0
+    if global_fallback_on:
+        product_score -= 15.0
+    if process_success_pct < 90:
+        product_score -= 15.0
+    if process_success_pct < 75:
+        product_score -= 15.0
+    if enterprise_on:
+        product_score += 5.0
+    product_score = max(0.0, min(100.0, product_score))
+
+    traction_score = 0.0
+    traction_score += min(35.0, uploads * 1.2)
+    traction_score += min(35.0, process_runs * 1.5)
+    traction_score += min(20.0, searches * 0.9)
+    traction_score += min(10.0, applies * 2.0)
+    traction_score = max(0.0, min(100.0, traction_score))
+
+    reliability_score = 100.0
+    if process_runs > 0:
+        err_ratio = api_errors / max(process_runs, 1)
+        reliability_score -= min(60.0, err_ratio * 100.0)
+    if api_errors >= 20:
+        reliability_score -= 10.0
+    reliability_score = max(0.0, min(100.0, reliability_score))
+
+    gtm_score = 0.0
+    gtm_score += min(45.0, int(leads.get("total", 0) or 0) * 12.0)
+    gtm_score += min(25.0, int(leads.get("last_7d", 0) or 0) * 8.0)
+    gtm_score += min(10.0, int(feedback.get("last_7d", 0) or 0) * 2.5)
+    gtm_score += min(15.0, search_to_apply_pct * 0.8)
+    gtm_score += 10.0 if searches > 0 else 0.0
+    gtm_score += 5.0 if applies > 0 else 0.0
+    gtm_score = max(0.0, min(100.0, gtm_score))
+
+    weighted = (
+        product_score * 0.35
+        + traction_score * 0.25
+        + reliability_score * 0.25
+        + gtm_score * 0.15
+    )
+    overall = round(max(0.0, min(100.0, weighted)), 1)
+
+    status = "seed_ready" if overall >= 75 else ("pre_seed_ready" if overall >= 60 else "build_stage")
+
+    return {
+        "status": status,
+        "overall_score": overall,
+        "pillars": {
+            "product": round(product_score, 1),
+            "traction": round(traction_score, 1),
+            "reliability": round(reliability_score, 1),
+            "go_to_market": round(gtm_score, 1),
+        },
+        "highlights": {
+            "provider_mode": cfg_mode,
+            "enterprise_api_configured": enterprise_on,
+            "global_fallback_enabled": global_fallback_on,
+            "cloud_cache_total": len(cloud_jobs_cache),
+            "feedback_total": int(feedback.get("total", 0) or 0),
+        },
+        "metrics": metrics,
+        "next_30d_targets": {
+            "uploads": max(uploads + 80, 120),
+            "process_runs": max(process_runs + 60, 100),
+            "searches": max(searches + 100, 180),
+            "applies": max(applies + 30, 40),
+            "leads_total": max(int(leads.get("total", 0) or 0) + 20, 30),
+        },
+    }
+
+
+def _track_event(name: str, payload: Optional[Dict[str, Any]] = None) -> None:
+    try:
+        business_service.track_event(name, payload or {})
+    except Exception:
+        # Do not break core user path due to analytics write failures.
+        pass
+
+
+def _cache_recent_jobs(jobs: List[Dict[str, Any]], max_size: int = 2000) -> None:
+    now = datetime.now().isoformat()
+    for j in jobs or []:
+        jid = str(j.get("id") or "").strip()
+        if not jid:
+            continue
+        row = dict(j)
+        row["_cached_at"] = now
+        recent_search_jobs[jid] = row
+    if len(recent_search_jobs) > max_size:
+        # Keep newest max_size by cached time.
+        items = sorted(
+            recent_search_jobs.items(),
+            key=lambda x: str(x[1].get("_cached_at") or ""),
+            reverse=True,
+        )[:max_size]
+        recent_search_jobs.clear()
+        recent_search_jobs.update(items)
+
+
+def _is_seed_or_demo_job(job: Dict[str, Any]) -> bool:
+    """Filter obvious seed/demo jobs so they never show in production recommendations."""
+    jid = str(job.get("id") or "").strip().lower()
+    if jid.startswith("seed") or jid.startswith("demo"):
+        return True
+    link = str(job.get("link") or job.get("apply_url") or "").strip().lower()
+    if "/job_detail/seed" in link:
+        return True
+    company = str(job.get("company") or "").strip().lower()
+    if company in {"示例公司", "测试公司", "demo"}:
+        return True
+    return False
+
+
+def _job_has_actionable_link(job: Dict[str, Any]) -> bool:
+    link = str(job.get("link") or job.get("apply_url") or "").strip()
+    return link.startswith("http://") or link.startswith("https://")
+
+
+def _is_cn_entrypoint_link(link: str) -> bool:
+    """Search entry/list pages are not treated as real actionable postings."""
+    low = (link or "").strip().lower()
+    if not low:
+        return False
+    patterns = (
+        "zhipin.com/web/geek/job?",
+        "zhipin.com/zhaopin/",
+        "liepin.com/zhaopin/?key=",
+        "sou.zhaopin.com/?kw=",
+        "we.51job.com/pc/search?",
+        "lagou.com/wn/jobs?kd=",
+    )
+    return any(p in low for p in patterns)
+
+
+def _is_cn_entrypoint_job(job: Dict[str, Any]) -> bool:
+    provider = str(job.get("provider") or "").strip().lower()
+    title = str(job.get("title") or job.get("job_title") or "").strip().lower()
+    link = str(job.get("link") or job.get("apply_url") or "").strip()
+    if provider == "cn_portal":
+        return True
+    if "搜索入口" in title:
+        return True
+    return _is_cn_entrypoint_link(link)
+
+
+def _normalize_and_filter_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+    """Keep only actionable real jobs and deduplicate by link/id/title-company."""
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for job in jobs or []:
+        if not isinstance(job, dict):
+            continue
+        if _is_seed_or_demo_job(job):
+            continue
+        if not _job_has_actionable_link(job):
+            continue
+
+        link = str(job.get("link") or job.get("apply_url") or "").strip().lower()
+        jid = str(job.get("id") or "").strip().lower()
+        title = str(job.get("title") or job.get("job_title") or "").strip().lower()
+        company = str(job.get("company") or "").strip().lower()
+        dedupe_key = link or jid or f"{title}|{company}"
+        if not dedupe_key or dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        out.append(job_intelligence_service.enrich_job(job))
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return out
+
+
+def _normalize_real_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Strict real-posting normalization:
+    - actionable links only
+    - no seed/demo
+    - no board-level search entry pages
+    """
+    scan_limit = max(20, int(limit or 10) * 5)
+    base = _normalize_and_filter_jobs(jobs, limit=scan_limit)
+    out: List[Dict[str, Any]] = []
+    for job in base:
+        if _is_cn_entrypoint_job(job):
+            continue
+        out.append(job)
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return out
+
+
+def _is_cn_job_link(link: str) -> bool:
+    low = (link or "").lower()
+    return any(d in low for d in CN_JOB_DOMAINS)
+
+
+def _enforce_cn_market_jobs(
+    jobs: List[Dict[str, Any]],
+    allow_entrypoints: bool = False,
+) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for j in (jobs or []):
+        if (not allow_entrypoints) and _is_cn_entrypoint_job(j):
+            continue
+        link = str(j.get("link") or j.get("apply_url") or "")
+        platform = str(j.get("platform") or "").strip()
+        if _is_cn_job_link(link):
+            out.append(j)
+            continue
+        if platform in {"Boss直聘", "猎聘", "智联招聘", "前程无忧", "拉勾"}:
+            out.append(j)
+    return out
+
+
+PROCESS_RESPONSE_SCHEMA_VERSION = "process_response.v2"
+LOW_QUALITY_MARKERS = (
+    "i appreciate your interest",
+    "amazon q",
+    "built by aws",
+    "i'm amazon q",
+    "i am amazon q",
+    "not career counseling",
+    "没有看到任何附件",
+)
+PUBLIC_EVENT_NAME_PATTERN = re.compile(r"^[a-z0-9_]{3,48}$")
+PUBLIC_EVENT_WHITELIST = {
+    "workspace_opened",
+    "resume_process_started",
+    "resume_process_success",
+    "resume_process_failed",
+    "job_link_click",
+    "result_download",
+}
+
+OAUTH_STATE_TTL_MINUTES = int(os.getenv("OAUTH_STATE_TTL_MINUTES", "15") or "15")
+OAUTH_STATE_STORE: Dict[str, Dict[str, Any]] = {}
+OAUTH_PROVIDER_META: Dict[str, Dict[str, str]] = {
+    "google": {
+        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "default_scope": "openid email profile",
+    },
+    "github": {
+        "auth_url": "https://github.com/login/oauth/authorize",
+        "token_url": "https://github.com/login/oauth/access_token",
+        "default_scope": "read:user user:email",
+    },
+    "linkedin": {
+        "auth_url": "https://www.linkedin.com/oauth/v2/authorization",
+        "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
+        "default_scope": "r_liteprofile r_emailaddress",
+    },
+    "wechat": {
+        "auth_url": "https://open.weixin.qq.com/connect/qrconnect",
+        "token_url": "https://api.weixin.qq.com/sns/oauth2/access_token",
+        "default_scope": "snsapi_login",
+    },
+}
+
+
+def _oauth_now() -> datetime:
+    return datetime.now()
+
+
+def _oauth_env(provider: str, key: str) -> str:
+    return os.getenv(f"OAUTH_{provider.upper()}_{key}", "").strip()
+
+
+def _oauth_provider_config(provider: str) -> Dict[str, Any]:
+    meta = OAUTH_PROVIDER_META.get(provider, {})
+    if not meta:
+        return {}
+
+    client_id = _oauth_env(provider, "CLIENT_ID")
+    client_secret = _oauth_env(provider, "CLIENT_SECRET")
+    redirect_uri = _oauth_env(provider, "REDIRECT_URI")
+    scope = _oauth_env(provider, "SCOPE") or meta.get("default_scope", "")
+
+    # WeChat uses appid/appsecret naming but keep unified env keys for ops.
+    config = {
+        "provider": provider,
+        "auth_url": meta.get("auth_url", ""),
+        "token_url": meta.get("token_url", ""),
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "scope": scope,
+    }
+    return config
+
+
+def _oauth_is_configured(config: Dict[str, Any]) -> bool:
+    if not config:
+        return False
+    provider = str(config.get("provider") or "")
+    if provider == "wechat":
+        return bool(config.get("client_id") and config.get("client_secret") and config.get("redirect_uri"))
+    return bool(config.get("client_id") and config.get("client_secret") and config.get("redirect_uri"))
+
+
+def _oauth_cleanup_state_store() -> None:
+    now = _oauth_now()
+    stale_keys = [
+        key for key, row in OAUTH_STATE_STORE.items()
+        if not isinstance(row, dict) or row.get("expires_at") is None or row["expires_at"] < now
+    ]
+    for key in stale_keys:
+        OAUTH_STATE_STORE.pop(key, None)
+
+
+def _oauth_issue_state(provider: str, redirect_after: str = "") -> str:
+    _oauth_cleanup_state_store()
+    state = secrets.token_urlsafe(24)
+    OAUTH_STATE_STORE[state] = {
+        "provider": provider,
+        "redirect_after": redirect_after or "",
+        "created_at": _oauth_now(),
+        "expires_at": _oauth_now() + timedelta(minutes=max(3, OAUTH_STATE_TTL_MINUTES)),
+    }
+    return state
+
+
+def _oauth_validate_state(provider: str, state: str) -> Dict[str, Any]:
+    _oauth_cleanup_state_store()
+    row = OAUTH_STATE_STORE.pop(state, None)
+    if not isinstance(row, dict):
+        raise ValueError("state_not_found")
+    if str(row.get("provider") or "") != provider:
+        raise ValueError("state_provider_mismatch")
+    if row.get("expires_at") and row["expires_at"] < _oauth_now():
+        raise ValueError("state_expired")
+    return row
+
+
+def _oauth_build_authorize_url(config: Dict[str, Any], state: str) -> str:
+    provider = str(config.get("provider") or "")
+    auth_url = str(config.get("auth_url") or "")
+    if not auth_url:
+        raise ValueError("oauth_auth_url_missing")
+
+    redirect_uri = str(config.get("redirect_uri") or "")
+    client_id = str(config.get("client_id") or "")
+    scope = str(config.get("scope") or "")
+
+    if provider == "wechat":
+        params = {
+            "appid": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scope or "snsapi_login",
+            "state": state,
+        }
+        return f"{auth_url}?{urlencode(params)}#wechat_redirect"
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": scope,
+        "state": state,
+    }
+
+    if provider == "google":
+        params["access_type"] = "offline"
+        params["prompt"] = "consent"
+
+    return f"{auth_url}?{urlencode(params)}"
+
+
+def _oauth_exchange_token(config: Dict[str, Any], code: str) -> Dict[str, Any]:
+    provider = str(config.get("provider") or "")
+    token_url = str(config.get("token_url") or "")
+    if not token_url:
+        raise ValueError("oauth_token_url_missing")
+
+    redirect_uri = str(config.get("redirect_uri") or "")
+    client_id = str(config.get("client_id") or "")
+    client_secret = str(config.get("client_secret") or "")
+
+    timeout_s = int(os.getenv("OAUTH_HTTP_TIMEOUT_S", "12") or "12")
+
+    if provider == "wechat":
+        params = {
+            "appid": client_id,
+            "secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+        }
+        resp = requests.get(token_url, params=params, timeout=timeout_s)
+    else:
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        headers = {"Accept": "application/json"}
+        resp = requests.post(token_url, data=payload, headers=headers, timeout=timeout_s)
+
+    text = resp.text or ""
+    if resp.status_code >= 400:
+        raise RuntimeError(f"oauth_token_exchange_http_{resp.status_code}:{text[:300]}")
+
+    try:
+        return resp.json()
+    except Exception:
+        # GitHub may return query-string style in edge cases.
+        if "=" in text and "&" in text:
+            pairs = [seg.split("=", 1) for seg in text.split("&") if "=" in seg]
+            return {k: v for k, v in pairs}
+        raise RuntimeError("oauth_token_exchange_invalid_json")
+
+
+def _text_has_low_quality_marker(text: str) -> bool:
+    low = (text or "").strip().lower()
+    if not low:
+        return True
+    return any(marker in low for marker in LOW_QUALITY_MARKERS)
+
+
+def _render_market_analysis_fallback(info: Dict[str, Any]) -> str:
+    skills = [s for s in (info.get("skills") or []) if s][:8]
+    skills_text = ", ".join(skills) if skills else "Python, FastAPI, SQL"
+    return (
+        "【市场竞争力分析】\n\n"
+        f"✅ 识别技能：{skills_text}\n\n"
+        "📊 市场需求度：中高（基于中国技术岗位关键词覆盖）\n"
+        "💼 建议投递方向：Python后端 / AI应用工程 / 数据工程\n"
+        "📈 建议策略：先投递有明确技术栈和薪资区间的岗位，再按反馈迭代简历。\n\n"
+        "💡 市场建议：\n"
+        "1. 先聚焦 1-2 个主岗位方向，避免关键词过散。\n"
+        "2. 简历中补充可量化结果（性能提升、效率提升、交付周期）。\n"
+        "3. 优先投递带真实岗位详情页和直接投递入口的职位。"
+    )
+
+
+def _render_interview_prep_fallback(info: Dict[str, Any], jobs: List[Dict[str, Any]]) -> str:
+    top = (jobs or [{}])[0]
+    title = str(top.get("title") or "Python后端工程师")
+    company = str(top.get("company") or "目标公司")
+    return (
+        f"目标岗位：{title}（{company}）\n\n"
+        "高频问题 1：你如何设计高并发 API？\n"
+        "回答要点：异步 I/O、缓存策略、限流、慢查询治理、可观测性。\n\n"
+        "高频问题 2：你如何保证数据链路质量？\n"
+        "回答要点：输入校验、幂等设计、回滚方案、监控告警、复盘机制。\n\n"
+        "高频问题 3：你做过最有业务价值的项目是什么？\n"
+        "回答要点：按“背景-动作-结果”讲清指标提升，并说明你的关键贡献。"
+    )
+
+
+def _render_optimized_resume_fallback(resume_text: str, info: Dict[str, Any]) -> str:
+    name = str(info.get("name") or "").strip()
+    if not name or name == "未知":
+        first = (resume_text or "").strip().splitlines()
+        name = first[0].strip() if first else "候选人"
+    skills = [s for s in (info.get("skills") or []) if s][:10]
+    skills_line = ", ".join(skills) if skills else "Python, FastAPI, SQL, Docker"
+    return (
+        f"{name}\n"
+        "AI应用工程师 | Python后端工程师\n\n"
+        "核心优势\n"
+        "- 聚焦 AI 应用工程与后端交付，能从需求到上线完成闭环。\n"
+        "- 具备数据处理、服务部署、性能优化和质量门禁实践。\n\n"
+        f"技术栈\n- {skills_line}\n\n"
+        "项目亮点（示例结构）\n"
+        "- 构建 RAG/数据服务，接口稳定性提升，响应延迟下降。\n"
+        "- 建立自动化数据管道，减少人工处理成本并提高时效。\n"
+        "- 引入测试与监控机制，降低线上故障率并缩短定位时间。\n\n"
+        "求职方向\n- Python后端开发\n- AI应用开发\n- 数据工程与平台方向"
+    )
+
+
+def _run_output_quality_gate(
+    results: Dict[str, Any],
+    resume_text: str,
+    info: Dict[str, Any],
+    real_jobs: List[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    clean = dict(results or {})
+    report: Dict[str, Any] = {"passed": True, "issues": []}
+
+    market_analysis = str(clean.get("market_analysis") or "").strip()
+    if len(market_analysis) < 80 or _text_has_low_quality_marker(market_analysis):
+        clean["market_analysis"] = _render_market_analysis_fallback(info)
+        report["issues"].append("market_analysis_replaced")
+
+    optimized_resume = str(clean.get("optimized_resume") or "").strip()
+    if len(optimized_resume) < 120 or _text_has_low_quality_marker(optimized_resume):
+        clean["optimized_resume"] = _render_optimized_resume_fallback(resume_text, info)
+        report["issues"].append("optimized_resume_replaced")
+
+    interview_prep = str(clean.get("interview_prep") or "").strip()
+    if len(interview_prep) < 80 or _text_has_low_quality_marker(interview_prep):
+        clean["interview_prep"] = _render_interview_prep_fallback(info, real_jobs)
+        report["issues"].append("interview_prep_replaced")
+
+    salary_analysis = str(clean.get("salary_analysis") or "").strip()
+    if not salary_analysis:
+        clean["salary_analysis"] = "【薪资潜力分析】\n\n建议：基于岗位匹配度和市场供需，优先投递高匹配岗位后再进行薪资谈判。"
+        report["issues"].append("salary_analysis_replaced")
+
+    if report["issues"]:
+        report["passed"] = False
+    return clean, report
+
+
+def _public_job_payload(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for j in _normalize_real_jobs(jobs or [], limit=limit):
+        link = str(j.get("link") or j.get("apply_url") or "").strip()
+        out.append(
+            {
+                "id": str(j.get("id") or f"job_{abs(hash(link.lower()))}"),
+                "title": str(j.get("title") or j.get("job_title") or "未知岗位"),
+                "company": str(j.get("company") or ""),
+                "location": str(j.get("location") or ""),
+                "salary": str(j.get("salary") or j.get("salary_range") or ""),
+                "platform": str(j.get("platform") or j.get("provider") or _platform_from_link(link)),
+                "link": link,
+                "provider": str(j.get("provider") or ""),
+                "updated": str(j.get("updated") or ""),
+                "stack_category": str(j.get("stack_category") or "general"),
+                "stack_tags": list(j.get("stack_tags") or []),
+                "company_category": str(j.get("company_category") or "general"),
+                "interview_focus": list(j.get("interview_focus") or []),
+            }
+        )
+    return out
+
+
+def _validate_process_response_shape(payload: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    required_text_fields = (
+        "career_analysis",
+        "job_recommendations",
+        "optimized_resume",
+        "interview_prep",
+        "mock_interview",
+        "job_provider_mode",
+        "schema_version",
+    )
+    for key in required_text_fields:
+        if not isinstance(payload.get(key), str):
+            errors.append(f"{key}:expected_string")
+
+    jobs = payload.get("recommended_jobs")
+    if not isinstance(jobs, list):
+        errors.append("recommended_jobs:expected_list")
+    else:
+        for idx, row in enumerate(jobs[:20]):
+            if not isinstance(row, dict):
+                errors.append(f"recommended_jobs[{idx}]:expected_object")
+                continue
+            for key in ("id", "title", "link"):
+                if not isinstance(row.get(key), str) or not str(row.get(key)).strip():
+                    errors.append(f"recommended_jobs[{idx}].{key}:missing")
+                    break
+    interview_pack = payload.get("interview_pack")
+    if interview_pack is not None and not isinstance(interview_pack, dict):
+        errors.append("interview_pack:expected_object")
+    return errors
+
+
+def _filter_cloud_cache_by_query(
+    keywords: List[str], location: Optional[str], limit: int
+) -> List[Dict[str, Any]]:
+    kw = [k.strip().lower() for k in (keywords or []) if k and k.strip()]
+
+    def hit(job: Dict[str, Any]) -> bool:
+        text = f"{job.get('title','')} {job.get('company','')}".lower()
+        if kw and not any(k in text for k in kw):
+            return False
+        if location and job.get("location") and location not in str(job.get("location")):
+            return False
+        return True
+
+    matched = [j for j in cloud_jobs_cache if hit(j)]
+    if not matched:
+        matched = list(cloud_jobs_cache)
+    return _normalize_real_jobs(matched, limit=limit)
+
+
+def _search_jobs_without_browser(
+    keywords: List[str],
+    location: Optional[str],
+    limit: int,
+    allow_portal_fallback: bool = False,
+    force_provider: Optional[str] = None,
+) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
+    """
+    Cloud-safe real-time search path.
+    No local browser/OpenClaw required.
+    """
+    provider = (force_provider or "").strip().lower()
+    service = real_job_service
+    if provider and provider not in {"cloud", "enterprise_api"}:
+        from app.services.real_job_service import RealJobService
+        service = RealJobService()
+        service.provider_name = provider
+
+    try:
+        jobs = service.search_jobs(
+            keywords=keywords,
+            location=location,
+            limit=max(5, min(int(limit or 10), 50)),
+        )
+        mode = (service.get_statistics() or {}).get("provider_mode", provider or "auto")
+        normalized = _normalize_real_jobs(jobs, limit=limit)
+        normalized = _enforce_cn_market_jobs(normalized)
+        if normalized:
+            return normalized, mode, None
+    except Exception as e:
+        first_error = str(e)
+    else:
+        first_error = None
+
+    enterprise_jobs = _search_jobs_enterprise_api(keywords, location, limit=limit)
+    enterprise_jobs = _normalize_real_jobs(enterprise_jobs, limit=limit)
+    enterprise_jobs = _enforce_cn_market_jobs(enterprise_jobs)
+    if enterprise_jobs:
+        return enterprise_jobs, "enterprise_api", None
+
+    # CN market fallback: no-browser HTML search on Chinese job sites.
+    bing_html_jobs = _search_jobs_bing_html(keywords, location, limit=limit)
+    bing_html_jobs = _normalize_real_jobs(bing_html_jobs, limit=limit)
+    bing_html_jobs = _enforce_cn_market_jobs(bing_html_jobs)
+    if bing_html_jobs:
+        return bing_html_jobs, "bing_html", None
+
+    # Last fallback: DuckDuckGo HTML search (no key, no browser).
+    ddg_jobs = _search_jobs_duckduckgo(keywords, location, limit=limit)
+    ddg_jobs = _normalize_real_jobs(ddg_jobs, limit=limit)
+    ddg_jobs = _enforce_cn_market_jobs(ddg_jobs)
+    if ddg_jobs:
+        return ddg_jobs, "duckduckgo", None
+
+    # Optional global fallback. Disabled by default to keep CN market realism.
+    if os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}:
+        remotive_jobs = _search_jobs_remotive(keywords, location, limit=limit)
+        if remotive_jobs:
+            return remotive_jobs, "remotive", None
+
+    if allow_portal_fallback:
+        portal_jobs = _search_jobs_cn_entrypoints(keywords, location, limit=min(limit, 5))
+        if portal_jobs:
+            return portal_jobs, "cn_portal", first_error or "using cn portal fallback"
+
+    return [], "no_real_jobs", first_error or "no result from no-browser providers"
+
+
+def _platform_from_link(link: str) -> str:
+    host = (urlparse(link).netloc or "").lower()
+    if "zhipin.com" in host:
+        return "Boss直聘"
+    if "liepin.com" in host:
+        return "猎聘"
+    if "zhaopin.com" in host:
+        return "智联招聘"
+    if "51job.com" in host:
+        return "前程无忧"
+    if "lagou.com" in host:
+        return "拉勾"
+    return host or "web"
+
+
+def _first_non_empty(row: Dict[str, Any], keys: List[str]) -> str:
+    for k in keys:
+        v = row.get(k)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            return s
+    return ""
+
+
+def _infer_company_from_title(title: str, platform: str = "") -> str:
+    t = (title or "").strip()
+    if not t:
+        return ""
+    # Boss style examples:
+    # - 「Python招聘」_苏州鼎级招聘-BOSS直聘
+    # - Python开发工程师 - 某某科技 - Boss直聘
+    if "_" in t:
+        tail = t.split("_", 1)[1].strip()
+        tail = re.split(r"[-|｜]", tail)[0].strip()
+        tail = tail.replace("招聘", "").replace("诚聘", "").strip()
+        if 1 <= len(tail) <= 24 and "直聘" not in tail:
+            return tail
+    parts = [p.strip() for p in re.split(r"[-|｜]", t) if p.strip()]
+    for p in parts[1:3]:
+        if any(x in p for x in ("直聘", "招聘", "猎聘", "前程无忧", "拉勾", "智联")):
+            continue
+        if 1 <= len(p) <= 24:
+            return p.replace("招聘", "").replace("诚聘", "").strip()
+    return ""
+
+
+def _search_jobs_enterprise_api(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    """
+    Enterprise-grade provider hook (config-driven).
+    Intended for stable cloud use when search engines hit anti-bot limits.
+    """
+    url = os.getenv("ENTERPRISE_JOB_API_URL", "").strip()
+    if not url:
+        return []
+
+    method = os.getenv("ENTERPRISE_JOB_API_METHOD", "GET").strip().upper()
+    timeout_s = int(os.getenv("ENTERPRISE_JOB_API_TIMEOUT_S", "15") or "15")
+    auth_header = os.getenv("ENTERPRISE_JOB_API_AUTH_HEADER", "Authorization").strip() or "Authorization"
+    auth_scheme = os.getenv("ENTERPRISE_JOB_API_AUTH_SCHEME", "Bearer").strip()
+    api_key = os.getenv("ENTERPRISE_JOB_API_KEY", "").strip()
+
+    kw = [k.strip() for k in (keywords or []) if k and k.strip()]
+    query = " ".join(kw[:5]) or "Python"
+    payload = {
+        "query": query,
+        "keywords": kw,
+        "location": (location or "").strip(),
+        "limit": max(1, min(int(limit or 10), 50)),
+    }
+    headers = {"User-Agent": "ai-job-helper/1.0"}
+    if api_key:
+        headers[auth_header] = f"{auth_scheme} {api_key}".strip() if auth_scheme else api_key
+
+    try:
+        if method == "POST":
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout_s)
+        else:
+            resp = requests.get(url, params=payload, headers=headers, timeout=timeout_s)
+        if resp.status_code >= 400:
+            return []
+        data = resp.json() if resp.content else {}
+    except Exception:
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    if isinstance(data, list):
+        rows = [x for x in data if isinstance(x, dict)]
+    elif isinstance(data, dict):
+        for k in ("jobs", "results", "items", "list", "data"):
+            v = data.get(k)
+            if isinstance(v, list):
+                rows = [x for x in v if isinstance(x, dict)]
+                break
+            if isinstance(v, dict):
+                for kk in ("jobs", "results", "items", "list"):
+                    vv = v.get(kk)
+                    if isinstance(vv, list):
+                        rows = [x for x in vv if isinstance(x, dict)]
+                        break
+                if rows:
+                    break
+
+    out: List[Dict[str, Any]] = []
+    for i, row in enumerate(rows, 1):
+        link = _first_non_empty(row, ["link", "url", "job_url", "detail_url", "apply_url", "jobLink", "jobUrl"])
+        if not link:
+            continue
+        title = _first_non_empty(row, ["title", "job_title", "name", "position", "jobName"]) or "招聘岗位"
+        company = _first_non_empty(row, ["company", "company_name", "employer", "brandName"])
+        loc = _first_non_empty(row, ["location", "city", "region", "work_city"]) or (location or "")
+        salary = _first_non_empty(row, ["salary", "salary_range", "pay", "salaryRange"])
+        platform = _first_non_empty(row, ["platform", "source", "site", "origin"]) or _platform_from_link(link)
+        out.append(
+            {
+                "id": f"enterprise_{i}_{abs(hash(link.lower()))}",
+                "title": title,
+                "company": company,
+                "location": loc,
+                "salary": salary,
+                "platform": platform,
+                "link": link,
+                "provider": "enterprise_api",
+                "updated": _first_non_empty(row, ["updated", "updated_at", "publish_time", "published_at"]),
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
+
+
+def _normalize_ddg_redirect(href: str) -> str:
+    href = html_lib.unescape((href or "").strip())
+    if not href:
+        return ""
+    if href.startswith("//"):
+        href = "https:" + href
+    # Absolute DuckDuckGo redirect URL.
+    if href.startswith("http://duckduckgo.com/l/?") or href.startswith("https://duckduckgo.com/l/?"):
+        qs = parse_qs(urlparse(href).query)
+        uddg = (qs.get("uddg") or [""])[0]
+        return unquote(uddg) if uddg else ""
+    if href.startswith("/l/?"):
+        qs = parse_qs(urlparse("https://duckduckgo.com" + href).query)
+        uddg = (qs.get("uddg") or [""])[0]
+        return unquote(uddg) if uddg else ""
+    return href
+
+
+def _search_jobs_duckduckgo(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    q_parts = [k.strip() for k in (keywords or []) if k and k.strip()]
+    if location:
+        q_parts.append(location.strip())
+    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com OR site:lagou.com")
+    q = " ".join(q_parts).strip() or "招聘 职位 site:zhipin.com"
+
+    url = f"https://html.duckduckgo.com/html/?q={quote_plus(q)}"
+    try:
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+            timeout=12,
+        )
+        text = resp.text or ""
+    except Exception:
+        return []
+
+    # result__a href="...">title</a>
+    pattern = re.compile(r'<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for href, raw_title in pattern.findall(text):
+        link = _normalize_ddg_redirect(href)
+        if not link:
+            continue
+        if not (link.startswith("http://") or link.startswith("https://")):
+            continue
+        low = link.lower()
+        if not any(d in low for d in CN_JOB_DOMAINS):
+            continue
+        if low in seen:
+            continue
+        seen.add(low)
+        title = re.sub(r"<[^>]+>", "", raw_title or "")
+        title = html_lib.unescape(title).strip()
+        platform = _platform_from_link(link)
+        company = _infer_company_from_title(title, platform=platform)
+        out.append(
+            {
+                "id": f"duckduckgo_{abs(hash(low))}",
+                "title": title or "招聘岗位",
+                "company": company,
+                "location": location or "",
+                "salary": "",
+                "platform": platform,
+                "link": link,
+                "provider": "duckduckgo",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
+
+
+def _search_jobs_bing_html(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    q_parts = [k.strip() for k in (keywords or []) if k and k.strip()]
+    if location:
+        q_parts.append(location.strip())
+    q_parts.append("招聘 职位 site:zhipin.com OR site:liepin.com OR site:zhaopin.com OR site:51job.com OR site:lagou.com")
+    q = " ".join(q_parts).strip() or "招聘 职位 site:zhipin.com"
+
+    try:
+        resp = requests.get(
+            "https://www.bing.com/search",
+            params={"q": q, "count": max(10, min(int(limit or 10) * 2, 50))},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            },
+            timeout=12,
+        )
+        text = resp.text or ""
+    except Exception:
+        return []
+
+    # <li class="b_algo"> ... <h2><a href="...">title</a>
+    pattern = re.compile(r'<li class="b_algo"[^>]*>.*?<h2><a href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for link, raw_title in pattern.findall(text):
+        if not link.startswith(("http://", "https://")):
+            continue
+        low = link.lower()
+        if not any(d in low for d in CN_JOB_DOMAINS):
+            continue
+        if low in seen:
+            continue
+        seen.add(low)
+        title = re.sub(r"<[^>]+>", "", raw_title or "")
+        title = html_lib.unescape(title).strip()
+        platform = _platform_from_link(link)
+        company = _infer_company_from_title(title, platform=platform)
+        out.append(
+            {
+                "id": f"binghtml_{abs(hash(low))}",
+                "title": title or "招聘岗位",
+                "company": company,
+                "location": location or "",
+                "salary": "",
+                "platform": platform,
+                "link": link,
+                "provider": "bing_html",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
+
+
+def _search_jobs_remotive(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    # Remotive is a public job API and currently reachable in cloud environments.
+    cleaned = [k.strip() for k in (keywords or []) if k and k.strip()]
+    q = cleaned[0] if cleaned else "python"
+    try:
+        resp = requests.get(
+            "https://remotive.com/api/remote-jobs",
+            params={"search": q},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=15,
+        )
+        data = resp.json() if resp.content else {}
+    except Exception:
+        return []
+
+    jobs = data.get("jobs") or []
+    base_rows: List[Dict[str, Any]] = []
+    for it in jobs:
+        link = str(it.get("url") or "").strip()
+        if not link:
+            continue
+        title = str(it.get("title") or "").strip()
+        company = str(it.get("company_name") or "").strip()
+        loc = str(it.get("candidate_required_location") or location or "").strip()
+        base_rows.append(
+            {
+                "id": f"remotive_{it.get('id')}",
+                "title": title or "招聘岗位",
+                "company": company,
+                "location": loc,
+                "salary": str(it.get("salary") or "").strip(),
+                "platform": "Remotive",
+                "link": link,
+                "provider": "remotive",
+                "updated": str(it.get("publication_date") or "").strip(),
+            }
+        )
+        if len(base_rows) >= max(30, int(limit or 10) * 4):
+            break
+
+    if location:
+        narrowed = [j for j in base_rows if location in str(j.get("location") or "")]
+        if narrowed:
+            return _normalize_and_filter_jobs(narrowed, limit=limit)
+    # If no location match, return best available remote jobs instead of empty.
+    return _normalize_and_filter_jobs(base_rows, limit=limit)
+
+
+def _search_jobs_cn_entrypoints(
+    keywords: List[str], location: Optional[str], limit: int = 10
+) -> List[Dict[str, Any]]:
+    """Guaranteed CN-market fallback: job-board search entry links."""
+    kw = [k.strip() for k in (keywords or []) if k and k.strip()]
+    query = " ".join(kw[:3]) or "Python"
+    loc = (location or "").strip()
+
+    boards = [
+        ("Boss直聘", f"https://www.zhipin.com/web/geek/job?query={quote_plus(query)}"),
+        ("猎聘", f"https://www.liepin.com/zhaopin/?key={quote_plus(query)}"),
+        ("智联招聘", f"https://sou.zhaopin.com/?kw={quote_plus(query)}" + (f"&jl={quote_plus(loc)}" if loc else "")),
+        ("前程无忧", f"https://we.51job.com/pc/search?keyword={quote_plus(query)}"),
+        ("拉勾", f"https://www.lagou.com/wn/jobs?kd={quote_plus(query)}"),
+    ]
+    out: List[Dict[str, Any]] = []
+    for i, (platform, link) in enumerate(boards, 1):
+        out.append(
+            {
+                "id": f"cn_portal_{i}_{abs(hash(link))}",
+                "title": f"{query} - {platform}搜索入口",
+                "company": "",
+                "location": loc,
+                "salary": "",
+                "platform": platform,
+                "link": link,
+                "provider": "cn_portal",
+            }
+        )
+        if len(out) >= max(1, int(limit or 10)):
+            break
+    return _normalize_and_filter_jobs(out, limit=limit)
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    """Root now points to the main app UI to avoid old index confusion."""
+    return RedirectResponse(url="/app", status_code=307)
+
+@app.get("/app", response_class=HTMLResponse)
+async def app_page():
+    """主应用页面"""
+    app_candidates = ["static/app.html", "static/app_clean.html"]
+    for app_html in app_candidates:
+        if not (os.path.exists(app_html) and os.path.getsize(app_html) > 64):
+            continue
+        with open(app_html, 'r', encoding='utf-8') as f:
+            return HTMLResponse(content=f.read())
+
+    return """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI求职助手 - 多AI协作系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: fadeInDown 0.8s ease;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: fadeInUp 0.8s ease;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+        
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #e0e0e0;
+            z-index: 0;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .step.active .step-circle {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scale(1.2);
+        }
+        
+        .step-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .step.active .step-label {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .input-section {
+            margin-bottom: 30px;
+        }
+        
+        .input-section label {
+            display: block;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 15px 40px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #666;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        .ai-status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            font-size: 0.95em;
+        }
+        
+        .ai-status .ai-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+        }
+        
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .results.active {
+            display: block;
+        }
+        
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .result-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .result-card pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .ai-roles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .ai-role-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        
+        .ai-role-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .ai-role-card .icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .ai-role-card .name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .ai-role-card .task {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI求职助手</h1>
+            <p>多AI协作系统 - 让6个AI帮您找到理想工作</p>
+        </div>
+        
+        <div class="main-card">
+            <div class="step-indicator">
+                <div class="step active" id="step1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">上传简历</div>
+                </div>
+                <div class="step" id="step2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">AI分析</div>
+                </div>
+                <div class="step" id="step3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">优化简历</div>
+                </div>
+                <div class="step" id="step4">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">面试准备</div>
+                </div>
+            </div>
+            
+            <div class="ai-roles">
+                <div class="ai-role-card">
+                    <div class="icon">👔</div>
+                    <div class="name">职业规划师</div>
+                    <div class="task">分析优势定位</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">🔍</div>
+                    <div class="name">招聘专家</div>
+                    <div class="task">搜索匹配岗位</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">✍️</div>
+                    <div class="name">简历优化师</div>
+                    <div class="task">改写简历内容</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">✅</div>
+                    <div class="name">质量检查官</div>
+                    <div class="task">审核并改进</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">🎓</div>
+                    <div class="name">面试教练</div>
+                    <div class="task">面试辅导</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">🎭</div>
+                    <div class="name">模拟面试官</div>
+                    <div class="task">模拟面试</div>
+                </div>
+            </div>
+            
+            <div class="input-section" id="inputSection">
+                <label>📄 上传简历或输入内容：</label>
+                
+                <!-- 文件上传区域 -->
+                <div style="margin-bottom: 20px;">
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.bmp,.gif" style="display: none;" onchange="handleFileUpload(event)">
+                    <button class="btn-secondary" onclick="document.getElementById('fileInput').click()" style="width: 100%; padding: 20px; font-size: 1em;">
+                        📎 点击上传简历文件（支持PDF、Word、TXT、图片）
+                    </button>
+                    <div id="uploadStatus" style="margin-top: 10px; text-align: center; color: #667eea; font-weight: bold;"></div>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0; color: #999;">或者</div>
+                
+                <textarea id="resumeInput" placeholder="直接输入您的简历内容：
+- 姓名、学历、工作经验
+- 技能清单（编程语言、框架、工具等）
+- 项目经验
+- 求职意向
+
+示例：
+姓名：张三
+学历：本科 - 计算机科学
+工作经验：3年Python开发
+技能：Python, Django, MySQL, Redis
+项目：电商后台系统、数据分析平台
+求职意向：Python后端开发工程师"></textarea>
+                
+                <div class="button-group" style="margin-top: 20px;">
+                    <button class="btn-secondary" onclick="loadExample()">使用示例简历</button>
+                    <button class="btn-primary" onclick="startProcess()">🚀 开始AI协作</button>
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <h3>🤖 AI团队正在协作中...</h3>
+                <p>6个AI正在依次工作，预计需要1-2分钟</p>
+                <div class="ai-status" id="aiStatus"></div>
+            </div>
+            
+            <div class="results" id="results">
+                <h2 style="text-align: center; color: #667eea; margin-bottom: 30px;">🎉 AI协作完成！</h2>
+                
+                <div class="result-card">
+                    <h3>📊 职业分析报告</h3>
+                    <pre id="careerAnalysis"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>🎯 推荐岗位列表</h3>
+                    <pre id="jobRecommendations"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>✍️ 优化后的简历</h3>
+                    <pre id="optimizedResume"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>🎓 面试准备指南</h3>
+                    <pre id="interviewPrep"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>🎭 模拟面试问答</h3>
+                    <pre id="mockInterview"></pre>
+                </div>
+                
+                <div class="button-group" style="margin-top: 30px;">
+                    <button class="btn-secondary" onclick="location.reload()">重新开始</button>
+                    <button class="btn-primary" onclick="downloadResults()">📥 下载结果</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.textContent = '📤 正在上传和解析文件...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '上传失败');
+                }
+                
+                const data = await response.json();
+                
+                // 显示上传成功
+                statusDiv.textContent = `✅ 文件上传成功：${data.filename}`;
+                statusDiv.style.color = '#27ae60';
+                
+                // 等待1秒后自动开始AI处理
+                setTimeout(() => {
+                    statusDiv.textContent = '🚀 正在启动AI协作...';
+                    statusDiv.style.color = '#667eea';
+                    
+                    // 自动开始处理
+                    processResumeText(data.resume_text);
+                }, 1000);
+                
+            } catch (error) {
+                statusDiv.textContent = `❌ ${error.message}`;
+                statusDiv.style.color = '#e74c3c';
+            }
+        }
+        
+        async function processResumeText(resumeText) {
+            // 隐藏输入区，显示加载动画
+            document.getElementById('inputSection').style.display = 'none';
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('step2').classList.add('active');
+            
+            try {
+                // 调用后端API
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ resume: resumeText })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('处理失败');
+                }
+                
+                const data = await response.json();
+                
+                // 显示结果
+                document.getElementById('loading').classList.remove('active');
+                document.getElementById('results').classList.add('active');
+                document.getElementById('step3').classList.add('active');
+                document.getElementById('step4').classList.add('active');
+                
+                document.getElementById('careerAnalysis').textContent = data.career_analysis;
+                document.getElementById('jobRecommendations').textContent = data.job_recommendations;
+                document.getElementById('optimizedResume').textContent = data.optimized_resume;
+                document.getElementById('interviewPrep').textContent = data.interview_prep;
+                document.getElementById('mockInterview').textContent = data.mock_interview;
+                
+            } catch (error) {
+                alert('处理出错：' + error.message);
+                location.reload();
+            }
+        }
+        
+        function loadExample() {
+            document.getElementById('resumeInput').value = `姓名：李明
+学历：本科 - 软件工程
+工作经验：3年Python开发经验
+
+技能清单：
+- 编程语言: Python, JavaScript, SQL
+- 后端框架: Django, Flask, FastAPI
+- 数据库: MySQL, Redis, MongoDB
+- 前端: React, Vue.js, HTML/CSS
+- 工具: Docker, Git, Linux
+
+项目经验：
+1. 电商后台管理系统
+   - 使用Django + MySQL开发
+   - 实现商品管理、订单处理、用户权限等功能
+   - 日均处理订单5000+
+
+2. 数据分析平台
+   - 使用Python + Pandas进行数据处理
+   - 开发可视化报表系统
+   - 支持实时数据监控
+
+3. RESTful API服务
+   - 使用FastAPI开发高性能API
+   - 集成Redis缓存，响应时间<100ms
+   - 日均请求量100万+
+
+求职意向：Python后端开发工程师 / 全栈开发工程师
+期望薪资：20-35K
+工作地点：北京、上海、杭州`;
+        }
+        
+        async function startProcess() {
+            const resume = document.getElementById('resumeInput').value.trim();
+            
+            if (!resume) {
+                alert('请先输入简历内容或上传文件！');
+                return;
+            }
+            
+            // 调用统一的处理函数
+            processResumeText(resume);
+        }
+        
+        function downloadResults() {
+            // 下载所有结果为文本文件
+            const results = {
+                '职业分析': document.getElementById('careerAnalysis').textContent,
+                '推荐岗位': document.getElementById('jobRecommendations').textContent,
+                '优化后简历': document.getElementById('optimizedResume').textContent,
+                '面试准备': document.getElementById('interviewPrep').textContent,
+                '模拟面试': document.getElementById('mockInterview').textContent
+            };
+            
+            let content = '';
+            for (const [title, text] of Object.entries(results)) {
+                content += `\n${'='.repeat(60)}\n${title}\n${'='.repeat(60)}\n\n${text}\n\n`;
+            }
+            
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'AI求职助手-完整结果.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
+"""
+
+
+@app.get("/index.html", response_class=HTMLResponse)
+async def home_alias():
+    """兼容旧入口路径。"""
+    return await home()
+
+
+@app.get("/app_clean.html", response_class=HTMLResponse)
+async def app_clean_alias():
+    """兼容旧工作台路径。"""
+    return await app_page()
+
+
+@app.get("/auto_apply_panel.html", response_class=HTMLResponse)
+async def auto_apply_panel_page():
+    """自动投递面板兼容入口。"""
+    panel_html = "static/auto_apply_panel.html"
+    if os.path.exists(panel_html):
+        with open(panel_html, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Auto Apply Panel</h1><p>/static/auto_apply_panel.html</p>")
+
+
+@app.get("/investor.html", response_class=HTMLResponse)
+async def investor_alias():
+    """兼容旧投资看板路径。"""
+    return await investor_page()
+
+
+@app.get("/investor", response_class=HTMLResponse)
+async def investor_page():
+    """Investor-facing readiness dashboard page."""
+    investor_html = "static/investor.html"
+    if os.path.exists(investor_html):
+        with open(investor_html, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Investor Dashboard</h1><p>/api/investor/readiness</p>")
+
+@app.post("/api/upload")
+async def upload_resume(
+    file: UploadFile = File(...),
+    force_ocr: Optional[str] = Form(None),
+):
+    """上传简历文件（支持PDF、Word、TXT、图片）"""
+    try:
+        # 检查文件类型
+        allowed_types = ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.gif']
+        file_ext = os.path.splitext(file.filename)[1].lower()
+        
+        if file_ext not in allowed_types:
+            return JSONResponse({
+                "error": f"不支持的文件格式。支持：PDF、Word、TXT、图片（JPG/PNG等）"
+            }, status_code=400)
+        
+        # 读取文件内容
+        content = await file.read()
+        resume_text = ""
+        force_pdf_ocr = str(force_ocr or "").strip().lower() in {"1", "true", "yes", "on"}
+        
+        try:
+            # 解析文件
+            if file_ext == '.txt':
+                # 文本文件
+                resume_text = _decode_text_file_bytes(content)
+                    
+            elif file_ext == '.pdf':
+                # PDF文件
+                try:
+                    pdf_source = "none"
+                    if force_pdf_ocr:
+                        resume_text = _extract_pdf_text_ocr(content)
+                        pdf_source = "ocr_forced"
+                        if not resume_text:
+                            resume_text, pdf_source = _extract_pdf_text_best_effort(content)
+                    else:
+                        resume_text, pdf_source = _extract_pdf_text_best_effort(content)
+                    logger.info(
+                        "pdf_extract_done source=%s chars=%s score=%.3f force_ocr=%s",
+                        pdf_source,
+                        len(resume_text or ""),
+                        _text_quality_score(resume_text or ""),
+                        force_pdf_ocr,
+                    )
+                except Exception as e:
+                    return JSONResponse({
+                        "error": f"PDF解析失败: {str(e)}。建议改传可编辑DOCX，或上传清晰图片触发OCR。"
+                    }, status_code=500)
+                    
+            elif file_ext in ['.docx', '.doc']:
+                # Word文件
+                try:
+                    from docx import Document
+                    import io
+                    doc = Document(io.BytesIO(content))
+                    
+                    # 提取段落文本
+                    for paragraph in doc.paragraphs:
+                        if paragraph.text.strip():
+                            resume_text += paragraph.text + "\n"
+                    
+                    # 提取表格文本
+                    for table in doc.tables:
+                        for row in table.rows:
+                            for cell in row.cells:
+                                if cell.text.strip():
+                                    resume_text += cell.text + " "
+                            resume_text += "\n"
+                            
+                except Exception as e:
+                    return JSONResponse({
+                        "error": f"Word文档解析失败: {str(e)}。请确保文件未损坏。"
+                    }, status_code=500)
+                    
+            elif file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.gif']:
+                # 图片文件 - 使用OCR
+                try:
+                    from PIL import Image
+                    import io
+                    
+                    # 打开图片
+                    image = Image.open(io.BytesIO(content))
+                    
+                    # OCR识别（支持中英文）
+                    resume_text = _ocr_image_best_effort(image)
+                    
+                    if not resume_text.strip():
+                        return JSONResponse({
+                            "error": "图片OCR未提取到有效文字。请保证分辨率清晰，或改传DOCX/TXT。"
+                        }, status_code=500)
+                        
+                except ImportError:
+                    return JSONResponse({
+                        "error": "图片OCR依赖未安装（Tesseract/PyMuPDF）。请联系管理员安装后重试。"
+                    }, status_code=500)
+                except Exception as e:
+                    return JSONResponse({
+                        "error": f"图片识别失败: {str(e)}。请确保图片清晰可读。"
+                    }, status_code=500)
+            
+            # 检查是否成功提取到内容
+            if not resume_text.strip():
+                return JSONResponse({
+                    "error": "文件解析成功，但未能提取到有效内容。请检查文件是否为空或格式是否正确。"
+                }, status_code=500)
+
+            _track_event(
+                "resume_uploaded",
+                {
+                    "filename": file.filename,
+                    "ext": file_ext,
+                    "chars": len(resume_text.strip()),
+                },
+            )
+            return JSONResponse({
+                "success": True,
+                "resume_text": resume_text.strip(),
+                "filename": file.filename
+            })
+            
+        except Exception as e:
+            return JSONResponse({
+                "error": f"文件解析出错: {str(e)}"
+            }, status_code=500)
+        
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/upload", "error": str(e)[:300]})
+        return JSONResponse({"error": f"上传失败: {str(e)}"}, status_code=500)
+
+@app.websocket("/ws/progress")
+async def websocket_progress(websocket: WebSocket):
+    """WebSocket实时进度推送"""
+    await websocket.accept()
+    await progress_tracker.connect(websocket)
+    
+    try:
+        while True:
+            # 保持连接
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        progress_tracker.disconnect(websocket)
+
+@app.post("/api/process")
+async def process_resume(request: Request):
+    """处理简历的API接口 - 市场驱动"""
+    try:
+        data = await request.json()
+        resume_text = data.get("resume", "")
+        
+        if not resume_text:
+            return _api_error("简历内容不能为空", status_code=400, code="empty_resume")
+
+        _track_event("resume_process_started", {"chars": len(resume_text)})
+
+        # 重置进度
+        progress_tracker.reset()
+        
+        # 定义进度回调
+        async def update_progress_callback(step, message, agent):
+            await progress_tracker.update_progress(step, message, agent)
+            await progress_tracker.add_ai_message(agent, message)
+        
+        # 使用市场驱动引擎处理
+        results = await market_engine.process_resume(resume_text, update_progress_callback)
+
+        # Seed job search (Boss/OpenClaw) from resume text, so frontend can auto-search links.
+        info = analyzer.extract_info(resume_text)
+        seed_keywords = []
+        if info.get("job_intention") and info["job_intention"] != "未指定":
+            seed_keywords.append(info["job_intention"])
+        seed_keywords.extend((info.get("skills") or [])[:6])
+        seed_keywords = [k for k in seed_keywords if k]
+
+        seed_location = None
+        locs = info.get("preferred_locations") or []
+        if locs:
+            seed_location = locs[0]
+        provider_mode = (real_job_service.get_statistics() or {}).get("provider_mode", "")
+        
+        # Real, actionable job text block (backward compatible with legacy UI field).
+        def _format_real_jobs(jobs: List[Dict[str, Any]], mode: str) -> str:
+            if not jobs:
+                return (
+                    '【推荐岗位】（当前暂无可用岗位）\n\n'
+                    '排查建议：\n'
+                    '1. 检查云端缓存：访问 /api/crawler/status。\n'
+                    '2. 检查企业级招聘 API 是否已配置。\n'
+                    '3. 若搜索引擎触发风控，可稍后重试。\n\n'
+                    '注意：系统默认不会回退到“搜索入口链接”或演示岗位。\n'
+                )
+
+            heading = '【推荐岗位】（中国劳动力市场真实数据）'
+            if mode == 'openclaw':
+                heading = '【推荐岗位】（来自 Boss 直聘实时数据，OpenClaw）'
+            elif mode == 'cloud':
+                heading = '【推荐岗位】（来自 Boss 直聘云端缓存）'
+            elif mode in ('baidu', 'bing', 'brave'):
+                heading = f'【推荐岗位】（来自搜索引擎 {mode}）'
+            elif mode == 'remotive':
+                heading = '【推荐岗位】（来自全球招聘API，仅在显式开启时使用）'
+            elif mode == 'bing_html':
+                heading = '【推荐岗位】（来自 Bing 无浏览器搜索）'
+            elif mode == 'duckduckgo':
+                heading = '【推荐岗位】（来自 DuckDuckGo 无浏览器搜索）'
+            elif mode == 'jooble':
+                heading = '【推荐岗位】（来自 Jooble API）'
+            elif mode == 'enterprise_api':
+                heading = '【推荐岗位】（企业级中国招聘API实时数据）'
+            elif mode == 'no_real_jobs':
+                heading = '【推荐岗位】（未检索到可投递真实岗位）'
+
+            lines = [heading, '']
+            for i, job in enumerate(jobs, 1):
+                title = job.get('title') or job.get('job_title') or '未知岗位'
+                company = job.get('company') or ''
+                loc = job.get('location') or ''
+                salary = job.get('salary') or job.get('salary_range') or ''
+                link = job.get('link') or job.get('apply_url') or ''
+
+                mp = job.get('match_percentage')
+                if mp is None:
+                    mp = job.get('match_rate')
+                if mp is None:
+                    mp = job.get('match_score')
+                mp_str = f"{mp}%" if isinstance(mp, (int, float)) else ''
+
+                lines.append(f"{i}. {title}" + (f" - {company}" if company else ''))
+                if salary:
+                    lines.append(f"   薪资：{salary}")
+                if loc:
+                    lines.append(f"   地点：{loc}")
+                if mp_str:
+                    lines.append(f"   匹配度：{mp_str}")
+                if link:
+                    lines.append(f"   链接：{link}")
+                lines.append('')
+
+            return "\n".join(lines).strip() + "\n"
+
+        async def _get_real_jobs_for_recommendation():
+            cfg_mode = os.getenv('JOB_DATA_PROVIDER', 'auto').strip().lower()
+            allow_portal_fallback = os.getenv("ALLOW_CN_PORTAL_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+            kw = seed_keywords[:10]
+            loc = seed_location
+
+            if cfg_mode == 'cloud' or cloud_jobs_cache:
+                cached = _filter_cloud_cache_by_query(kw, loc, limit=10)
+                cached = _enforce_cn_market_jobs(cached)
+                if cached:
+                    return cached, 'cloud'
+                # Cache empty/insufficient: fallback to cloud-safe real-time providers.
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    loc,
+                    limit=10,
+                    allow_portal_fallback=allow_portal_fallback,
+                )
+                return _enforce_cn_market_jobs(fallback_jobs), fallback_mode
+
+            try:
+                jobs = _normalize_real_jobs(
+                    real_job_service.search_jobs(keywords=kw, location=loc, limit=10),
+                    limit=10,
+                )
+                jobs = _enforce_cn_market_jobs(jobs)
+                mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
+                if jobs:
+                    return jobs[:10], mode
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    loc,
+                    limit=10,
+                    allow_portal_fallback=allow_portal_fallback,
+                )
+                return _enforce_cn_market_jobs(fallback_jobs), fallback_mode or mode
+            except Exception:
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    loc,
+                    limit=10,
+                    allow_portal_fallback=allow_portal_fallback,
+                )
+                return _enforce_cn_market_jobs(fallback_jobs), fallback_mode or cfg_mode
+
+        real_jobs, real_mode = await _get_real_jobs_for_recommendation()
+        public_jobs = _public_job_payload(_enforce_cn_market_jobs(real_jobs), limit=10)
+        interview_pack = job_intelligence_service.build_interview_pack(
+            resume_text=resume_text,
+            jobs=public_jobs,
+            top_n=8,
+        )
+        interview_keywords: List[str] = []
+        interview_keywords.extend(seed_keywords[:4])
+        interview_keywords.extend(
+            [
+                str(j.get("title") or "").strip()
+                for j in public_jobs[:3]
+                if str(j.get("title") or "").strip()
+            ]
+        )
+        interview_keywords = [k for k in interview_keywords if k][:8]
+        interview_experiences: List[Dict[str, Any]] = []
+        interview_experience_digest: str = ""
+        try:
+            interview_experiences = await asyncio.to_thread(
+                interview_experience_service.search_experiences,
+                interview_keywords,
+                seed_location or "",
+                12,
+            )
+            interview_experience_digest = interview_experience_service.render_digest(
+                interview_experiences,
+                top_n=6,
+            )
+            _track_event(
+                "interview_experience_lookup",
+                {
+                    "source": "process",
+                    "keywords_count": len(interview_keywords),
+                    "location": bool(seed_location),
+                    "count": len(interview_experiences),
+                },
+            )
+        except Exception as ie:
+            _track_event(
+                "interview_experience_lookup_failed",
+                {"error": str(ie)[:300]},
+            )
+        results["job_recommendations"] = _format_real_jobs(public_jobs, real_mode)
+        results, quality_gate = _run_output_quality_gate(results, resume_text, info, public_jobs)
+        provider_mode = real_mode
+
+        # 完成
+        await progress_tracker.complete()
+        await progress_tracker.add_ai_message("系统", "🎉 市场分析完成！")
+        _track_event(
+            "process_quality_gate",
+            {
+                "passed": bool(quality_gate.get("passed", True)),
+                "issues_count": len(quality_gate.get("issues") or []),
+            },
+        )
+        _track_event(
+            "job_recommendation_ready",
+            {
+                "provider_mode": provider_mode,
+                "real_jobs_count": len(public_jobs),
+                "top_stack": (interview_pack.get("summary") or {}).get("top_stack", ""),
+                "interview_experience_count": len(interview_experiences),
+            },
+        )
+        _track_event(
+            "resume_processed",
+            {
+                "ok": True,
+                "provider_mode": provider_mode,
+                "skills_count": len(seed_keywords),
+                "real_jobs_count": len(public_jobs),
+                "interview_experience_count": len(interview_experiences),
+                "quality_gate_passed": bool(quality_gate.get("passed", True)),
+            },
+        )
+
+        response_payload = {
+            "career_analysis": str(results.get("market_analysis") or ""),
+            "job_recommendations": str(results.get("job_recommendations") or ""),
+            "optimized_resume": str(results.get("optimized_resume") or ""),
+            "interview_prep": str(results.get("interview_prep") or ""),
+            "mock_interview": str(results.get("salary_analysis") or ""),
+            "job_provider_mode": str(provider_mode or ""),
+            "recommended_jobs": public_jobs,
+            "interview_experiences": interview_experiences,
+            "interview_experience_digest": str(interview_experience_digest or ""),
+            "recommendation_quality": {
+                "strict_real_posting": True,
+                "count": len(public_jobs),
+                "has_actionable_jobs": bool(public_jobs),
+            },
+            "interview_pack": interview_pack,
+            "quality_gate": quality_gate,
+            "schema_version": PROCESS_RESPONSE_SCHEMA_VERSION,
+            "boss_seed": {
+                "keywords": seed_keywords,
+                "location": seed_location,
+            },
+        }
+        shape_errors = _validate_process_response_shape(response_payload)
+        if shape_errors:
+            _track_event(
+                "process_contract_error",
+                {
+                    "count": len(shape_errors),
+                    "sample": shape_errors[:3],
+                },
+            )
+            return _api_error("输出JSON未通过契约校验", status_code=500, code="process_contract_failed")
+
+        return _api_success(response_payload)
+        
+    except Exception as e:
+        _track_event("resume_process_failed", {"error": str(e)[:300]})
+        _track_event("resume_processed", {"ok": False, "error": str(e)[:300]})
+        _track_event("api_error", {"api": "/api/process", "error": str(e)[:300]})
+        await progress_tracker.error(f"处理出错: {str(e)}")
+        return _api_error(str(e), status_code=500, code="process_failed")
+
+@app.get("/api/health")
+async def health_check():
+    """健康检查"""
+    stats = real_job_service.get_statistics()
+    biz = business_service.metrics()
+    
+    # 检查OpenClaw状态
+    openclaw_status = None
+    if stats.get("provider_mode") == "openclaw":
+        from app.services.job_providers.openclaw_browser_provider import OpenClawBrowserProvider
+        openclaw = OpenClawBrowserProvider()
+        openclaw_status = openclaw.health_check()
+    
+    return _api_success({
+        "status": "ok",
+        "message": "AI求职助手运行正常",
+        "boot_ts": APP_BOOT_TS,
+        "uptime_s": round(time.perf_counter() - APP_BOOT_MONO, 1),
+        "job_database": stats,
+        "openclaw": openclaw_status,
+        "business": {
+            "leads_total": biz.get("leads", {}).get("total", 0),
+            "uploads": biz.get("funnel", {}).get("uploads", 0),
+            "process_runs": biz.get("funnel", {}).get("process_runs", 0),
+            "searches": biz.get("funnel", {}).get("searches", 0),
+            "applies": biz.get("funnel", {}).get("applies", 0),
+        },
+        "config": {
+            "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
+            "cloud_cache_total": len(cloud_jobs_cache),
+            "cloud_last_push_at": cloud_jobs_meta.get("last_push_at"),
+            "no_browser_fallback_enabled": True,
+            "enterprise_job_api_configured": bool(os.getenv("ENTERPRISE_JOB_API_URL", "").strip()),
+            "llm": get_public_llm_config(),
+        },
+    })
+
+
+
+@app.get("/api/version")
+async def version():
+    """Expose basic build metadata for debugging deployments."""
+    return _api_success({
+        "job_data_provider": os.getenv("JOB_DATA_PROVIDER", "auto"),
+        "railway_git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+        "github_sha": os.getenv("GITHUB_SHA"),
+        "app_boot_ts": APP_BOOT_TS,
+    })
+
+
+@app.get("/api/ping")
+async def ping():
+    """Ultra-light probe for availability checks."""
+    return _api_success({"ok": True, "ts": datetime.now().isoformat()})
+
+
+@app.get("/api/ready")
+async def ready():
+    """Release gate probe used by QA/ops before Go/No-Go."""
+    cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+    cache_total = len(cloud_jobs_cache)
+    checks = {
+        "api_alive": True,
+        "cn_provider_mode": cfg_mode in {"auto", "cloud", "baidu", "bing", "brave", "jooble", "openclaw", "enterprise_api"},
+        "cache_or_cn_fallback": cache_total > 0 or True,
+        "global_fallback_disabled_by_default": os.getenv("ENABLE_GLOBAL_JOB_FALLBACK", "").strip().lower() not in {"1", "true", "yes", "on"},
+        "enterprise_api_configured": bool(os.getenv("ENTERPRISE_JOB_API_URL", "").strip()),
+    }
+    score = round(sum(1 for v in checks.values() if v) / len(checks) * 100, 1)
+    status = "ready" if score >= 75 else "not_ready"
+    return _api_success(
+        {
+            "status": status,
+            "score": score,
+            "checks": checks,
+            "provider_mode": cfg_mode,
+            "cloud_cache_total": cache_total,
+            "boot_ts": APP_BOOT_TS,
+        }
+    )
+
+
+@app.post("/api/business/lead")
+async def capture_business_lead(request: Request):
+    """Capture B2B/B2C monetization leads from landing page."""
+    try:
+        data = await request.json()
+        email = (data.get("email") or "").strip()
+        if ("@" not in email) or ("." not in email):
+            return JSONResponse({"error": "请输入有效邮箱"}, status_code=400)
+
+        payload = business_service.add_lead(
+            email=email,
+            name=(data.get("name") or "").strip(),
+            company=(data.get("company") or "").strip(),
+            use_case=(data.get("use_case") or "").strip(),
+            budget=(data.get("budget") or "").strip(),
+            source=(data.get("source") or "landing").strip(),
+            note=(data.get("note") or "").strip(),
+        )
+        return JSONResponse({"success": True, "data": payload})
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/business/lead", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/business/feedback")
+async def capture_user_feedback(request: Request):
+    """Capture user feedback from product and landing pages."""
+    try:
+        data = await request.json()
+        message = (data.get("message") or "").strip()
+        if len(message) < 5:
+            return JSONResponse({"error": "反馈内容太短，请至少输入5个字符"}, status_code=400)
+        rating_raw = data.get("rating")
+        rating = int(rating_raw) if str(rating_raw).strip() else None
+        payload = business_service.add_feedback(
+            message=message,
+            rating=rating,
+            category=(data.get("category") or "").strip(),
+            email=(data.get("email") or "").strip(),
+            source=(data.get("source") or "product").strip(),
+            page=(data.get("page") or "").strip(),
+        )
+        return JSONResponse({"success": True, "data": payload})
+    except ValueError as ve:
+        return JSONResponse({"error": str(ve)}, status_code=400)
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/business/feedback", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/business/event")
+async def capture_public_event(request: Request):
+    """Public-safe growth event ingest endpoint for frontend KPI tracking."""
+    try:
+        data = await request.json()
+        event_name = str(data.get("event_name") or "").strip().lower()
+        payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+
+        if (not event_name) or (not PUBLIC_EVENT_NAME_PATTERN.match(event_name)):
+            return JSONResponse({"error": "invalid event_name"}, status_code=400)
+        if event_name not in PUBLIC_EVENT_WHITELIST:
+            return JSONResponse({"error": "event not allowed"}, status_code=400)
+
+        business_service.track_event(event_name, payload)
+        return JSONResponse({"success": True})
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/business/event", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/feedback/summary")
+async def feedback_summary(request: Request, days: int = 7, limit: int = 20):
+    """Feedback summary for ops dashboards and growth automation."""
+    token = os.getenv("ADMIN_METRICS_TOKEN", "").strip()
+    supplied = request.headers.get("x-admin-token", "").strip()
+    if token and supplied != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        return JSONResponse({"success": True, "data": business_service.feedback_summary(days=days, limit=limit)})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/public-proof")
+async def business_public_proof():
+    """Public-safe proof counters used on landing page."""
+    try:
+        m = business_service.metrics()
+        funnel = m.get("funnel", {})
+        engagement = m.get("engagement", {})
+        quality = m.get("quality", {})
+        return _api_success(
+            {
+                "leads_total": int(m.get("leads", {}).get("total", 0) or 0),
+                "feedback_total": int(m.get("feedback", {}).get("total", 0) or 0),
+                "uploads_total": int(funnel.get("uploads", 0) or 0),
+                "process_runs_total": int(funnel.get("process_runs", 0) or 0),
+                "searches_total": int(funnel.get("searches", 0) or 0),
+                "applies_total": int(funnel.get("applies", 0) or 0),
+                "job_link_clicks_total": int(engagement.get("job_link_clicks", 0) or 0),
+                "result_downloads_total": int(engagement.get("result_downloads", 0) or 0),
+                "upload_to_process_pct": float(funnel.get("upload_to_process_pct", 0) or 0),
+                "process_to_search_pct": float(funnel.get("process_to_search_pct", 0) or 0),
+                "search_to_apply_pct": float(funnel.get("search_to_apply_pct", 0) or 0),
+                "click_to_apply_pct": float(engagement.get("click_to_apply_pct", 0) or 0),
+                "quality_gate_fail_rate_pct": float(quality.get("gate_fail_rate_pct", 0) or 0),
+            }
+        )
+    except Exception as e:
+        return _api_error(str(e), status_code=500, code="business_public_proof_failed")
+
+
+@app.get("/api/business/metrics")
+async def business_metrics(request: Request):
+    """Operational funnel metrics for fundraising / monetization tracking."""
+    token = os.getenv("ADMIN_METRICS_TOKEN", "").strip()
+    supplied = request.headers.get("x-admin-token", "").strip()
+    if token and supplied != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        return JSONResponse({"success": True, "data": business_service.metrics()})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/business/readiness")
+async def business_readiness(request: Request):
+    """Simple GTM readiness snapshot for investor demos."""
+    token = os.getenv("ADMIN_METRICS_TOKEN", "").strip()
+    supplied = request.headers.get("x-admin-token", "").strip()
+    if token and supplied != token:
+        return JSONResponse({"error": "forbidden"}, status_code=403)
+    try:
+        m = business_service.metrics()
+        funnel = m.get("funnel", {})
+        leads = m.get("leads", {})
+        feedback = m.get("feedback", {})
+        checks = {
+            "lead_capture_ready": leads.get("total", 0) >= 1,
+            "feedback_loop_ready": feedback.get("last_7d", 0) >= 1,
+            "activation_flow_ready": funnel.get("upload_to_process_pct", 0) > 0,
+            "job_match_flow_ready": funnel.get("process_to_search_pct", 0) > 0,
+            "monetization_signal_ready": funnel.get("search_to_apply_pct", 0) > 0,
+        }
+        score = round(sum(1 for v in checks.values() if v) / len(checks) * 100, 1)
+        return JSONResponse(
+            {
+                "success": True,
+                "score": score,
+                "checks": checks,
+                "metrics": m,
+            }
+        )
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/investor/readiness")
+async def investor_readiness(request: Request):
+    """
+    Investor-facing readiness API.
+    Optional auth via INVESTOR_READ_TOKEN header x-investor-token.
+    """
+    token = os.getenv("INVESTOR_READ_TOKEN", "").strip()
+    supplied = request.headers.get("x-investor-token", "").strip()
+    if token and supplied != token:
+        return _api_error("forbidden", status_code=403, code="forbidden")
+    try:
+        return _api_success(_build_investor_readiness_snapshot())
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/investor/readiness", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="investor_readiness_failed")
+
+
+@app.get("/api/investor/summary")
+async def investor_summary(request: Request):
+    """Compact summary payload for pitch materials."""
+    token = os.getenv("INVESTOR_READ_TOKEN", "").strip()
+    supplied = request.headers.get("x-investor-token", "").strip()
+    if token and supplied != token:
+        return _api_error("forbidden", status_code=403, code="forbidden")
+    try:
+        snap = _build_investor_readiness_snapshot()
+        p = snap.get("pillars", {})
+        narrative = [
+            f"Current financing readiness status: {snap.get('status')} (score {snap.get('overall_score')}).",
+            f"Product pillar score: {p.get('product')}, reliability: {p.get('reliability')}.",
+            f"Traction pillar score: {p.get('traction')}, GTM pillar score: {p.get('go_to_market')}.",
+            f"Feedback captured so far: {(snap.get('metrics') or {}).get('feedback', {}).get('total', 0)}.",
+            "Next 30 days focus: increase uploads, process runs, qualified leads, and actionable user feedback while keeping CN-real job links stable.",
+        ]
+        return _api_success(
+            {
+                "status": snap.get("status"),
+                "overall_score": snap.get("overall_score"),
+                "pillars": p,
+                "highlights": snap.get("highlights", {}),
+                "next_30d_targets": snap.get("next_30d_targets", {}),
+                "narrative": narrative,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/investor/summary", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="investor_summary_failed")
+
+
+@app.get("/api/auth/providers")
+async def oauth_provider_status():
+    providers: Dict[str, Any] = {}
+    for provider in OAUTH_PROVIDER_META.keys():
+        cfg = _oauth_provider_config(provider)
+        providers[provider] = {
+            "configured": _oauth_is_configured(cfg),
+            "redirect_uri": str(cfg.get("redirect_uri") or ""),
+            "scope": str(cfg.get("scope") or ""),
+        }
+    return _api_success({"providers": providers})
+
+
+@app.get("/api/auth/{provider}/start")
+async def oauth_start(provider: str, redirect_after: str = ""):
+    name = (provider or "").strip().lower()
+    if name not in OAUTH_PROVIDER_META:
+        return _api_error("unsupported_oauth_provider", status_code=400, code="unsupported_oauth_provider")
+
+    cfg = _oauth_provider_config(name)
+    if not _oauth_is_configured(cfg):
+        return _api_error(
+            f"{name} oauth not configured",
+            status_code=400,
+            code="oauth_provider_not_configured",
+        )
+
+    try:
+        state = _oauth_issue_state(name, redirect_after=redirect_after)
+        auth_url = _oauth_build_authorize_url(cfg, state)
+        return _api_success(
+            {
+                "provider": name,
+                "state": state,
+                "auth_url": auth_url,
+                "redirect_after": redirect_after or "",
+            }
+        )
+    except Exception as e:
+        return _api_error(str(e), status_code=500, code="oauth_start_failed")
+
+
+@app.get("/api/auth/{provider}/callback")
+async def oauth_callback(
+    provider: str,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    error_description: str = "",
+):
+    name = (provider or "").strip().lower()
+    if name not in OAUTH_PROVIDER_META:
+        return _api_error("unsupported_oauth_provider", status_code=400, code="unsupported_oauth_provider")
+
+    if error:
+        return _api_error(
+            f"{error}: {error_description}".strip(),
+            status_code=400,
+            code="oauth_authorization_denied",
+        )
+    if not code:
+        return _api_error("missing_oauth_code", status_code=400, code="missing_oauth_code")
+    if not state:
+        return _api_error("missing_oauth_state", status_code=400, code="missing_oauth_state")
+
+    cfg = _oauth_provider_config(name)
+    if not _oauth_is_configured(cfg):
+        return _api_error(
+            f"{name} oauth not configured",
+            status_code=400,
+            code="oauth_provider_not_configured",
+        )
+
+    try:
+        state_row = _oauth_validate_state(name, state)
+    except Exception as e:
+        return _api_error(str(e), status_code=400, code="oauth_state_invalid")
+
+    try:
+        token_payload = _oauth_exchange_token(cfg, code=code)
+    except Exception as e:
+        return _api_error(str(e), status_code=502, code="oauth_token_exchange_failed")
+
+    access_token = str(token_payload.get("access_token") or "")
+    preview = ""
+    if access_token:
+        preview = (access_token[:6] + "..." + access_token[-4:]) if len(access_token) > 14 else "***"
+
+    _track_event(
+        "oauth_callback_success",
+        {
+            "provider": name,
+            "has_access_token": bool(access_token),
+            "redirect_after": state_row.get("redirect_after") or "",
+        },
+    )
+    return _api_success(
+        {
+            "provider": name,
+            "token_type": str(token_payload.get("token_type") or ""),
+            "expires_in": int(token_payload.get("expires_in") or 0),
+            "scope": str(token_payload.get("scope") or ""),
+            "access_token_preview": preview,
+            "redirect_after": state_row.get("redirect_after") or "",
+            "raw": token_payload if os.getenv("OAUTH_DEBUG", "").strip().lower() in {"1", "true", "yes"} else {},
+        }
+    )
+
+
+@app.post("/api/interview/prep_pack")
+async def build_interview_prep_pack(request: Request):
+    """
+    Build interview prep pack based on:
+      - resume_text
+      - provided jobs OR job_ids from recent search cache.
+    """
+    try:
+        data = await request.json()
+        resume_text = str(data.get("resume_text") or "").strip()
+        raw_jobs = data.get("jobs") if isinstance(data.get("jobs"), list) else []
+        job_ids = data.get("job_ids") if isinstance(data.get("job_ids"), list) else []
+
+        jobs: List[Dict[str, Any]] = [row for row in raw_jobs if isinstance(row, dict)]
+        if (not jobs) and job_ids:
+            for job_id in job_ids:
+                row = recent_search_jobs.get(str(job_id))
+                if isinstance(row, dict):
+                    jobs.append(row)
+
+        jobs = _normalize_real_jobs(jobs, limit=20)
+        jobs = _enforce_cn_market_jobs(jobs)
+        jobs = job_intelligence_service.enrich_jobs(jobs)
+
+        interview_pack = job_intelligence_service.build_interview_pack(
+            resume_text=resume_text,
+            jobs=jobs,
+            top_n=8,
+        )
+        _track_event(
+            "interview_prep_generated",
+            {
+                "jobs_count": len(jobs),
+                "with_resume_text": bool(resume_text),
+            },
+        )
+        return _api_success(
+            {
+                "jobs": _public_job_payload(jobs, limit=20),
+                "interview_pack": interview_pack,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/interview/prep_pack", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="interview_prep_failed")
+
+
+@app.get("/api/interview/experiences")
+async def interview_experiences(
+    keywords: str = "",
+    location: str = "",
+    sources: str = "",
+    limit: int = 12,
+):
+    """
+    Aggregate public interview experiences from search engines and community sites.
+    """
+    try:
+        keyword_list = [k.strip() for k in (keywords or "").split(",") if k and k.strip()]
+        source_list = [s.strip().lower() for s in (sources or "").split(",") if s and s.strip()]
+        n = max(1, min(int(limit or 12), 30))
+        rows: List[Dict[str, Any]] = []
+
+        # Prefer the enhanced collector for unified fields + source filtering.
+        try:
+            rows = await asyncio.to_thread(
+                interview_experience_collector_service.search,
+                keyword_list,
+                location,
+                source_list,
+                n,
+            )
+        except Exception:
+            rows = []
+
+        # Fallback keeps legacy behavior available.
+        if not rows:
+            rows = await asyncio.to_thread(
+                interview_experience_service.search_experiences,
+                keyword_list,
+                location,
+                n,
+                source_list,
+                True,
+            )
+
+        digest = interview_experience_service.render_digest(rows, top_n=min(6, n))
+        _track_event(
+            "interview_experience_collected",
+            {
+                "keywords_count": len(keyword_list),
+                "sources_count": len(source_list),
+                "result_count": len(rows),
+                "location": location or "",
+            },
+        )
+        return _api_success(
+            {
+                "keywords": keyword_list,
+                "location": location or "",
+                "sources": source_list,
+                "total": len(rows),
+                "items": rows,
+                "interview_experiences": rows,
+                "interview_experience_digest": digest,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/interview/experiences", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="interview_experience_failed")
+
+
+@app.get("/api/interview/experiences/search")
+async def interview_experiences_search(
+    keywords: str = "",
+    location: str = "",
+    sources: str = "nowcoder,xiaohongshu",
+    limit: int = 12,
+):
+    """
+    Enhanced interview experience search endpoint.
+    Returns unified `items` and keeps `interview_experiences` for compatibility.
+    """
+    try:
+        keyword_list = [k.strip() for k in (keywords or "").split(",") if k and k.strip()]
+        source_list = [s.strip().lower() for s in (sources or "").split(",") if s and s.strip()]
+        n = max(1, min(int(limit or 12), 30))
+
+        rows: List[Dict[str, Any]] = []
+        try:
+            rows = await asyncio.to_thread(
+                interview_experience_collector_service.search,
+                keyword_list,
+                location,
+                source_list,
+                n,
+            )
+        except Exception:
+            rows = []
+
+        # Ensure source-filtered unified output is still available if collector fails.
+        if not rows:
+            rows = await asyncio.to_thread(
+                interview_experience_service.search_experiences,
+                keyword_list,
+                location,
+                n,
+                source_list,
+                True,
+            )
+        digest = interview_experience_service.render_digest(rows, top_n=min(6, n))
+        _track_event(
+            "interview_experience_search",
+            {
+                "keywords_count": len(keyword_list),
+                "sources_count": len(source_list),
+                "result_count": len(rows),
+                "location": location or "",
+            },
+        )
+        return _api_success(
+            {
+                "keywords": keyword_list,
+                "location": location or "",
+                "sources": source_list,
+                "total": len(rows),
+                "items": rows,
+                "interview_experiences": rows,
+                "interview_experience_digest": digest,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/interview/experiences/search", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="interview_experience_search_failed")
+
+
+@app.get("/api/jobs/search")
+async def search_jobs(
+    keywords: str = None,
+    location: str = None,
+    salary_min: int = None,
+    experience: str = None,
+    limit: int = 50,
+    allow_portal_fallback: bool = False,
+    provider: str = None,
+):
+    """搜索真实岗位"""
+    try:
+        cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+        provider_override = str(provider or "").strip().lower()
+        if provider_override and provider_override not in {
+            "auto",
+            "cloud",
+            "baidu",
+            "bing",
+            "brave",
+            "jooble",
+            "openclaw",
+            "enterprise_api",
+            "local",
+            "offline",
+        }:
+            return _api_error(f"unsupported provider: {provider_override}", status_code=400, code="invalid_provider")
+        effective_mode = provider_override or cfg_mode
+        n = int(limit) if limit is not None else 50
+        n = max(1, min(n, 100))
+        keyword_list = keywords.split(",") if keywords else []
+        kw = [k.strip() for k in keyword_list if k and k.strip()]
+        allow_portal = bool(allow_portal_fallback) or (
+            os.getenv("ALLOW_CN_PORTAL_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
+        )
+
+        # Cloud mode: prefer crawler cache; fallback to cloud-safe real-time providers.
+        if effective_mode == "cloud" or (effective_mode == "auto" and cloud_jobs_cache):
+            jobs = _filter_cloud_cache_by_query(kw, location, limit=n)
+            jobs = _enforce_cn_market_jobs(jobs)
+            warning = None
+            mode = "cloud"
+            if not jobs:
+                fallback_jobs, fallback_mode, fallback_err = _search_jobs_without_browser(
+                    kw,
+                    location,
+                    limit=n,
+                    allow_portal_fallback=allow_portal,
+                    force_provider=provider_override or None,
+                )
+                jobs = _enforce_cn_market_jobs(fallback_jobs)
+                mode = fallback_mode or "cloud"
+                warning = (
+                    f"cloud cache is empty; switched to no-browser provider: {mode}"
+                    if jobs
+                    else (
+                        f"cloud cache empty and no-browser search failed: {fallback_err}"
+                        if fallback_err
+                        else "cloud cache is empty and no real jobs were found"
+                    )
+                )
+            _track_event(
+                "job_search",
+                {
+                    "provider_mode": mode,
+                    "provider_override": provider_override or "",
+                    "result_count": len(jobs),
+                    "cloud_mode": True,
+                },
+            )
+            _cache_recent_jobs(jobs)
+            return _api_success({
+                "total": len(jobs),
+                "jobs": jobs,
+                "provider_mode": mode,
+                "provider_override": provider_override or None,
+                "warning": warning,
+            })
+
+        # Stream progress to the same WebSocket channel as the AI pipeline.
+        # Frontend listens for `type=job_search`.
+        import asyncio
+
+        def progress_cb(message: str, percent: int):
+            asyncio.create_task(
+                progress_tracker.broadcast(
+                    {"type": "job_search", "data": {"message": message, "percent": int(percent)}}
+                )
+            )
+
+        search_service = real_job_service
+        if provider_override and provider_override not in {"cloud", "enterprise_api"}:
+            from app.services.real_job_service import RealJobService
+            search_service = RealJobService()
+            search_service.provider_name = provider_override
+
+        try:
+            jobs = search_service.search_jobs(
+                keywords=kw,
+                location=location,
+                salary_min=salary_min,
+                experience=experience,
+                limit=n,
+                progress_callback=progress_cb,
+            )
+            jobs = _normalize_real_jobs(jobs, limit=n)
+            jobs = _enforce_cn_market_jobs(jobs)
+            mode = (search_service.get_statistics() or {}).get("provider_mode", effective_mode)
+            if not jobs:
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    location,
+                    limit=n,
+                    allow_portal_fallback=allow_portal,
+                    force_provider=provider_override or None,
+                )
+                jobs = _enforce_cn_market_jobs(fallback_jobs)
+                mode = fallback_mode or mode
+        except Exception as e:
+            jobs, mode, fallback_err = _search_jobs_without_browser(
+                kw,
+                location,
+                limit=n,
+                allow_portal_fallback=allow_portal,
+                force_provider=provider_override or None,
+            )
+            jobs = _enforce_cn_market_jobs(jobs)
+            if not jobs:
+                warning = fallback_err or str(e)
+                _track_event(
+                    "job_search",
+                    {
+                        "provider_mode": mode or "no_real_jobs",
+                        "provider_override": provider_override or "",
+                        "result_count": 0,
+                        "cloud_mode": False,
+                        "warning": warning[:300],
+                    },
+                )
+                return _api_success(
+                    {
+                        "total": 0,
+                        "jobs": [],
+                        "provider_mode": mode or "no_real_jobs",
+                        "provider_override": provider_override or None,
+                        "warning": warning,
+                        "code": "job_search_no_result",
+                    }
+                )
+        _track_event(
+            "job_search",
+            {
+                "provider_mode": mode,
+                "provider_override": provider_override or "",
+                "result_count": len(jobs),
+                "cloud_mode": False,
+            },
+        )
+        _cache_recent_jobs(jobs)
+        return _api_success({
+            "total": len(jobs),
+            "jobs": jobs,
+            "provider_mode": mode,
+            "provider_override": provider_override or None,
+        })
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/jobs/search", "error": str(e)[:300]})
+        # Do not hard-fail the UI when provider is rate-limited/captcha-blocked.
+        # Return an empty-but-success payload so the frontend can keep the full flow available.
+        return _api_success({
+            "total": 0,
+            "jobs": [],
+            "provider_mode": os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower() or "auto",
+            "provider_override": str(provider or "").strip().lower() or None,
+            "warning": str(e),
+            "code": "job_search_failed",
+        })
+
+@app.get("/api/jobs/{job_id}")
+async def get_job_detail(job_id: str):
+    """获取岗位详情"""
+    try:
+        job = real_job_service.get_job_detail(job_id)
+        if job:
+            return JSONResponse({"success": True, "job": job})
+        else:
+            return JSONResponse({"error": "岗位不存在"}, status_code=404)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/jobs/apply")
+async def apply_job(request: Request):
+    """投递简历到指定岗位"""
+    try:
+        data = await request.json()
+        job_id = data.get("job_id")
+        resume_text = data.get("resume_text")
+        user_info = data.get("user_info", {})
+        
+        result = real_job_service.apply_job(job_id, resume_text, user_info)
+        if (not result.get("success")) and job_id in recent_search_jobs:
+            # Fallback for no-browser providers whose job detail is not in local provider cache.
+            j = recent_search_jobs.get(job_id, {})
+            link = j.get("link") or j.get("apply_url")
+            if link:
+                app_id = f"EXT{int(datetime.now().timestamp())}"
+                record = {
+                    "application_id": app_id,
+                    "job_id": job_id,
+                    "job_title": j.get("title", ""),
+                    "company": j.get("company", ""),
+                    "platform": j.get("platform", j.get("provider", "")),
+                    "apply_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "status": "待投递",
+                    "apply_link": link,
+                    "user_info": user_info or {},
+                }
+                try:
+                    real_job_service.records.add_record(record)
+                except Exception:
+                    pass
+                result = {
+                    "success": True,
+                    "message": "已生成投递跳转链接（请在招聘网站完成真实投递）",
+                    "data": record,
+                }
+        _track_event(
+            "job_apply",
+            {
+                "job_id": job_id,
+                "success": bool(result.get("success")),
+            },
+        )
+        return JSONResponse(result)
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/jobs/apply", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.post("/api/jobs/batch_apply")
+async def batch_apply_jobs(request: Request):
+    """批量投递简历"""
+    try:
+        data = await request.json()
+        job_ids = data.get("job_ids", [])
+        resume_text = data.get("resume_text")
+        user_info = data.get("user_info", {})
+        
+        results = real_job_service.batch_apply(job_ids, resume_text, user_info)
+        _track_event(
+            "job_apply",
+            {
+                "batch": True,
+                "requested": len(job_ids),
+                "success_count": len([r for r in results if r.get("success")]),
+            },
+        )
+        return JSONResponse({
+            "success": True,
+            "total": len(results),
+            "results": results
+        })
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/jobs/batch_apply", "error": str(e)[:300]})
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/statistics")
+async def get_statistics():
+    """获取数据统计"""
+    try:
+        stats = real_job_service.get_statistics()
+        return JSONResponse({"success": True, "data": stats})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+# ========================================
+# 爬虫数据接收接口（云端部署时使用）
+# ========================================
+
+from fastapi import Header
+
+# 简单的API密钥验证
+CRAWLER_API_KEY = os.getenv("CRAWLER_API_KEY", "your-secret-key-change-this")
+
+@app.post("/api/crawler/upload")
+async def receive_crawler_data(request: Request, authorization: str = Header(None)):
+    """接收本地爬虫推送的岗位数据"""
+    try:
+        # 验证API密钥
+        if not authorization or not authorization.startswith("Bearer "):
+            return JSONResponse({"error": "未授权：缺少API密钥"}, status_code=401)
+        
+        api_key = authorization.replace("Bearer ", "")
+        if api_key != CRAWLER_API_KEY:
+            return JSONResponse({"error": "未授权：API密钥无效"}, status_code=401)
+        
+        # 解析数据
+        data = await request.json()
+        jobs = data.get("jobs", [])
+        
+        if not jobs:
+            return JSONResponse({"error": "岗位数据为空"}, status_code=400)
+        
+        # 添加接收时间戳
+        for job in jobs:
+            job["received_at"] = datetime.now().isoformat()
+
+        # 存储到缓存（去重 + 过滤 seed/demo + 必须可跳转）
+        incoming = _normalize_and_filter_jobs(jobs, limit=5000)
+        existing_keys = {
+            str(j.get("link") or j.get("apply_url") or j.get("id") or "").strip().lower()
+            for j in cloud_jobs_cache
+        }
+        new_jobs = []
+        for job in incoming:
+            key = str(job.get("link") or job.get("apply_url") or job.get("id") or "").strip().lower()
+            if key and key not in existing_keys:
+                existing_keys.add(key)
+                new_jobs.append(job)
+
+        cloud_jobs_cache.extend(new_jobs)
+
+        # 限制缓存大小（保留最新的5000个）
+        if len(cloud_jobs_cache) > 5000:
+            cloud_jobs_cache[:] = cloud_jobs_cache[-5000:]
+
+        cloud_jobs_meta["last_push_at"] = datetime.now().isoformat()
+        cloud_jobs_meta["last_received"] = len(jobs)
+        cloud_jobs_meta["last_new"] = len(new_jobs)
+        _track_event(
+            "crawler_upload",
+            {"received": len(jobs), "new": len(new_jobs), "total": len(cloud_jobs_cache)},
+        )
+
+        print(f"✅ 接收爬虫数据：{len(new_jobs)} 个新岗位（总计：{len(cloud_jobs_cache)}）")
+        
+        return JSONResponse({
+            "success": True,
+            "received": len(jobs),
+            "new": len(new_jobs),
+            "total": len(cloud_jobs_cache)
+        })
+        
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/crawler/status")
+async def get_crawler_status():
+    """获取爬虫数据状态"""
+    if not cloud_jobs_cache:
+        return JSONResponse({
+            "status": "empty",
+            "total": 0,
+            "last_push_at": cloud_jobs_meta.get("last_push_at"),
+            "last_received": cloud_jobs_meta.get("last_received", 0),
+            "last_new": cloud_jobs_meta.get("last_new", 0),
+        })
+
+    return JSONResponse({
+        "status": "ok",
+        "total": len(cloud_jobs_cache),
+        "last_push_at": cloud_jobs_meta.get("last_push_at"),
+        "last_received": cloud_jobs_meta.get("last_received", 0),
+        "last_new": cloud_jobs_meta.get("last_new", 0),
+    })
+
+
+# ========================================
+# 自动投递 API 接口（新增）
+# ========================================
+
+# 全局任务管理
+auto_apply_tasks: Dict[str, Dict[str, Any]] = {}
+auto_apply_runtime_tasks: Dict[str, asyncio.Task] = {}
+task_lock = asyncio.Lock()
+TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped"}
+
+# 平台映射
+PLATFORM_APPLIERS = {
+    'boss': 'app.services.auto_apply.boss_applier.BossApplier',
+    'zhilian': 'app.services.auto_apply.zhilian_applier.ZhilianApplier',
+    'linkedin': 'app.services.auto_apply.linkedin_applier.LinkedInApplier'
+}
+
+TASK_STATUS_TRANSITIONS = {
+    "starting": {"running", "failed", "stopped"},
+    "running": {"paused", "completed", "failed", "stopped"},
+    "paused": {"running", "stopped", "failed"},
+    "completed": set(),
+    "failed": set(),
+    "stopped": set(),
+}
+NON_RETRYABLE_ERROR_MARKERS = (
+    "already",
+    "已投递",
+    "blacklist",
+    "黑名单",
+    "缺少链接",
+    "missing",
+    "invalid",
+    "not found",
+    "不支持",
+)
+
+
+def _transition_task_status(task: Dict[str, Any], target: str) -> None:
+    current = str(task.get("status") or "starting")
+    if current == target:
+        return
+    allowed = TASK_STATUS_TRANSITIONS.get(current, set())
+    if target in allowed:
+        task["status"] = target
+    else:
+        logger.warning("ignore_invalid_task_transition from=%s to=%s task_id=%s", current, target, task.get("task_id"))
+
+
+def _resolve_apply_interval_seconds(config: Dict[str, Any]) -> float:
+    interval = float(config.get("apply_interval_seconds") or 0.0)
+    if interval > 0:
+        return interval
+    min_delay = float(config.get("random_delay_min") or 0.0)
+    max_delay = float(config.get("random_delay_max") or min_delay)
+    return max(min_delay, max_delay)
+
+
+def _is_retryable_error(message: str) -> bool:
+    msg = str(message or "").lower()
+    return not any(marker in msg for marker in NON_RETRYABLE_ERROR_MARKERS)
+
+
+def _auto_apply_job_key(job: Dict[str, Any]) -> str:
+    link = str(job.get("link") or job.get("apply_url") or job.get("url") or "").strip().lower()
+    jid = str(job.get("id") or "").strip().lower()
+    title = str(job.get("title") or job.get("job_title") or "").strip().lower()
+    company = str(job.get("company") or "").strip().lower()
+    return link or jid or f"{title}|{company}"
+
+
+def _auto_apply_job_score(job: Dict[str, Any], keywords: str, location: str) -> float:
+    title = str(job.get("title") or job.get("job_title") or "").lower()
+    link = str(job.get("link") or job.get("apply_url") or job.get("url") or "").lower()
+    company = str(job.get("company") or "").lower()
+    target_location = str(location or "").strip().lower()
+    job_location = str(job.get("location") or "").strip().lower()
+
+    try:
+        match_value = float(job.get("match_rate") or job.get("match_score") or 0.0)
+    except Exception:
+        match_value = 0.0
+    if match_value > 1.0:
+        match_value = match_value / 100.0
+    match_value = max(0.0, min(1.0, match_value))
+
+    score = match_value * 100.0
+    for token in str(keywords or "").split():
+        tk = token.strip().lower()
+        if not tk:
+            continue
+        if tk in title:
+            score += 3.0
+        if tk in link:
+            score += 1.0
+    if target_location and target_location in job_location:
+        score += 4.0
+    if company:
+        score += 1.0
+    return score
+
+
+def _prepare_auto_apply_jobs(jobs: List[Dict[str, Any]], max_count: int, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    dedupe_enabled = bool(config.get("dedupe_before_apply", True))
+    scoring_enabled = bool(config.get("enable_job_scoring", True))
+    keywords = str(config.get("keywords") or "")
+    location = str(config.get("location") or "")
+
+    prepared: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for one in jobs or []:
+        if not isinstance(one, dict):
+            continue
+        if dedupe_enabled:
+            key = _auto_apply_job_key(one)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+        prepared.append(one)
+
+    if scoring_enabled:
+        prepared.sort(key=lambda row: _auto_apply_job_score(row, keywords=keywords, location=location), reverse=True)
+
+    return prepared[: max(1, int(max_count or 50))]
+
+
+async def _apply_with_retry_async(
+    apply_fn,
+    job: Dict[str, Any],
+    max_retries: int,
+    retry_backoff_seconds: float,
+) -> Dict[str, Any]:
+    attempt = 0
+    final_result: Dict[str, Any] = {}
+    max_retry_safe = max(0, int(max_retries or 0))
+    backoff = max(0.0, float(retry_backoff_seconds or 0.0))
+
+    while attempt <= max_retry_safe:
+        attempt += 1
+        try:
+            result = await apply_fn(job)
+            if not isinstance(result, dict):
+                result = {"success": False, "message": "apply returned non-dict", "job": job}
+        except Exception as e:
+            result = {"success": False, "message": str(e), "job": job}
+        result.setdefault("job", job)
+        result["attempts"] = attempt
+        result.setdefault("timestamp", datetime.now().isoformat())
+        final_result = result
+
+        if result.get("success"):
+            break
+        if attempt > max_retry_safe:
+            break
+        if not _is_retryable_error(result.get("message")):
+            break
+        if backoff > 0:
+            await asyncio.sleep(backoff * attempt)
+
+    return final_result
+
+
+def _set_task_stopped(task: Dict[str, Any]) -> None:
+    """统一设置任务为停止状态。"""
+    _transition_task_status(task, "stopped")
+    task["completed_at"] = datetime.now().isoformat()
+
+
+def _set_task_failed(task: Dict[str, Any], error: str) -> None:
+    """统一设置任务为失败状态。"""
+    _transition_task_status(task, "failed")
+    task["error"] = error
+    task["completed_at"] = datetime.now().isoformat()
+
+
+def _cancel_runtime_task(task_id: str) -> None:
+    """取消后台运行中的任务（如果存在）。"""
+    runtime_task = auto_apply_runtime_tasks.get(task_id)
+    if runtime_task and not runtime_task.done():
+        runtime_task.cancel()
+
+@app.post("/api/auto-apply/start")
+async def start_auto_apply(request: Request):
+    """启动自动投递"""
+    try:
+        data = await request.json()
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+
+        # 获取配置
+        config = {
+            'platform': data.get('platform', 'boss'),
+            'max_apply_per_session': data.get('max_count', 50),
+            'keywords': data.get('keywords', ''),
+            'location': data.get('location', ''),
+            'company_blacklist': data.get('blacklist', []),
+            'user_profile': data.get('user_profile', {}),
+            'pause_before_submit': data.get('pause_before_submit', False),
+            'headless': data.get('headless', False),
+            'dedupe_before_apply': data.get('dedupe_before_apply', True),
+            'enable_job_scoring': data.get('enable_job_scoring', True),
+            'max_retries': data.get('max_retries', 3),
+            'retry_backoff_seconds': data.get('retry_backoff_seconds', 1.5),
+            'apply_interval_seconds': data.get('apply_interval_seconds', 0),
+            'random_delay_min': data.get('random_delay_min', 2),
+            'random_delay_max': data.get('random_delay_max', 5),
+            'captcha_mode': data.get('captcha_mode', 'manual'),
+            'captcha_wait_timeout': data.get('captcha_wait_timeout', 180),
+            'login_wait_timeout': data.get('login_wait_timeout', 240),
+            'login_call_timeout': data.get('login_call_timeout', 150),
+        }
+
+        # 验证配置
+        from app.services.auto_apply.config import AutoApplyConfig, validate_config
+        apply_config = AutoApplyConfig.from_dict(config)
+        is_valid, error_msg = validate_config(apply_config)
+
+        if not is_valid:
+            return _api_error(error_msg, 400)
+
+        # 创建任务记录
+        auto_apply_tasks[task_id] = {
+            'task_id': task_id,
+            'status': 'starting',
+            'config': config,
+            'progress': {
+                'applied': 0,
+                'failed': 0,
+                'total': 0,
+                'current_job': None
+            },
+            'created_at': datetime.now().isoformat(),
+            'started_at': None,
+            'completed_at': None
+        }
+
+        # 异步启动投递任务（保存句柄，便于 stop/cancel）
+        runtime_task = asyncio.create_task(_run_auto_apply_task(task_id, config, data.get('jobs', [])))
+        auto_apply_runtime_tasks[task_id] = runtime_task
+
+        return _api_success({
+            'task_id': task_id,
+            'message': '自动投递任务已启动'
+        })
+
+    except Exception as e:
+        logger.exception("启动自动投递失败")
+        return _api_error(str(e), 500)
+
+
+async def _run_auto_apply_task(task_id: str, config: Dict[str, Any], jobs: List[Dict[str, Any]]):
+    """运行自动投递任务（异步）"""
+    applier = None
+    hard_timeout = int(config.get('task_timeout', 900) or 900)
+    platform = str(config.get('platform') or 'boss').strip().lower()
+
+    async def _core_run() -> None:
+        nonlocal applier
+
+        if platform not in PLATFORM_APPLIERS:
+            raise Exception(f"不支持的平台: {platform}")
+
+        # 动态导入平台 Applier
+        module_path, class_name = PLATFORM_APPLIERS[platform].rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        ApplierClass = getattr(module, class_name)
+
+        # 创建投递器（LinkedIn 兼容 llm_client，其他平台直接使用 config）
+        if platform == 'linkedin':
+            llm_client = None
+            if config.get('use_ai_answers', True):
+                try:
+                    from app.core.llm_client import LLMClient
+                    llm_client = LLMClient()
+                except Exception:
+                    llm_client = None
+            applier = ApplierClass(config, llm_client)
+        else:
+            applier = ApplierClass(config)
+
+        # 登录（如果需要）
+        user_profile = config.get('user_profile', {}) or {}
+        login_success = True
+        login_call_timeout = int(config.get('login_call_timeout', 150) or 150)
+        if platform == 'boss':
+            phone = user_profile.get('phone') or config.get('phone') or ""
+            if not str(phone).strip():
+                raise Exception("Boss 自动投递需要手机号：user_profile.phone")
+            if hasattr(applier, "_async_login"):
+                login_success = await asyncio.wait_for(
+                    applier._async_login(str(phone).strip()),
+                    timeout=login_call_timeout,
+                )
+            else:
+                login_success = await asyncio.wait_for(
+                    asyncio.to_thread(applier.login, str(phone).strip()),
+                    timeout=login_call_timeout,
+                )
+        elif platform == 'linkedin':
+            email = user_profile.get('email') or config.get('email') or ""
+            password = user_profile.get('password') or config.get('password') or ""
+            if not (str(email).strip() and str(password).strip()):
+                raise Exception("LinkedIn 自动投递需要邮箱和密码")
+            login_success = await asyncio.wait_for(
+                asyncio.to_thread(applier.login, str(email).strip(), str(password)),
+                timeout=login_call_timeout,
+            )
+        elif platform == 'zhilian':
+            username = user_profile.get('username') or user_profile.get('email') or config.get('username') or ""
+            password = user_profile.get('password') or config.get('password') or ""
+            if not (str(username).strip() and str(password).strip()):
+                raise Exception("智联自动投递需要账号和密码")
+            login_success = await asyncio.wait_for(
+                asyncio.to_thread(applier.login, str(username).strip(), str(password)),
+                timeout=login_call_timeout,
+            )
+
+        task = auto_apply_tasks.get(task_id)
+        if task is None:
+            return
+        task['platform'] = platform
+        if task.get('status') == 'stopped':
+            return
+
+        if not login_success:
+            _set_task_failed(task, f'{platform} 登录失败')
+            return
+
+        # 如果没有提供职位列表，则搜索
+        local_jobs = list(jobs or [])
+        if not local_jobs:
+            if platform == 'boss' and hasattr(applier, "_async_search_jobs"):
+                local_jobs = await applier._async_search_jobs(
+                    keywords=config.get('keywords', ''),
+                    location=config.get('location', ''),
+                    filters={},
+                )
+            else:
+                local_jobs = await asyncio.to_thread(
+                    applier.search_jobs,
+                    keywords=config.get('keywords', ''),
+                    location=config.get('location', ''),
+                    filters={},
+                )
+
+        max_count = int(config.get('max_apply_per_session', 50) or 50)
+        selected_jobs = _prepare_auto_apply_jobs(local_jobs or [], max_count=max_count, config=config)
+        task['progress']['total'] = len(selected_jobs)
+
+        # 批量投递
+        if platform == 'boss' and hasattr(applier, "_async_apply_job"):
+            max_retries = int(config.get("max_retries", 3) or 3)
+            retry_backoff = float(config.get("retry_backoff_seconds", 1.5) or 1.5)
+            apply_interval = _resolve_apply_interval_seconds(config)
+
+            applied = 0
+            failed = 0
+            details: List[Dict[str, Any]] = []
+            for idx, job in enumerate(selected_jobs):
+                if task.get('status') == 'stopped':
+                    break
+                task['progress']['current_job'] = job.get('title') or job.get('id') or 'unknown_job'
+                one = await _apply_with_retry_async(
+                    applier._async_apply_job,
+                    job,
+                    max_retries=max_retries,
+                    retry_backoff_seconds=retry_backoff,
+                )
+                details.append(one)
+                if one.get('success'):
+                    applied += 1
+                else:
+                    failed += 1
+                if apply_interval > 0 and idx < len(selected_jobs) - 1:
+                    await asyncio.sleep(apply_interval)
+            result = {
+                'total_attempted': len(details),
+                'applied': applied,
+                'failed': failed,
+                'results': details,
+            }
+        else:
+            result = await asyncio.to_thread(
+                applier.batch_apply,
+                selected_jobs,
+                max_count,
+            )
+
+        task['result'] = result
+        task['progress']['applied'] = int((result or {}).get('applied', 0))
+        task['progress']['failed'] = int((result or {}).get('failed', 0))
+        task['progress']['current_job'] = None
+        if task.get('status') != 'stopped':
+            _transition_task_status(task, "completed")
+            task['completed_at'] = datetime.now().isoformat()
+
+    try:
+        task = auto_apply_tasks.get(task_id)
+        if task is None:
+            return
+        _transition_task_status(task, "running")
+        task['started_at'] = datetime.now().isoformat()
+        await asyncio.wait_for(_core_run(), timeout=hard_timeout)
+    except asyncio.TimeoutError:
+        logger.error("自动投递任务超时: %s (>%ss)", task_id, hard_timeout)
+        task = auto_apply_tasks.get(task_id)
+        if task and task.get('status') not in TERMINAL_TASK_STATUSES:
+            _set_task_failed(task, f"任务超时（>{hard_timeout}s）")
+    except asyncio.CancelledError:
+        task = auto_apply_tasks.get(task_id)
+        if task and task.get('status') not in TERMINAL_TASK_STATUSES:
+            _set_task_stopped(task)
+        raise
+    except Exception as e:
+        logger.exception(f"自动投递任务失败: {task_id}")
+        task = auto_apply_tasks.get(task_id)
+        if task and task.get('status') not in TERMINAL_TASK_STATUSES:
+            _set_task_failed(task, str(e))
+    finally:
+        auto_apply_runtime_tasks.pop(task_id, None)
+        if applier is not None:
+            try:
+                await asyncio.wait_for(asyncio.to_thread(applier.cleanup), timeout=8)
+            except Exception:
+                pass
+
+
+@app.post("/api/auto-apply/stop")
+async def stop_auto_apply(request: Request):
+    """停止自动投递"""
+    try:
+        data = await request.json()
+        task_id = data.get('task_id')
+
+        if not task_id or task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+
+        task = auto_apply_tasks[task_id]
+
+        if task['status'] in ['completed', 'failed', 'stopped']:
+            return _api_success({
+                'message': '任务已结束',
+                'status': task['status'],
+            })
+
+        # 设置停止标志并取消后台协程
+        _set_task_stopped(task)
+        _cancel_runtime_task(task_id)
+
+        return _api_success({
+            'message': '停止指令已发送'
+        })
+
+    except Exception as e:
+        logger.exception("停止自动投递失败")
+        return _api_error(str(e), 500)
+
+
+@app.post("/api/auto-apply/stop/{task_id}")
+async def stop_auto_apply_by_path(task_id: str):
+    """兼容前端路径参数形式的停止接口。"""
+    try:
+        if task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+
+        task = auto_apply_tasks[task_id]
+        if task['status'] not in ['completed', 'failed', 'stopped']:
+            _set_task_stopped(task)
+            _cancel_runtime_task(task_id)
+
+        return _api_success({
+            'task_id': task_id,
+            'status': task.get('status'),
+            'message': '停止指令已发送'
+        })
+    except Exception as e:
+        logger.exception("路径停止自动投递失败")
+        return _api_error(str(e), 500)
+
+
+@app.post("/api/auto-apply/pause/{task_id}")
+async def pause_auto_apply_by_path(task_id: str):
+    """兼容前端路径参数形式的暂停接口。"""
+    try:
+        if task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+        task = auto_apply_tasks[task_id]
+        if task['status'] in ['completed', 'failed', 'stopped']:
+            return _api_error('任务已结束，无法暂停', 400)
+
+        _transition_task_status(task, "paused")
+        return _api_success({
+            'task_id': task_id,
+            'status': task.get('status'),
+            'message': '任务已暂停'
+        })
+    except Exception as e:
+        logger.exception("暂停自动投递失败")
+        return _api_error(str(e), 500)
+
+
+@app.post("/api/auto-apply/resume/{task_id}")
+async def resume_auto_apply_by_path(task_id: str):
+    """兼容前端路径参数形式的恢复接口。"""
+    try:
+        if task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+        task = auto_apply_tasks[task_id]
+        if task['status'] in ['completed', 'failed', 'stopped']:
+            return _api_error('任务已结束，无法继续', 400)
+
+        _transition_task_status(task, "running")
+        return _api_success({
+            'task_id': task_id,
+            'status': task.get('status'),
+            'message': '任务已继续'
+        })
+    except Exception as e:
+        logger.exception("继续自动投递失败")
+        return _api_error(str(e), 500)
+
+
+@app.get("/api/auto-apply/status/{task_id}")
+async def get_auto_apply_status(task_id: str):
+    """查询投递状态"""
+    try:
+        if task_id not in auto_apply_tasks:
+            return _api_error('任务不存在', 404)
+
+        task = auto_apply_tasks[task_id]
+
+        return _api_success({
+            'task': task
+        })
+
+    except Exception as e:
+        logger.exception("查询投递状态失败")
+        return _api_error(str(e), 500)
+
+
+@app.get("/api/auto-apply/history")
+async def get_auto_apply_history(limit: int = 50):
+    """获取投递历史"""
+    try:
+        # 按时间倒序排列
+        tasks = sorted(
+            auto_apply_tasks.values(),
+            key=lambda x: x.get('created_at', ''),
+            reverse=True
+        )
+
+        return _api_success({
+            'tasks': tasks[:limit],
+            'total': len(tasks)
+        })
+
+    except Exception as e:
+        logger.exception("获取投递历史失败")
+        return _api_error(str(e), 500)
+
+
+@app.websocket("/ws/auto-apply/{task_id}")
+async def auto_apply_progress_ws(websocket: WebSocket, task_id: str):
+    """实时推送投递进度（支持多平台）"""
+    await websocket.accept()
+
+    try:
+        while True:
+            if task_id not in auto_apply_tasks:
+                await websocket.send_json({
+                    'type': 'error',
+                    'message': '任务不存在'
+                })
+                break
+
+            task = auto_apply_tasks[task_id]
+
+            # 发送详细进度
+            await websocket.send_json({
+                'type': 'progress',
+                'task_id': task_id,
+                'status': task['status'],
+                'progress': task['progress'],
+                'platforms': task.get('platforms', [task.get('config', {}).get('platform', 'linkedin')]),
+                'timestamp': datetime.now().isoformat()
+            })
+
+            # 如果任务已完成，发送最终消息并断开
+            if task['status'] in ['completed', 'failed', 'stopped']:
+                await websocket.send_json({
+                    'type': 'complete',
+                    'task_id': task_id,
+                    'status': task['status'],
+                    'progress': task['progress'],
+                    'result': task.get('result', {}),
+                    'error': task.get('error')
+                })
+                break
+
+            await asyncio.sleep(2)
+
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket 断开: {task_id}")
+    except Exception as e:
+        logger.exception(f"WebSocket 错误: {e}")
+        try:
+            await websocket.send_json({
+                'type': 'error',
+                'message': str(e)
+            })
+        except:
+            pass
+
+
+# ========================================
+# 多平台投递 API 接口（新增）
+# ========================================
+
+@app.post("/api/auto-apply/start-multi")
+async def start_multi_platform_apply(request: Request):
+    """启动多平台自动投递"""
+    try:
+        data = await request.json()
+        platforms = data.get('platforms', ['boss'])
+        config = data.get('config', {}) or {}
+        config.setdefault('dedupe_before_apply', True)
+        config.setdefault('enable_job_scoring', True)
+        config.setdefault('max_retries', 3)
+        config.setdefault('retry_backoff_seconds', 1.5)
+        config.setdefault('apply_interval_seconds', 0)
+        config.setdefault('random_delay_min', 2)
+        config.setdefault('random_delay_max', 5)
+
+        # 生成任务ID
+        task_id = str(uuid.uuid4())
+
+        # 创建任务记录
+        async with task_lock:
+            auto_apply_tasks[task_id] = {
+                'task_id': task_id,
+                'status': 'starting',
+                'platforms': platforms,
+                'config': config,
+                'progress': {
+                    'total_platforms': len(platforms),
+                    'completed_platforms': 0,
+                    'total_applied': 0,
+                    'total_failed': 0,
+                    'platform_progress': {}
+                },
+                'created_at': datetime.now().isoformat(),
+                'started_at': None,
+                'completed_at': None
+            }
+
+        # 异步启动多平台投递（保存句柄，便于 stop/cancel）
+        runtime_task = asyncio.create_task(_run_multi_platform_apply(task_id, platforms, config))
+        auto_apply_runtime_tasks[task_id] = runtime_task
+
+        return _api_success({
+            'task_id': task_id,
+            'message': f'已启动 {len(platforms)} 个平台的自动投递'
+        })
+
+    except Exception as e:
+        logger.exception("启动多平台投递失败")
+        return _api_error(str(e), 500)
+
+
+async def _run_multi_platform_apply(task_id: str, platforms: List[str], config: Dict[str, Any]):
+    """运行多平台投递任务"""
+    try:
+        # 更新状态
+        _transition_task_status(auto_apply_tasks[task_id], "running")
+        auto_apply_tasks[task_id]['started_at'] = datetime.now().isoformat()
+
+        # 并发执行多个平台
+        tasks = []
+        for platform in platforms:
+            if platform in PLATFORM_APPLIERS:
+                task = asyncio.create_task(
+                    _run_single_platform_apply(task_id, platform, config)
+                )
+                tasks.append(task)
+
+        # 等待所有平台完成
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 汇总结果
+        total_applied = 0
+        total_failed = 0
+
+        for result in results:
+            if isinstance(result, dict):
+                total_applied += result.get('applied', 0)
+                total_failed += result.get('failed', 0)
+
+        # 更新最终状态（若已手动停止则保持 stopped）
+        task = auto_apply_tasks.get(task_id, {})
+        if task.get('status') != 'stopped':
+            _transition_task_status(task, "completed")
+            task['completed_at'] = datetime.now().isoformat()
+        task.setdefault('progress', {})
+        task['progress']['total_applied'] = total_applied
+        task['progress']['total_failed'] = total_failed
+
+    except Exception as e:
+        logger.exception(f"多平台投递任务失败: {task_id}")
+        task = auto_apply_tasks.get(task_id)
+        if task:
+            _set_task_failed(task, str(e))
+    finally:
+        auto_apply_runtime_tasks.pop(task_id, None)
+
+
+async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[str, Any]):
+    """运行单个平台的投递任务"""
+    try:
+        if auto_apply_tasks.get(task_id, {}).get('status') == 'stopped':
+            return {'applied': 0, 'failed': 0}
+
+        # 动态导入平台 Applier
+        module_path, class_name = PLATFORM_APPLIERS[platform].rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        ApplierClass = getattr(module, class_name)
+
+        # 获取平台特定配置
+        platform_config = config.get(f'{platform}_config', {})
+        platform_config.update({
+            'keywords': config.get('keywords', ''),
+            'location': config.get('location', ''),
+            'max_apply_per_session': config.get('max_count', 50),
+            'company_blacklist': config.get('blacklist', []),
+            'headless': config.get('headless', False),
+            'dedupe_before_apply': config.get('dedupe_before_apply', True),
+            'enable_job_scoring': config.get('enable_job_scoring', True),
+            'max_retries': config.get('max_retries', 3),
+            'retry_backoff_seconds': config.get('retry_backoff_seconds', 1.5),
+            'apply_interval_seconds': config.get('apply_interval_seconds', 0),
+            'random_delay_min': config.get('random_delay_min', 2),
+            'random_delay_max': config.get('random_delay_max', 5),
+        })
+
+        # 创建投递器（兼容不同的构造函数）
+        # LinkedIn 需要 llm_client 参数，其他平台不应受其可用性影响。
+        if platform == 'linkedin':
+            llm_client = None
+            if config.get('use_ai_answers', True):
+                try:
+                    from app.core.llm_client import LLMClient
+                    llm_client = LLMClient()
+                except Exception:
+                    llm_client = None
+            applier = ApplierClass(platform_config, llm_client)
+        else:
+            applier = ApplierClass(platform_config)
+
+        # 登录
+        login_success = False
+        if platform == 'boss':
+            phone = platform_config.get('phone')
+            if phone:
+                login_success = await asyncio.to_thread(applier.login, phone)
+        elif platform == 'zhilian':
+            username = platform_config.get('username')
+            password = platform_config.get('password')
+            if username and password:
+                login_success = await asyncio.to_thread(applier.login, username, password)
+        elif platform == 'linkedin':
+            email = platform_config.get('email')
+            password = platform_config.get('password')
+            if email and password:
+                login_success = await asyncio.to_thread(applier.login, email, password)
+
+        if not login_success:
+            raise Exception(f"{platform} 登录失败")
+
+        # 搜索职位
+        jobs = await asyncio.to_thread(
+            applier.search_jobs,
+            keywords=platform_config.get('keywords', ''),
+            location=platform_config.get('location', ''),
+            filters={},
+        )
+        max_count = int(platform_config.get('max_apply_per_session', 50) or 50)
+        prepared_jobs = _prepare_auto_apply_jobs(jobs or [], max_count=max_count, config=platform_config)
+
+        # 更新进度
+        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
+            'status': 'running',
+            'total': len(prepared_jobs),
+            'applied': 0,
+            'failed': 0
+        }
+
+        if auto_apply_tasks.get(task_id, {}).get('status') == 'stopped':
+            auto_apply_tasks[task_id]['progress']['platform_progress'][platform]['status'] = 'stopped'
+            applier.cleanup()
+            return {'applied': 0, 'failed': 0}
+
+        # 批量投递
+        result = await asyncio.to_thread(
+            applier.batch_apply,
+            prepared_jobs,
+            max_count,
+        )
+
+        # 更新平台进度
+        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
+            'status': 'completed',
+            'total': len(prepared_jobs),
+            'applied': result['applied'],
+            'failed': result['failed']
+        }
+
+        auto_apply_tasks[task_id]['progress']['completed_platforms'] += 1
+
+        # 清理资源
+        await asyncio.to_thread(applier.cleanup)
+
+        return result
+
+    except Exception as e:
+        logger.exception(f"平台 {platform} 投递失败")
+        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
+            'status': 'failed',
+            'error': str(e)
+        }
+        return {'applied': 0, 'failed': 0}
+
+
+@app.get("/api/auto-apply/platforms")
+async def get_supported_platforms():
+    """获取支持的平台列表"""
+    return _api_success({
+        'platforms': [
+            {
+                'id': 'boss',
+                'name': 'Boss直聘',
+                'icon': '💼',
+                'status': 'available',
+                'features': ['手机验证码登录', '智能投递', '打招呼语'],
+                'config_fields': [
+                    {'name': 'phone', 'label': '手机号', 'type': 'text', 'required': True}
+                ]
+            },
+            {
+                'id': 'zhilian',
+                'name': '智联招聘',
+                'icon': '📋',
+                'status': 'available',
+                'features': ['账号密码登录', '简历投递', '附件上传'],
+                'config_fields': [
+                    {'name': 'username', 'label': '用户名', 'type': 'text', 'required': True},
+                    {'name': 'password', 'label': '密码', 'type': 'password', 'required': True}
+                ]
+            },
+            {
+                'id': 'linkedin',
+                'name': 'LinkedIn',
+                'icon': '🔗',
+                'status': 'available',
+                'features': ['Easy Apply', 'AI问答', '国际职位'],
+                'config_fields': [
+                    {'name': 'email', 'label': '邮箱', 'type': 'email', 'required': True},
+                    {'name': 'password', 'label': '密码', 'type': 'password', 'required': True}
+                ]
+            }
+        ]
+    })
+
+
+@app.get("/api/auto-apply/stats")
+async def get_apply_stats():
+    """获取投递统计"""
+    try:
+        # 统计所有任务
+        total_tasks = len(auto_apply_tasks)
+        completed_tasks = sum(1 for t in auto_apply_tasks.values() if t['status'] == 'completed')
+        running_tasks = sum(1 for t in auto_apply_tasks.values() if t['status'] == 'running')
+
+        total_applied = 0
+        total_failed = 0
+
+        # 平台统计
+        platform_stats = {}
+
+        for task in auto_apply_tasks.values():
+            # 单平台任务
+            if 'result' in task:
+                result = task['result']
+                total_applied += result.get('applied', 0)
+                total_failed += result.get('failed', 0)
+
+                platform = task.get('config', {}).get('platform', 'linkedin')
+                if platform not in platform_stats:
+                    platform_stats[platform] = {'applied': 0, 'failed': 0, 'total': 0}
+                platform_stats[platform]['applied'] += result.get('applied', 0)
+                platform_stats[platform]['failed'] += result.get('failed', 0)
+
+            # 多平台任务
+            if 'progress' in task and 'platform_progress' in task['progress']:
+                for platform, progress in task['progress']['platform_progress'].items():
+                    if platform not in platform_stats:
+                        platform_stats[platform] = {'applied': 0, 'failed': 0, 'total': 0}
+                    platform_stats[platform]['applied'] += progress.get('applied', 0)
+                    platform_stats[platform]['failed'] += progress.get('failed', 0)
+                    platform_stats[platform]['total'] += progress.get('total', 0)
+
+                total_applied += task['progress'].get('total_applied', 0)
+                total_failed += task['progress'].get('total_failed', 0)
+
+        return _api_success({
+            'total_tasks': total_tasks,
+            'completed_tasks': completed_tasks,
+            'running_tasks': running_tasks,
+            'total_applied': total_applied,
+            'total_failed': total_failed,
+            'success_rate': round(total_applied / (total_applied + total_failed) * 100, 2) if (total_applied + total_failed) > 0 else 0,
+            'platform_stats': platform_stats
+        })
+
+    except Exception as e:
+        logger.exception("获取统计失败")
+        return _api_error(str(e), 500)
+
+
+@app.post("/api/auto-apply/test-platform")
+async def test_platform_config(request: Request):
+    """测试平台配置（不实际投递）"""
+    try:
+        data = await request.json()
+        platform = data.get('platform', 'boss')
+        config = data.get('config', {})
+
+        if platform not in PLATFORM_APPLIERS:
+            return _api_error(f'不支持的平台: {platform}', 400)
+
+        # 动态导入平台 Applier
+        module_path, class_name = PLATFORM_APPLIERS[platform].rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        ApplierClass = getattr(module, class_name)
+
+        # 创建投递器
+        if platform == 'linkedin':
+            from app.core.llm_client import LLMClient
+            llm_client = LLMClient()
+            applier = ApplierClass(config, llm_client)
+        else:
+            applier = ApplierClass(config)
+
+        # 测试登录
+        login_result = {'success': False, 'message': '未测试'}
+
+        if platform == 'boss':
+            phone = config.get('phone')
+            if phone:
+                login_result = {
+                    'success': True,
+                    'message': f'配置正确，手机号: {phone[:3]}****{phone[-4:]}'
+                }
+        elif platform == 'zhilian':
+            username = config.get('username')
+            password = config.get('password')
+            if username and password:
+                login_result = {
+                    'success': True,
+                    'message': f'配置正确，用户名: {username}'
+                }
+        elif platform == 'linkedin':
+            email = config.get('email')
+            password = config.get('password')
+            if email and password:
+                login_result = {
+                    'success': True,
+                    'message': f'配置正确，邮箱: {email}'
+                }
+
+        return _api_success({
+            'platform': platform,
+            'login_test': login_result,
+            'config_valid': login_result['success']
+        })
+
+    except Exception as e:
+        logger.exception("测试平台配置失败")
+        return _api_error(str(e), 500)
+
+
+@app.get("/api/resume/templates")
+async def resume_templates():
+    """Available resume templates for rendering."""
+    return _api_success({"templates": resume_render_service.template_names()})
+
+
+@app.post("/api/resume/structure")
+async def resume_structure(request: Request):
+    """Resume text -> structured JSON, optionally persisted as profile."""
+    try:
+        data = await request.json()
+        resume_text = str(data.get("resume_text") or "").strip()
+        if len(resume_text) < 20:
+            return _api_error("resume_text 太短，至少 20 个字符", status_code=400)
+
+        model = str(data.get("model") or "").strip() or None
+        save_profile = bool(data.get("save_profile", True))
+        user_id = str(data.get("user_id") or "").strip()
+        title = str(data.get("title") or "").strip()
+        profile_id = str(data.get("profile_id") or "").strip()
+
+        result = await resume_profile_service.structure_resume_text(resume_text, model=model)
+        if not result.get("ok"):
+            return _api_error(result.get("error") or "结构化失败", status_code=500, code="resume_structure_failed")
+
+        out: Dict[str, Any] = {
+            "resume_json": result.get("resume_json") or {},
+            "source": result.get("source") or "",
+            "model": result.get("model") or "",
+        }
+        if result.get("warning"):
+            out["warning"] = result.get("warning")
+
+        if save_profile:
+            info = resume_profile_service.save_profile(
+                resume_json=out["resume_json"],
+                profile_id=profile_id,
+                user_id=user_id,
+                title=title,
+                source_text=resume_text,
+            )
+            out["profile"] = info
+            _track_event("resume_profile_saved", {"profile_id": info.get("profile_id"), "source": out["source"]})
+
+        return _api_success(out)
+    except Exception as e:
+        logger.exception("结构化简历失败")
+        return _api_error(str(e), status_code=500, code="resume_structure_failed")
+
+
+@app.post("/api/resume/profiles")
+async def upsert_resume_profile(request: Request):
+    """Create/update structured resume profile directly."""
+    try:
+        data = await request.json()
+        resume_json = data.get("resume_json")
+        if not isinstance(resume_json, dict):
+            return _api_error("resume_json 必须是对象", status_code=400)
+
+        info = resume_profile_service.save_profile(
+            resume_json=resume_json,
+            profile_id=str(data.get("profile_id") or "").strip(),
+            user_id=str(data.get("user_id") or "").strip(),
+            title=str(data.get("title") or "").strip(),
+            source_text=str(data.get("source_text") or "").strip(),
+        )
+        _track_event("resume_profile_saved", {"profile_id": info.get("profile_id"), "source": "direct"})
+        return _api_success({"profile": info})
+    except Exception as e:
+        logger.exception("保存简历档案失败")
+        return _api_error(str(e), status_code=500, code="resume_profile_save_failed")
+
+
+@app.get("/api/resume/profiles")
+async def list_resume_profiles(limit: int = 20, user_id: str = ""):
+    """List structured resume profiles."""
+    try:
+        payload = resume_profile_service.list_profiles(limit=limit, user_id=user_id)
+        return _api_success(payload)
+    except Exception as e:
+        logger.exception("获取简历档案列表失败")
+        return _api_error(str(e), status_code=500, code="resume_profile_list_failed")
+
+
+@app.get("/api/resume/profiles/{profile_id}")
+async def get_resume_profile(profile_id: str):
+    """Get one structured resume profile."""
+    try:
+        row = resume_profile_service.get_profile(profile_id)
+        if not row:
+            return _api_error("简历档案不存在", status_code=404, code="resume_profile_not_found")
+        return _api_success({"profile": row})
+    except Exception as e:
+        logger.exception("获取简历档案失败")
+        return _api_error(str(e), status_code=500, code="resume_profile_get_failed")
+
+
+@app.post("/api/resume/profiles/{profile_id}/fragment")
+async def merge_resume_fragment(profile_id: str, request: Request):
+    """Merge fragmented input into existing structured resume profile."""
+    try:
+        data = await request.json()
+        fragment_text = str(data.get("fragment_text") or "").strip()
+        if not fragment_text:
+            return _api_error("fragment_text 不能为空", status_code=400)
+
+        profile = resume_profile_service.get_profile(profile_id)
+        if not profile:
+            return _api_error("简历档案不存在", status_code=404, code="resume_profile_not_found")
+
+        merged = await resume_profile_service.merge_fragment(
+            current_resume_json=profile.get("resume_json") or {},
+            fragment_text=fragment_text,
+            section=str(data.get("section") or "").strip(),
+            model=str(data.get("model") or "").strip() or None,
+        )
+        if not merged.get("ok"):
+            return _api_error(merged.get("error") or "合并失败", status_code=400)
+
+        info = resume_profile_service.save_profile(
+            resume_json=merged.get("resume_json") or {},
+            profile_id=profile_id,
+            user_id=str(profile.get("user_id") or ""),
+            title=str(profile.get("title") or ""),
+            source_text=str(profile.get("source_text") or ""),
+        )
+        _track_event("resume_fragment_merged", {"profile_id": profile_id, "source": merged.get("source")})
+        return _api_success(
+            {
+                "profile": info,
+                "resume_json": merged.get("resume_json") or {},
+                "source": merged.get("source") or "",
+                "model": merged.get("model") or "",
+            }
+        )
+    except Exception as e:
+        logger.exception("简历碎片合并失败")
+        return _api_error(str(e), status_code=500, code="resume_fragment_merge_failed")
+
+
+@app.post("/api/resume/render")
+async def render_resume(request: Request):
+    """Render structured resume JSON to PDF/HTML."""
+    try:
+        data = await request.json()
+        template_name = str(data.get("template") or "classic").strip().lower()
+        fmt = str(data.get("format") or "pdf").strip().lower()
+        if template_name not in set(resume_render_service.template_names()):
+            return _api_error("template 不支持", status_code=400)
+        if fmt not in {"pdf", "html"}:
+            return _api_error("format 仅支持 pdf/html", status_code=400)
+
+        resume_json = data.get("resume_json")
+        profile_id = str(data.get("profile_id") or "").strip()
+        if not isinstance(resume_json, dict):
+            if not profile_id:
+                return _api_error("需要提供 profile_id 或 resume_json", status_code=400)
+            profile = resume_profile_service.get_profile(profile_id)
+            if not profile:
+                return _api_error("简历档案不存在", status_code=404, code="resume_profile_not_found")
+            resume_json = profile.get("resume_json") or {}
+
+        doc = await asyncio.to_thread(
+            resume_render_service.render_to_file,
+            resume_json,
+            template_name,
+            fmt,
+        )
+        _track_event(
+            "resume_rendered",
+            {
+                "doc_id": doc.get("doc_id"),
+                "format": doc.get("format"),
+                "template": doc.get("template"),
+            },
+        )
+        return _api_success(
+            {
+                "document": {
+                    "doc_id": doc.get("doc_id"),
+                    "format": doc.get("format"),
+                    "template": doc.get("template"),
+                    "file_size": doc.get("file_size"),
+                    "created_at": doc.get("created_at"),
+                    "download_url": f"/api/resume/render/download/{doc.get('doc_id')}",
+                }
+            }
+        )
+    except Exception as e:
+        logger.exception("简历渲染失败")
+        return _api_error(str(e), status_code=500, code="resume_render_failed")
+
+
+@app.get("/api/resume/render/download/{doc_id}")
+async def download_rendered_resume(doc_id: str):
+    """Download rendered resume document by doc_id."""
+    try:
+        file_path = resume_render_service.resolve_doc_path(doc_id)
+        if not file_path:
+            return _api_error("文档不存在", status_code=404, code="render_doc_not_found")
+        filename = os.path.basename(file_path)
+        media = "application/pdf" if file_path.lower().endswith(".pdf") else "text/html; charset=utf-8"
+        return FileResponse(file_path, media_type=media, filename=filename)
+    except Exception as e:
+        logger.exception("下载渲染文档失败")
+        return _api_error(str(e), status_code=500, code="render_doc_download_failed")
+
+
+def _default_email_html_template() -> str:
+    return """
+    <p>您好 {name}：</p>
+    <p>我是候选人 {candidate_name}，关注到贵司 {company} 的相关岗位，非常希望有机会进一步沟通。</p>
+    <p>我的核心能力：{skills_line}。</p>
+    <p>简历已附上，期待您的回复，感谢！</p>
+    <p>此致<br/>敬礼</p>
+    <p>{candidate_name}<br/>{candidate_email}</p>
+    """
+
+
+@app.get("/api/email/presets")
+async def email_presets():
+    return _api_success({"presets": SMTP_PRESETS})
+
+
+@app.get("/api/email/history")
+async def email_history(limit: int = 50):
+    try:
+        return _api_success(email_campaign_service.list_history(limit=limit))
+    except Exception as e:
+        logger.exception("查询邮件历史失败")
+        return _api_error(str(e), status_code=500, code="email_history_failed")
+
+
+@app.get("/api/email/rate-limit")
+async def email_rate_limit(sender_email: str, max_hourly: int = 30, max_daily: int = 100):
+    try:
+        if "@" not in (sender_email or ""):
+            return _api_error("sender_email 不合法", status_code=400)
+        payload = email_campaign_service.check_rate_limit(
+            sender_email=sender_email.strip().lower(),
+            max_hourly=max_hourly,
+            max_daily=max_daily,
+        )
+        return _api_success(payload)
+    except Exception as e:
+        logger.exception("查询邮件限速失败")
+        return _api_error(str(e), status_code=500, code="email_rate_limit_failed")
+
+
+@app.post("/api/email/send-batch")
+async def email_send_batch(request: Request):
+    """
+    Batch email delivery with SMTP presets + rate limits.
+    Payload:
+      smtp, contacts[], subject_template, body_template,
+      profile_id/resume_json, template, max_hourly, max_daily, dry_run, attach_pdf
+    """
+    try:
+        data = await request.json()
+        smtp = data.get("smtp") if isinstance(data.get("smtp"), dict) else {}
+        contacts = data.get("contacts") if isinstance(data.get("contacts"), list) else []
+        if not contacts:
+            return _api_error("contacts 不能为空", status_code=400)
+
+        profile_id = str(data.get("profile_id") or "").strip()
+        resume_json = data.get("resume_json") if isinstance(data.get("resume_json"), dict) else None
+        if (not resume_json) and profile_id:
+            profile = resume_profile_service.get_profile(profile_id)
+            if not profile:
+                return _api_error("简历档案不存在", status_code=404, code="resume_profile_not_found")
+            resume_json = profile.get("resume_json") or {}
+
+        attach_pdf = bool(data.get("attach_pdf", True))
+        template_name = str(data.get("template") or "classic").strip().lower()
+        if template_name not in set(resume_render_service.template_names()):
+            template_name = "classic"
+
+        attachment_path = ""
+        rendered_doc = None
+        if attach_pdf:
+            if not isinstance(resume_json, dict):
+                return _api_error("attach_pdf=true 时必须提供 profile_id 或 resume_json", status_code=400)
+            rendered_doc = await asyncio.to_thread(
+                resume_render_service.render_to_file,
+                resume_json,
+                template_name,
+                "pdf",
+            )
+            attachment_path = rendered_doc.get("file_path") or ""
+
+        personal = (resume_json or {}).get("personal_info") if isinstance(resume_json, dict) else {}
+        skills = (resume_json or {}).get("skills") if isinstance(resume_json, dict) else []
+        candidate_name = str((personal or {}).get("name") or "候选人")
+        candidate_email = str((personal or {}).get("email") or (smtp.get("username") or ""))
+        skills_line = "、".join([str(s) for s in skills[:8]]) if isinstance(skills, list) else ""
+        default_ctx = {
+            "candidate_name": candidate_name,
+            "candidate_email": candidate_email,
+            "skills_line": skills_line,
+        }
+
+        subject_template = str(data.get("subject_template") or "应聘咨询 - {candidate_name}")
+        body_template = str(data.get("body_template") or _default_email_html_template())
+        max_hourly = int(data.get("max_hourly") or 30)
+        max_daily = int(data.get("max_daily") or 100)
+        dry_run = bool(data.get("dry_run", False))
+
+        result = await asyncio.to_thread(
+            email_campaign_service.send_batch,
+            smtp,
+            contacts,
+            subject_template,
+            body_template,
+            attachment_path,
+            max_hourly,
+            max_daily,
+            dry_run,
+            default_ctx,
+        )
+        _track_event(
+            "email_batch_sent",
+            {
+                "campaign_id": result.get("campaign_id"),
+                "sent": result.get("sent", 0),
+                "failed": result.get("failed", 0),
+                "dry_run": dry_run,
+            },
+        )
+
+        out: Dict[str, Any] = {"result": result}
+        if rendered_doc:
+            out["attachment"] = {
+                "doc_id": rendered_doc.get("doc_id"),
+                "download_url": f"/api/resume/render/download/{rendered_doc.get('doc_id')}",
+                "file_size": rendered_doc.get("file_size"),
+            }
+        return _api_success(out)
+    except Exception as e:
+        logger.exception("批量发送邮件失败")
+        return _api_error(str(e), status_code=500, code="email_batch_send_failed")
+
+
+if __name__ == "__main__":
+    import webbrowser
+    import threading
+    
+    port = int(os.getenv("PORT", 8000))
+    
+    print("\n" + "🚀"*30)
+    print("AI求职助手 - Web服务启动中...")
+    print("🚀"*30 + "\n")
+    print(f"📍 访问地址: http://localhost:{port}")
+    print(f"📍 API文档: http://localhost:{port}/docs")
+    print(f"📍 WebSocket: ws://localhost:{port}/ws/progress")
+    print("\n✨ 新功能: WebSocket实时进度推送")
+    print("按 Ctrl+C 停止服务\n")
+    
+    # 延迟2秒后自动打开浏览器
+    def open_browser():
+        import time
+        time.sleep(2)
+        webbrowser.open(f'http://localhost:{port}/app')
+    
+    threading.Thread(target=open_browser, daemon=True).start()
+    
+    uvicorn.run(app, host="0.0.0.0", port=port)
+

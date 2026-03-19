@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import os
@@ -185,6 +185,56 @@ class OpenClawBrowserProvider(JobProvider):
 
         return urls or [("Boss直聘", f"https://www.zhipin.com/web/geek/job?query={q}", ["zhipin.com"])]
 
+    def _search_terms(self, params: JobSearchParams) -> List[str]:
+        terms: List[str] = []
+        for token in (params.keywords or []):
+            for seg in str(token or "").lower().split():
+                seg = seg.strip()
+                if len(seg) >= 2:
+                    terms.append(seg)
+        return terms
+
+    def _score_job(self, job: Dict[str, Any], terms: List[str], target_location: str) -> float:
+        title = str(job.get("title") or "").lower()
+        link = str(job.get("link") or "").lower()
+        location = str(job.get("location") or "").lower()
+
+        score = 0.0
+        for term in terms:
+            if term in title:
+                score += 3.0
+            if term in link:
+                score += 1.0
+        if target_location and target_location in location:
+            score += 2.0
+        if "/job_detail/" in link:
+            score += 1.0
+        return score
+
+    def _dedupe_and_rank(
+        self,
+        jobs: List[Dict[str, Any]],
+        params: JobSearchParams,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        terms = self._search_terms(params)
+        target_location = str(params.location or "").strip().lower()
+
+        deduped: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+        for job in jobs:
+            link = str(job.get("link") or "").strip().lower()
+            jid = str(job.get("id") or "").strip().lower()
+            title = str(job.get("title") or "").strip().lower()
+            key = link or jid or title
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            deduped.append(job)
+
+        deduped.sort(key=lambda one: self._score_job(one, terms, target_location), reverse=True)
+        return deduped[:limit]
+
     def search_jobs(self, params: JobSearchParams, progress_callback=None) -> List[Dict[str, Any]]:
         # Always local-only.
         urls = self._build_urls(params)
@@ -235,20 +285,14 @@ class OpenClawBrowserProvider(JobProvider):
                 }
                 self._cache[job_id] = job
                 results.append(job)
-                if len(results) >= limit:
-                    if progress_callback:
-                        try:
-                            progress_callback("完成", 100)
-                        except Exception:
-                            pass
-                    return results[:limit]
 
+        ranked = self._dedupe_and_rank(results, params=params, limit=limit)
         if progress_callback:
             try:
                 progress_callback("完成", 100)
             except Exception:
                 pass
-        return results[:limit]
+        return ranked
 
     def get_job_detail(self, job_id: str) -> Optional[Dict[str, Any]]:
         return self._cache.get(job_id)

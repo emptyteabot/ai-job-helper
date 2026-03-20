@@ -12,29 +12,30 @@ import os
 import sys
 from typing import Optional, List, Dict, Any, Tuple
 import asyncio
-from datetime import datetime
-from urllib.parse import quote_plus, urlparse, parse_qs, unquote
+from datetime import datetime, timedelta
+from urllib.parse import quote_plus, urlparse, parse_qs, unquote, urlencode
 import re
 import html as html_lib
 import requests
 import logging
 import time
 import uuid
-import importlib.util
-import json
+import secrets
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from app.core.multi_ai_debate import JobApplicationPipeline
 from app.core.fast_ai_engine import fast_pipeline, HighPerformanceAIEngine
 from app.core.market_driven_engine import market_driven_pipeline
-from app.core.skills_graph import SkillsGraph
 from app.core.llm_client import get_public_llm_config
 from app.services.resume_analyzer import ResumeAnalyzer
 from app.services.real_job_service import RealJobService
 from app.services.business_service import BusinessService
 from app.services.resume_profile_service import ResumeProfileService
 from app.services.resume_render_service import ResumeRenderService
+from app.services.job_intelligence_service import JobIntelligenceService
+from app.services.interview_experience_service import InterviewExperienceService
+from app.services.interview_experience_collector_service import InterviewExperienceCollectorService
 from app.services.email_campaign_service import EmailCampaignService, SMTP_PRESETS
 from app.core.realtime_progress import progress_tracker
 
@@ -106,11 +107,13 @@ async def request_context_middleware(request: Request, call_next):
 # 全局变量
 pipeline = JobApplicationPipeline()
 analyzer = ResumeAnalyzer()
-skills_graph = SkillsGraph()
 real_job_service = RealJobService()  # 真实招聘数据服务
 business_service = BusinessService()
 resume_profile_service = ResumeProfileService()
 resume_render_service = ResumeRenderService()
+job_intelligence_service = JobIntelligenceService()
+interview_experience_service = InterviewExperienceService()
+interview_experience_collector_service = InterviewExperienceCollectorService()
 email_campaign_service = EmailCampaignService()
 
 # 云端岗位缓存（内存）
@@ -122,21 +125,6 @@ cloud_jobs_meta: Dict[str, Any] = {
     "last_new": 0,
 }
 recent_search_jobs: Dict[str, Dict[str, Any]] = {}
-github_apply_tasks: Dict[str, Dict[str, Any]] = {}
-boss_sms_code_store: Dict[str, Dict[str, Any]] = {}
-boss_control_action_store: Dict[str, Dict[str, Any]] = {}
-HAITOU_DEFAULT_POLICY: Dict[str, Any] = {
-    "enabled": True,
-    "fallback_platforms": ["boss", "zhilian", "linkedin"],
-    "max_count": 80,
-    "headless": True,
-    "allow_portal_fallback": True,
-    "verification_wait_seconds": 180,
-    "strategy_version": "haitou_v1",
-}
-AIHAWK_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "third_party", "Auto_Jobs_Applier_AIHawk")
-)
 
 
 def _api_success(payload: Dict[str, Any], status_code: int = 200) -> JSONResponse:
@@ -150,193 +138,6 @@ def _api_error(message: str, status_code: int = 400, code: str = "bad_request") 
         {"success": False, "error": message, "code": code},
         status_code=status_code,
     )
-
-
-def _to_string_list(value: Any) -> List[str]:
-    if isinstance(value, list):
-        return [str(x).strip() for x in value if str(x).strip()]
-    if isinstance(value, str):
-        return [x.strip() for x in value.split(",") if x.strip()]
-    return []
-
-
-def _apply_haitou_defaults(raw: Dict[str, Any]) -> Dict[str, Any]:
-    data = dict(raw or {})
-    # Global permanent strategy: enforce identical haitou policy for all users.
-    data["enable_fallback_auto_apply"] = True
-    data["fallback_platforms"] = list(HAITOU_DEFAULT_POLICY["fallback_platforms"])
-    data["platforms"] = list(HAITOU_DEFAULT_POLICY["fallback_platforms"])
-    data["max_count"] = int(HAITOU_DEFAULT_POLICY["max_count"])
-    data["headless"] = bool(HAITOU_DEFAULT_POLICY["headless"])
-    data["verification_wait_seconds"] = int(HAITOU_DEFAULT_POLICY["verification_wait_seconds"])
-    cfg = dict(data.get("config") or {})
-    cfg["max_count"] = int(HAITOU_DEFAULT_POLICY["max_count"])
-    cfg["headless"] = bool(HAITOU_DEFAULT_POLICY["headless"])
-    cfg["verification_wait_seconds"] = int(HAITOU_DEFAULT_POLICY["verification_wait_seconds"])
-    data["config"] = cfg
-    return data
-
-
-def _mask_phone(phone: str) -> str:
-    s = str(phone or "").strip()
-    if len(s) >= 7:
-        return f"{s[:3]}****{s[-4:]}"
-    return s
-
-
-def _resolve_auto_apply_task_id(task_id: str = "", gh_task_id: str = "") -> str:
-    tid = str(task_id or "").strip()
-    if tid:
-        return tid
-    gid = str(gh_task_id or "").strip()
-    if not gid:
-        return ""
-    gh_task = github_apply_tasks.get(gid) or {}
-    return str(gh_task.get("linked_auto_apply_task_id") or "").strip()
-
-
-def _set_boss_sms_code(task_id: str, code: str) -> None:
-    tid = str(task_id or "").strip()
-    if not tid:
-        return
-    boss_sms_code_store[tid] = {
-        "code": str(code or "").strip(),
-        "updated_at": datetime.now().isoformat(),
-    }
-
-
-def _pop_boss_sms_code(task_id: str) -> str:
-    tid = str(task_id or "").strip()
-    if not tid:
-        return ""
-    row = boss_sms_code_store.pop(tid, None) or {}
-    return str(row.get("code") or "").strip()
-
-
-def _push_boss_control_action(task_id: str, action: str) -> None:
-    tid = str(task_id or "").strip()
-    act = str(action or "").strip().lower()
-    if not tid or not act:
-        return
-    boss_control_action_store[tid] = {
-        "action": act,
-        "updated_at": datetime.now().isoformat(),
-    }
-
-
-def _pop_boss_control_action(task_id: str) -> str:
-    tid = str(task_id or "").strip()
-    if not tid:
-        return ""
-    row = boss_control_action_store.pop(tid, None) or {}
-    return str(row.get("action") or "").strip().lower()
-
-
-def _aihawk_capability_snapshot() -> Dict[str, Any]:
-    root_exists = os.path.isdir(AIHAWK_ROOT)
-    required_files = ["main.py", "config.py", "requirements.txt", "data_folder"]
-    missing_required = [
-        p for p in required_files if not os.path.exists(os.path.join(AIHAWK_ROOT, p))
-    ]
-
-    dep_names = ["yaml", "inquirer", "selenium", "webdriver_manager"]
-    missing_deps = [d for d in dep_names if importlib.util.find_spec(d) is None]
-
-    plugin_markers = [
-        "ai_hawk/bot_facade.py",
-        "ai_hawk/job_manager.py",
-    ]
-    has_auto_apply_plugins = all(
-        os.path.exists(os.path.join(AIHAWK_ROOT, rel)) for rel in plugin_markers
-    )
-
-    llm_key_ready = bool(
-        os.getenv("DEEPSEEK_API_KEY", "").strip()
-        or os.getenv("OPENAI_API_KEY", "").strip()
-    )
-
-    can_prepare = root_exists and (len(missing_required) == 0) and ("yaml" not in missing_deps)
-    can_run = can_prepare and has_auto_apply_plugins and (len(missing_deps) == 0) and llm_key_ready
-
-    blockers: List[str] = []
-    actions: List[str] = []
-    if missing_required:
-        blockers.append(f"缺少必要文件: {missing_required}")
-        actions.append("补齐 third_party/Auto_Jobs_Applier_AIHawk 目录结构")
-    if missing_deps:
-        blockers.append(f"缺少依赖: {missing_deps}")
-        actions.append("在后端虚拟环境安装缺失依赖")
-    if not has_auto_apply_plugins:
-        blockers.append("当前 AIHawk 版本缺少 auto-apply 插件代码")
-        actions.append("切换到含插件的历史提交或私有分支")
-    if not llm_key_ready:
-        blockers.append("未配置 LLM API KEY")
-        actions.append("配置 DEEPSEEK_API_KEY 或 OPENAI_API_KEY")
-
-    return {
-        "root": AIHAWK_ROOT,
-        "root_exists": root_exists,
-        "missing_required": missing_required,
-        "missing_deps": missing_deps,
-        "has_auto_apply_plugins": has_auto_apply_plugins,
-        "llm_key_ready": llm_key_ready,
-        "mode": "full_auto_apply" if has_auto_apply_plugins else "prepare_only",
-        "can_prepare": can_prepare,
-        "can_run": can_run,
-        "blockers": blockers,
-        "actions": actions,
-    }
-
-
-def _skills_graph_payload(
-    resume_text: str,
-    target_role: str = "",
-    job_text: str = "",
-) -> Dict[str, Any]:
-    resume_text = str(resume_text or "")
-    target_role = str(target_role or "").strip()
-    job_text = str(job_text or "")
-
-    if not target_role:
-        try:
-            parsed = analyzer.extract_info(resume_text)
-            target_role = str(parsed.get("job_intention") or "").strip()
-        except Exception:
-            target_role = ""
-
-    resume_skills = skills_graph.extract_skills(resume_text)
-    job_skills = skills_graph.extract_skills(job_text or target_role)
-
-    match_score = None
-    if job_skills:
-        match_score = round(skills_graph.calculate_match_score(resume_skills, job_skills), 1)
-
-    recommend_for = target_role or "后端开发"
-    recommended = skills_graph.recommend_skills(resume_skills, recommend_for)
-
-    return {
-        "target_role": target_role,
-        "resume_skills": resume_skills,
-        "job_skills": job_skills,
-        "match_score": match_score,
-        "recommended_skills": recommended,
-    }
-
-
-def _multi_agent_outputs_degraded(results: Dict[str, Any]) -> bool:
-    fields = [
-        str(results.get("career_analysis") or ""),
-        str(results.get("job_recommendations") or ""),
-        str(results.get("optimized_resume") or ""),
-        str(results.get("interview_prep") or ""),
-        str(results.get("mock_interview") or ""),
-    ]
-    bad = 0
-    for text in fields:
-        t = text.lower()
-        if ("ai思考出错" in text) or ("authentication fails" in t) or ("error" in t and len(t) < 120):
-            bad += 1
-    return bad >= 3
 
 
 def _decode_text_file_bytes(content: bytes) -> str:
@@ -739,7 +540,7 @@ def _normalize_and_filter_jobs(jobs: List[Dict[str, Any]], limit: int = 10) -> L
         if not dedupe_key or dedupe_key in seen:
             continue
         seen.add(dedupe_key)
-        out.append(job)
+        out.append(job_intelligence_service.enrich_job(job))
         if len(out) >= max(1, int(limit or 10)):
             break
     return out
@@ -806,6 +607,185 @@ PUBLIC_EVENT_WHITELIST = {
     "job_link_click",
     "result_download",
 }
+
+OAUTH_STATE_TTL_MINUTES = int(os.getenv("OAUTH_STATE_TTL_MINUTES", "15") or "15")
+OAUTH_STATE_STORE: Dict[str, Dict[str, Any]] = {}
+OAUTH_PROVIDER_META: Dict[str, Dict[str, str]] = {
+    "google": {
+        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "default_scope": "openid email profile",
+    },
+    "github": {
+        "auth_url": "https://github.com/login/oauth/authorize",
+        "token_url": "https://github.com/login/oauth/access_token",
+        "default_scope": "read:user user:email",
+    },
+    "linkedin": {
+        "auth_url": "https://www.linkedin.com/oauth/v2/authorization",
+        "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
+        "default_scope": "r_liteprofile r_emailaddress",
+    },
+    "wechat": {
+        "auth_url": "https://open.weixin.qq.com/connect/qrconnect",
+        "token_url": "https://api.weixin.qq.com/sns/oauth2/access_token",
+        "default_scope": "snsapi_login",
+    },
+}
+
+
+def _oauth_now() -> datetime:
+    return datetime.now()
+
+
+def _oauth_env(provider: str, key: str) -> str:
+    return os.getenv(f"OAUTH_{provider.upper()}_{key}", "").strip()
+
+
+def _oauth_provider_config(provider: str) -> Dict[str, Any]:
+    meta = OAUTH_PROVIDER_META.get(provider, {})
+    if not meta:
+        return {}
+
+    client_id = _oauth_env(provider, "CLIENT_ID")
+    client_secret = _oauth_env(provider, "CLIENT_SECRET")
+    redirect_uri = _oauth_env(provider, "REDIRECT_URI")
+    scope = _oauth_env(provider, "SCOPE") or meta.get("default_scope", "")
+
+    # WeChat uses appid/appsecret naming but keep unified env keys for ops.
+    config = {
+        "provider": provider,
+        "auth_url": meta.get("auth_url", ""),
+        "token_url": meta.get("token_url", ""),
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "redirect_uri": redirect_uri,
+        "scope": scope,
+    }
+    return config
+
+
+def _oauth_is_configured(config: Dict[str, Any]) -> bool:
+    if not config:
+        return False
+    provider = str(config.get("provider") or "")
+    if provider == "wechat":
+        return bool(config.get("client_id") and config.get("client_secret") and config.get("redirect_uri"))
+    return bool(config.get("client_id") and config.get("client_secret") and config.get("redirect_uri"))
+
+
+def _oauth_cleanup_state_store() -> None:
+    now = _oauth_now()
+    stale_keys = [
+        key for key, row in OAUTH_STATE_STORE.items()
+        if not isinstance(row, dict) or row.get("expires_at") is None or row["expires_at"] < now
+    ]
+    for key in stale_keys:
+        OAUTH_STATE_STORE.pop(key, None)
+
+
+def _oauth_issue_state(provider: str, redirect_after: str = "") -> str:
+    _oauth_cleanup_state_store()
+    state = secrets.token_urlsafe(24)
+    OAUTH_STATE_STORE[state] = {
+        "provider": provider,
+        "redirect_after": redirect_after or "",
+        "created_at": _oauth_now(),
+        "expires_at": _oauth_now() + timedelta(minutes=max(3, OAUTH_STATE_TTL_MINUTES)),
+    }
+    return state
+
+
+def _oauth_validate_state(provider: str, state: str) -> Dict[str, Any]:
+    _oauth_cleanup_state_store()
+    row = OAUTH_STATE_STORE.pop(state, None)
+    if not isinstance(row, dict):
+        raise ValueError("state_not_found")
+    if str(row.get("provider") or "") != provider:
+        raise ValueError("state_provider_mismatch")
+    if row.get("expires_at") and row["expires_at"] < _oauth_now():
+        raise ValueError("state_expired")
+    return row
+
+
+def _oauth_build_authorize_url(config: Dict[str, Any], state: str) -> str:
+    provider = str(config.get("provider") or "")
+    auth_url = str(config.get("auth_url") or "")
+    if not auth_url:
+        raise ValueError("oauth_auth_url_missing")
+
+    redirect_uri = str(config.get("redirect_uri") or "")
+    client_id = str(config.get("client_id") or "")
+    scope = str(config.get("scope") or "")
+
+    if provider == "wechat":
+        params = {
+            "appid": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": "code",
+            "scope": scope or "snsapi_login",
+            "state": state,
+        }
+        return f"{auth_url}?{urlencode(params)}#wechat_redirect"
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": scope,
+        "state": state,
+    }
+
+    if provider == "google":
+        params["access_type"] = "offline"
+        params["prompt"] = "consent"
+
+    return f"{auth_url}?{urlencode(params)}"
+
+
+def _oauth_exchange_token(config: Dict[str, Any], code: str) -> Dict[str, Any]:
+    provider = str(config.get("provider") or "")
+    token_url = str(config.get("token_url") or "")
+    if not token_url:
+        raise ValueError("oauth_token_url_missing")
+
+    redirect_uri = str(config.get("redirect_uri") or "")
+    client_id = str(config.get("client_id") or "")
+    client_secret = str(config.get("client_secret") or "")
+
+    timeout_s = int(os.getenv("OAUTH_HTTP_TIMEOUT_S", "12") or "12")
+
+    if provider == "wechat":
+        params = {
+            "appid": client_id,
+            "secret": client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+        }
+        resp = requests.get(token_url, params=params, timeout=timeout_s)
+    else:
+        payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        headers = {"Accept": "application/json"}
+        resp = requests.post(token_url, data=payload, headers=headers, timeout=timeout_s)
+
+    text = resp.text or ""
+    if resp.status_code >= 400:
+        raise RuntimeError(f"oauth_token_exchange_http_{resp.status_code}:{text[:300]}")
+
+    try:
+        return resp.json()
+    except Exception:
+        # GitHub may return query-string style in edge cases.
+        if "=" in text and "&" in text:
+            pairs = [seg.split("=", 1) for seg in text.split("&") if "=" in seg]
+            return {k: v for k, v in pairs}
+        raise RuntimeError("oauth_token_exchange_invalid_json")
 
 
 def _text_has_low_quality_marker(text: str) -> bool:
@@ -902,18 +882,9 @@ def _run_output_quality_gate(
     return clean, report
 
 
-def _public_job_payload(
-    jobs: List[Dict[str, Any]],
-    limit: int = 10,
-    allow_entrypoints: bool = False,
-) -> List[Dict[str, Any]]:
+def _public_job_payload(jobs: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    normalized = (
-        _normalize_and_filter_jobs(jobs or [], limit=limit)
-        if allow_entrypoints
-        else _normalize_real_jobs(jobs or [], limit=limit)
-    )
-    for j in normalized:
+    for j in _normalize_real_jobs(jobs or [], limit=limit):
         link = str(j.get("link") or j.get("apply_url") or "").strip()
         out.append(
             {
@@ -926,6 +897,10 @@ def _public_job_payload(
                 "link": link,
                 "provider": str(j.get("provider") or ""),
                 "updated": str(j.get("updated") or ""),
+                "stack_category": str(j.get("stack_category") or "general"),
+                "stack_tags": list(j.get("stack_tags") or []),
+                "company_category": str(j.get("company_category") or "general"),
+                "interview_focus": list(j.get("interview_focus") or []),
             }
         )
     return out
@@ -958,6 +933,9 @@ def _validate_process_response_shape(payload: Dict[str, Any]) -> List[str]:
                 if not isinstance(row.get(key), str) or not str(row.get(key)).strip():
                     errors.append(f"recommended_jobs[{idx}].{key}:missing")
                     break
+    interview_pack = payload.get("interview_pack")
+    if interview_pack is not None and not isinstance(interview_pack, dict):
+        errors.append("interview_pack:expected_object")
     return errors
 
 
@@ -985,18 +963,26 @@ def _search_jobs_without_browser(
     location: Optional[str],
     limit: int,
     allow_portal_fallback: bool = False,
+    force_provider: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], str, Optional[str]]:
     """
     Cloud-safe real-time search path.
     No local browser/OpenClaw required.
     """
+    provider = (force_provider or "").strip().lower()
+    service = real_job_service
+    if provider and provider not in {"cloud", "enterprise_api"}:
+        from app.services.real_job_service import RealJobService
+        service = RealJobService()
+        service.provider_name = provider
+
     try:
-        jobs = real_job_service.search_jobs(
+        jobs = service.search_jobs(
             keywords=keywords,
             location=location,
             limit=max(5, min(int(limit or 10), 50)),
         )
-        mode = (real_job_service.get_statistics() or {}).get("provider_mode", "auto")
+        mode = (service.get_statistics() or {}).get("provider_mode", provider or "auto")
         normalized = _normalize_real_jobs(jobs, limit=limit)
         normalized = _enforce_cn_market_jobs(normalized)
         if normalized:
@@ -1392,37 +1378,639 @@ def _search_jobs_cn_entrypoints(
             break
     return _normalize_and_filter_jobs(out, limit=limit)
 
-@app.get("/", include_in_schema=False)
+@app.get("/", response_class=HTMLResponse)
 async def home():
-    """Default entry: always route to app workspace to avoid stale static home pages."""
-    return RedirectResponse(url="/app", status_code=302)
+    """Root now points to the main app UI to avoid old index confusion."""
+    return RedirectResponse(url="/app", status_code=307)
 
 @app.get("/app", response_class=HTMLResponse)
 async def app_page():
-    """主应用页面（仅保留统一工作台版本）。"""
-    app_html = "static/app_pro.html"
-    if os.path.exists(app_html) and os.path.getsize(app_html) > 64:
+    """主应用页面"""
+    app_candidates = ["static/app.html", "static/app_clean.html"]
+    for app_html in app_candidates:
+        if not (os.path.exists(app_html) and os.path.getsize(app_html) > 64):
+            continue
         with open(app_html, 'r', encoding='utf-8') as f:
             return HTMLResponse(content=f.read())
-    return HTMLResponse(content="<h1>app_pro.html not found</h1>", status_code=500)
+
+    return """
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI求职助手 - 多AI协作系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            animation: fadeInDown 0.8s ease;
+        }
+        
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .main-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: fadeInUp 0.8s ease;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+        
+        .step-indicator::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #e0e0e0;
+            z-index: 0;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e0e0e0;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 10px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .step.active .step-circle {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transform: scale(1.2);
+        }
+        
+        .step-label {
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .step.active .step-label {
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .input-section {
+            margin-bottom: 30px;
+        }
+        
+        .input-section label {
+            display: block;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 300px;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 15px 40px;
+            font-size: 1.1em;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #666;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        .ai-status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            font-size: 0.95em;
+        }
+        
+        .ai-status .ai-item {
+            padding: 8px;
+            margin: 5px 0;
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+        }
+        
+        .results {
+            display: none;
+            margin-top: 30px;
+        }
+        
+        .results.active {
+            display: block;
+        }
+        
+        .result-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .result-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .result-card pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: inherit;
+            line-height: 1.6;
+        }
+        
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .ai-roles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .ai-role-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        
+        .ai-role-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .ai-role-card .icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        
+        .ai-role-card .name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .ai-role-card .task {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI求职助手</h1>
+            <p>多AI协作系统 - 让6个AI帮您找到理想工作</p>
+        </div>
+        
+        <div class="main-card">
+            <div class="step-indicator">
+                <div class="step active" id="step1">
+                    <div class="step-circle">1</div>
+                    <div class="step-label">上传简历</div>
+                </div>
+                <div class="step" id="step2">
+                    <div class="step-circle">2</div>
+                    <div class="step-label">AI分析</div>
+                </div>
+                <div class="step" id="step3">
+                    <div class="step-circle">3</div>
+                    <div class="step-label">优化简历</div>
+                </div>
+                <div class="step" id="step4">
+                    <div class="step-circle">4</div>
+                    <div class="step-label">面试准备</div>
+                </div>
+            </div>
+            
+            <div class="ai-roles">
+                <div class="ai-role-card">
+                    <div class="icon">👔</div>
+                    <div class="name">职业规划师</div>
+                    <div class="task">分析优势定位</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">🔍</div>
+                    <div class="name">招聘专家</div>
+                    <div class="task">搜索匹配岗位</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">✍️</div>
+                    <div class="name">简历优化师</div>
+                    <div class="task">改写简历内容</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">✅</div>
+                    <div class="name">质量检查官</div>
+                    <div class="task">审核并改进</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">🎓</div>
+                    <div class="name">面试教练</div>
+                    <div class="task">面试辅导</div>
+                </div>
+                <div class="ai-role-card">
+                    <div class="icon">🎭</div>
+                    <div class="name">模拟面试官</div>
+                    <div class="task">模拟面试</div>
+                </div>
+            </div>
+            
+            <div class="input-section" id="inputSection">
+                <label>📄 上传简历或输入内容：</label>
+                
+                <!-- 文件上传区域 -->
+                <div style="margin-bottom: 20px;">
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.txt,.jpg,.jpeg,.png,.bmp,.gif" style="display: none;" onchange="handleFileUpload(event)">
+                    <button class="btn-secondary" onclick="document.getElementById('fileInput').click()" style="width: 100%; padding: 20px; font-size: 1em;">
+                        📎 点击上传简历文件（支持PDF、Word、TXT、图片）
+                    </button>
+                    <div id="uploadStatus" style="margin-top: 10px; text-align: center; color: #667eea; font-weight: bold;"></div>
+                </div>
+                
+                <div style="text-align: center; margin: 20px 0; color: #999;">或者</div>
+                
+                <textarea id="resumeInput" placeholder="直接输入您的简历内容：
+- 姓名、学历、工作经验
+- 技能清单（编程语言、框架、工具等）
+- 项目经验
+- 求职意向
+
+示例：
+姓名：张三
+学历：本科 - 计算机科学
+工作经验：3年Python开发
+技能：Python, Django, MySQL, Redis
+项目：电商后台系统、数据分析平台
+求职意向：Python后端开发工程师"></textarea>
+                
+                <div class="button-group" style="margin-top: 20px;">
+                    <button class="btn-secondary" onclick="loadExample()">使用示例简历</button>
+                    <button class="btn-primary" onclick="startProcess()">🚀 开始AI协作</button>
+                </div>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <h3>🤖 AI团队正在协作中...</h3>
+                <p>6个AI正在依次工作，预计需要1-2分钟</p>
+                <div class="ai-status" id="aiStatus"></div>
+            </div>
+            
+            <div class="results" id="results">
+                <h2 style="text-align: center; color: #667eea; margin-bottom: 30px;">🎉 AI协作完成！</h2>
+                
+                <div class="result-card">
+                    <h3>📊 职业分析报告</h3>
+                    <pre id="careerAnalysis"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>🎯 推荐岗位列表</h3>
+                    <pre id="jobRecommendations"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>✍️ 优化后的简历</h3>
+                    <pre id="optimizedResume"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>🎓 面试准备指南</h3>
+                    <pre id="interviewPrep"></pre>
+                </div>
+                
+                <div class="result-card">
+                    <h3>🎭 模拟面试问答</h3>
+                    <pre id="mockInterview"></pre>
+                </div>
+                
+                <div class="button-group" style="margin-top: 30px;">
+                    <button class="btn-secondary" onclick="location.reload()">重新开始</button>
+                    <button class="btn-primary" onclick="downloadResults()">📥 下载结果</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.textContent = '📤 正在上传和解析文件...';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '上传失败');
+                }
+                
+                const data = await response.json();
+                
+                // 显示上传成功
+                statusDiv.textContent = `✅ 文件上传成功：${data.filename}`;
+                statusDiv.style.color = '#27ae60';
+                
+                // 等待1秒后自动开始AI处理
+                setTimeout(() => {
+                    statusDiv.textContent = '🚀 正在启动AI协作...';
+                    statusDiv.style.color = '#667eea';
+                    
+                    // 自动开始处理
+                    processResumeText(data.resume_text);
+                }, 1000);
+                
+            } catch (error) {
+                statusDiv.textContent = `❌ ${error.message}`;
+                statusDiv.style.color = '#e74c3c';
+            }
+        }
+        
+        async function processResumeText(resumeText) {
+            // 隐藏输入区，显示加载动画
+            document.getElementById('inputSection').style.display = 'none';
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('step2').classList.add('active');
+            
+            try {
+                // 调用后端API
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ resume: resumeText })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('处理失败');
+                }
+                
+                const data = await response.json();
+                
+                // 显示结果
+                document.getElementById('loading').classList.remove('active');
+                document.getElementById('results').classList.add('active');
+                document.getElementById('step3').classList.add('active');
+                document.getElementById('step4').classList.add('active');
+                
+                document.getElementById('careerAnalysis').textContent = data.career_analysis;
+                document.getElementById('jobRecommendations').textContent = data.job_recommendations;
+                document.getElementById('optimizedResume').textContent = data.optimized_resume;
+                document.getElementById('interviewPrep').textContent = data.interview_prep;
+                document.getElementById('mockInterview').textContent = data.mock_interview;
+                
+            } catch (error) {
+                alert('处理出错：' + error.message);
+                location.reload();
+            }
+        }
+        
+        function loadExample() {
+            document.getElementById('resumeInput').value = `姓名：李明
+学历：本科 - 软件工程
+工作经验：3年Python开发经验
+
+技能清单：
+- 编程语言: Python, JavaScript, SQL
+- 后端框架: Django, Flask, FastAPI
+- 数据库: MySQL, Redis, MongoDB
+- 前端: React, Vue.js, HTML/CSS
+- 工具: Docker, Git, Linux
+
+项目经验：
+1. 电商后台管理系统
+   - 使用Django + MySQL开发
+   - 实现商品管理、订单处理、用户权限等功能
+   - 日均处理订单5000+
+
+2. 数据分析平台
+   - 使用Python + Pandas进行数据处理
+   - 开发可视化报表系统
+   - 支持实时数据监控
+
+3. RESTful API服务
+   - 使用FastAPI开发高性能API
+   - 集成Redis缓存，响应时间<100ms
+   - 日均请求量100万+
+
+求职意向：Python后端开发工程师 / 全栈开发工程师
+期望薪资：20-35K
+工作地点：北京、上海、杭州`;
+        }
+        
+        async function startProcess() {
+            const resume = document.getElementById('resumeInput').value.trim();
+            
+            if (!resume) {
+                alert('请先输入简历内容或上传文件！');
+                return;
+            }
+            
+            // 调用统一的处理函数
+            processResumeText(resume);
+        }
+        
+        function downloadResults() {
+            // 下载所有结果为文本文件
+            const results = {
+                '职业分析': document.getElementById('careerAnalysis').textContent,
+                '推荐岗位': document.getElementById('jobRecommendations').textContent,
+                '优化后简历': document.getElementById('optimizedResume').textContent,
+                '面试准备': document.getElementById('interviewPrep').textContent,
+                '模拟面试': document.getElementById('mockInterview').textContent
+            };
+            
+            let content = '';
+            for (const [title, text] of Object.entries(results)) {
+                content += `\n${'='.repeat(60)}\n${title}\n${'='.repeat(60)}\n\n${text}\n\n`;
+            }
+            
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'AI求职助手-完整结果.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
+"""
+
+
+@app.get("/enter", response_class=HTMLResponse)
+async def enter_page():
+    """主工作台入口 - 重定向到 /app"""
+    return await app_page()
 
 
 @app.get("/index.html", response_class=HTMLResponse)
 async def home_alias():
-    """旧入口统一跳转到主工作台。"""
-    return RedirectResponse(url="/app", status_code=302)
+    """兼容旧入口路径。"""
+    return await home()
 
 
 @app.get("/app_clean.html", response_class=HTMLResponse)
 async def app_clean_alias():
-    """旧工作台统一跳转。"""
-    return RedirectResponse(url="/app", status_code=302)
+    """兼容旧工作台路径。"""
+    return await app_page()
 
 
 @app.get("/auto_apply_panel.html", response_class=HTMLResponse)
 async def auto_apply_panel_page():
-    """自动投递旧面板统一跳转。"""
-    return RedirectResponse(url="/app", status_code=302)
+    """自动投递面板兼容入口。"""
+    panel_html = "static/auto_apply_panel.html"
+    if os.path.exists(panel_html):
+        with open(panel_html, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    return HTMLResponse(content="<h1>Auto Apply Panel</h1><p>/static/auto_apply_panel.html</p>")
 
 
 @app.get("/investor.html", response_class=HTMLResponse)
@@ -1445,15 +2033,15 @@ async def upload_resume(
     file: UploadFile = File(...),
     force_ocr: Optional[str] = Form(None),
 ):
-    """上传简历文件（支持PDF、Word、TXT/MD、图片）"""
+    """上传简历文件（支持PDF、Word、TXT、图片）"""
     try:
         # 检查文件类型
-        allowed_types = ['.pdf', '.docx', '.doc', '.txt', '.md', '.markdown', '.jpg', '.jpeg', '.png', '.bmp', '.gif']
+        allowed_types = ['.pdf', '.docx', '.doc', '.txt', '.jpg', '.jpeg', '.png', '.bmp', '.gif']
         file_ext = os.path.splitext(file.filename)[1].lower()
         
         if file_ext not in allowed_types:
             return JSONResponse({
-                "error": f"不支持的文件格式。支持：PDF、Word、TXT/MD、图片（JPG/PNG等）"
+                "error": f"不支持的文件格式。支持：PDF、Word、TXT、图片（JPG/PNG等）"
             }, status_code=400)
         
         # 读取文件内容
@@ -1463,7 +2051,7 @@ async def upload_resume(
         
         try:
             # 解析文件
-            if file_ext in {'.txt', '.md', '.markdown'}:
+            if file_ext == '.txt':
                 # 文本文件
                 resume_text = _decode_text_file_bytes(content)
                     
@@ -1682,7 +2270,7 @@ async def process_resume(request: Request):
 
         async def _get_real_jobs_for_recommendation():
             cfg_mode = os.getenv('JOB_DATA_PROVIDER', 'auto').strip().lower()
-            allow_portal_fallback = os.getenv("ALLOW_CN_PORTAL_FALLBACK", "1").strip().lower() in {"1", "true", "yes", "on"}
+            allow_portal_fallback = os.getenv("ALLOW_CN_PORTAL_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
             kw = seed_keywords[:10]
             loc = seed_location
 
@@ -1707,7 +2295,15 @@ async def process_resume(request: Request):
                 )
                 jobs = _enforce_cn_market_jobs(jobs)
                 mode = (real_job_service.get_statistics() or {}).get('provider_mode', '') or cfg_mode
-                return jobs[:10], mode
+                if jobs:
+                    return jobs[:10], mode
+                fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
+                    kw,
+                    loc,
+                    limit=10,
+                    allow_portal_fallback=allow_portal_fallback,
+                )
+                return _enforce_cn_market_jobs(fallback_jobs), fallback_mode or mode
             except Exception:
                 fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
                     kw,
@@ -1719,11 +2315,48 @@ async def process_resume(request: Request):
 
         real_jobs, real_mode = await _get_real_jobs_for_recommendation()
         public_jobs = _public_job_payload(_enforce_cn_market_jobs(real_jobs), limit=10)
-        if not public_jobs:
-            portal_jobs = _search_jobs_cn_entrypoints(seed_keywords, seed_location, limit=5)
-            if portal_jobs:
-                public_jobs = _public_job_payload(portal_jobs, limit=10, allow_entrypoints=True)
-                real_mode = "cn_portal"
+        interview_pack = job_intelligence_service.build_interview_pack(
+            resume_text=resume_text,
+            jobs=public_jobs,
+            top_n=8,
+        )
+        interview_keywords: List[str] = []
+        interview_keywords.extend(seed_keywords[:4])
+        interview_keywords.extend(
+            [
+                str(j.get("title") or "").strip()
+                for j in public_jobs[:3]
+                if str(j.get("title") or "").strip()
+            ]
+        )
+        interview_keywords = [k for k in interview_keywords if k][:8]
+        interview_experiences: List[Dict[str, Any]] = []
+        interview_experience_digest: str = ""
+        try:
+            interview_experiences = await asyncio.to_thread(
+                interview_experience_service.search_experiences,
+                interview_keywords,
+                seed_location or "",
+                12,
+            )
+            interview_experience_digest = interview_experience_service.render_digest(
+                interview_experiences,
+                top_n=6,
+            )
+            _track_event(
+                "interview_experience_lookup",
+                {
+                    "source": "process",
+                    "keywords_count": len(interview_keywords),
+                    "location": bool(seed_location),
+                    "count": len(interview_experiences),
+                },
+            )
+        except Exception as ie:
+            _track_event(
+                "interview_experience_lookup_failed",
+                {"error": str(ie)[:300]},
+            )
         results["job_recommendations"] = _format_real_jobs(public_jobs, real_mode)
         results, quality_gate = _run_output_quality_gate(results, resume_text, info, public_jobs)
         provider_mode = real_mode
@@ -1743,6 +2376,8 @@ async def process_resume(request: Request):
             {
                 "provider_mode": provider_mode,
                 "real_jobs_count": len(public_jobs),
+                "top_stack": (interview_pack.get("summary") or {}).get("top_stack", ""),
+                "interview_experience_count": len(interview_experiences),
             },
         )
         _track_event(
@@ -1752,6 +2387,7 @@ async def process_resume(request: Request):
                 "provider_mode": provider_mode,
                 "skills_count": len(seed_keywords),
                 "real_jobs_count": len(public_jobs),
+                "interview_experience_count": len(interview_experiences),
                 "quality_gate_passed": bool(quality_gate.get("passed", True)),
             },
         )
@@ -1764,11 +2400,14 @@ async def process_resume(request: Request):
             "mock_interview": str(results.get("salary_analysis") or ""),
             "job_provider_mode": str(provider_mode or ""),
             "recommended_jobs": public_jobs,
+            "interview_experiences": interview_experiences,
+            "interview_experience_digest": str(interview_experience_digest or ""),
             "recommendation_quality": {
                 "strict_real_posting": True,
                 "count": len(public_jobs),
                 "has_actionable_jobs": bool(public_jobs),
             },
+            "interview_pack": interview_pack,
             "quality_gate": quality_gate,
             "schema_version": PROCESS_RESPONSE_SCHEMA_VERSION,
             "boss_seed": {
@@ -2083,6 +2722,292 @@ async def investor_summary(request: Request):
         _track_event("api_error", {"api": "/api/investor/summary", "error": str(e)[:300]})
         return _api_error(str(e), status_code=500, code="investor_summary_failed")
 
+
+@app.get("/api/auth/providers")
+async def oauth_provider_status():
+    providers: Dict[str, Any] = {}
+    for provider in OAUTH_PROVIDER_META.keys():
+        cfg = _oauth_provider_config(provider)
+        providers[provider] = {
+            "configured": _oauth_is_configured(cfg),
+            "redirect_uri": str(cfg.get("redirect_uri") or ""),
+            "scope": str(cfg.get("scope") or ""),
+        }
+    return _api_success({"providers": providers})
+
+
+@app.get("/api/auth/{provider}/start")
+async def oauth_start(provider: str, redirect_after: str = ""):
+    name = (provider or "").strip().lower()
+    if name not in OAUTH_PROVIDER_META:
+        return _api_error("unsupported_oauth_provider", status_code=400, code="unsupported_oauth_provider")
+
+    cfg = _oauth_provider_config(name)
+    if not _oauth_is_configured(cfg):
+        return _api_error(
+            f"{name} oauth not configured",
+            status_code=400,
+            code="oauth_provider_not_configured",
+        )
+
+    try:
+        state = _oauth_issue_state(name, redirect_after=redirect_after)
+        auth_url = _oauth_build_authorize_url(cfg, state)
+        return _api_success(
+            {
+                "provider": name,
+                "state": state,
+                "auth_url": auth_url,
+                "redirect_after": redirect_after or "",
+            }
+        )
+    except Exception as e:
+        return _api_error(str(e), status_code=500, code="oauth_start_failed")
+
+
+@app.get("/api/auth/{provider}/callback")
+async def oauth_callback(
+    provider: str,
+    code: str = "",
+    state: str = "",
+    error: str = "",
+    error_description: str = "",
+):
+    name = (provider or "").strip().lower()
+    if name not in OAUTH_PROVIDER_META:
+        return _api_error("unsupported_oauth_provider", status_code=400, code="unsupported_oauth_provider")
+
+    if error:
+        return _api_error(
+            f"{error}: {error_description}".strip(),
+            status_code=400,
+            code="oauth_authorization_denied",
+        )
+    if not code:
+        return _api_error("missing_oauth_code", status_code=400, code="missing_oauth_code")
+    if not state:
+        return _api_error("missing_oauth_state", status_code=400, code="missing_oauth_state")
+
+    cfg = _oauth_provider_config(name)
+    if not _oauth_is_configured(cfg):
+        return _api_error(
+            f"{name} oauth not configured",
+            status_code=400,
+            code="oauth_provider_not_configured",
+        )
+
+    try:
+        state_row = _oauth_validate_state(name, state)
+    except Exception as e:
+        return _api_error(str(e), status_code=400, code="oauth_state_invalid")
+
+    try:
+        token_payload = _oauth_exchange_token(cfg, code=code)
+    except Exception as e:
+        return _api_error(str(e), status_code=502, code="oauth_token_exchange_failed")
+
+    access_token = str(token_payload.get("access_token") or "")
+    preview = ""
+    if access_token:
+        preview = (access_token[:6] + "..." + access_token[-4:]) if len(access_token) > 14 else "***"
+
+    _track_event(
+        "oauth_callback_success",
+        {
+            "provider": name,
+            "has_access_token": bool(access_token),
+            "redirect_after": state_row.get("redirect_after") or "",
+        },
+    )
+    return _api_success(
+        {
+            "provider": name,
+            "token_type": str(token_payload.get("token_type") or ""),
+            "expires_in": int(token_payload.get("expires_in") or 0),
+            "scope": str(token_payload.get("scope") or ""),
+            "access_token_preview": preview,
+            "redirect_after": state_row.get("redirect_after") or "",
+            "raw": token_payload if os.getenv("OAUTH_DEBUG", "").strip().lower() in {"1", "true", "yes"} else {},
+        }
+    )
+
+
+@app.post("/api/interview/prep_pack")
+async def build_interview_prep_pack(request: Request):
+    """
+    Build interview prep pack based on:
+      - resume_text
+      - provided jobs OR job_ids from recent search cache.
+    """
+    try:
+        data = await request.json()
+        resume_text = str(data.get("resume_text") or "").strip()
+        raw_jobs = data.get("jobs") if isinstance(data.get("jobs"), list) else []
+        job_ids = data.get("job_ids") if isinstance(data.get("job_ids"), list) else []
+
+        jobs: List[Dict[str, Any]] = [row for row in raw_jobs if isinstance(row, dict)]
+        if (not jobs) and job_ids:
+            for job_id in job_ids:
+                row = recent_search_jobs.get(str(job_id))
+                if isinstance(row, dict):
+                    jobs.append(row)
+
+        jobs = _normalize_real_jobs(jobs, limit=20)
+        jobs = _enforce_cn_market_jobs(jobs)
+        jobs = job_intelligence_service.enrich_jobs(jobs)
+
+        interview_pack = job_intelligence_service.build_interview_pack(
+            resume_text=resume_text,
+            jobs=jobs,
+            top_n=8,
+        )
+        _track_event(
+            "interview_prep_generated",
+            {
+                "jobs_count": len(jobs),
+                "with_resume_text": bool(resume_text),
+            },
+        )
+        return _api_success(
+            {
+                "jobs": _public_job_payload(jobs, limit=20),
+                "interview_pack": interview_pack,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/interview/prep_pack", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="interview_prep_failed")
+
+
+@app.get("/api/interview/experiences")
+async def interview_experiences(
+    keywords: str = "",
+    location: str = "",
+    sources: str = "",
+    limit: int = 12,
+):
+    """
+    Aggregate public interview experiences from search engines and community sites.
+    """
+    try:
+        keyword_list = [k.strip() for k in (keywords or "").split(",") if k and k.strip()]
+        source_list = [s.strip().lower() for s in (sources or "").split(",") if s and s.strip()]
+        n = max(1, min(int(limit or 12), 30))
+        rows: List[Dict[str, Any]] = []
+
+        # Prefer the enhanced collector for unified fields + source filtering.
+        try:
+            rows = await asyncio.to_thread(
+                interview_experience_collector_service.search,
+                keyword_list,
+                location,
+                source_list,
+                n,
+            )
+        except Exception:
+            rows = []
+
+        # Fallback keeps legacy behavior available.
+        if not rows:
+            rows = await asyncio.to_thread(
+                interview_experience_service.search_experiences,
+                keyword_list,
+                location,
+                n,
+                source_list,
+                True,
+            )
+
+        digest = interview_experience_service.render_digest(rows, top_n=min(6, n))
+        _track_event(
+            "interview_experience_collected",
+            {
+                "keywords_count": len(keyword_list),
+                "sources_count": len(source_list),
+                "result_count": len(rows),
+                "location": location or "",
+            },
+        )
+        return _api_success(
+            {
+                "keywords": keyword_list,
+                "location": location or "",
+                "sources": source_list,
+                "total": len(rows),
+                "items": rows,
+                "interview_experiences": rows,
+                "interview_experience_digest": digest,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/interview/experiences", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="interview_experience_failed")
+
+
+@app.get("/api/interview/experiences/search")
+async def interview_experiences_search(
+    keywords: str = "",
+    location: str = "",
+    sources: str = "nowcoder,xiaohongshu",
+    limit: int = 12,
+):
+    """
+    Enhanced interview experience search endpoint.
+    Returns unified `items` and keeps `interview_experiences` for compatibility.
+    """
+    try:
+        keyword_list = [k.strip() for k in (keywords or "").split(",") if k and k.strip()]
+        source_list = [s.strip().lower() for s in (sources or "").split(",") if s and s.strip()]
+        n = max(1, min(int(limit or 12), 30))
+
+        rows: List[Dict[str, Any]] = []
+        try:
+            rows = await asyncio.to_thread(
+                interview_experience_collector_service.search,
+                keyword_list,
+                location,
+                source_list,
+                n,
+            )
+        except Exception:
+            rows = []
+
+        # Ensure source-filtered unified output is still available if collector fails.
+        if not rows:
+            rows = await asyncio.to_thread(
+                interview_experience_service.search_experiences,
+                keyword_list,
+                location,
+                n,
+                source_list,
+                True,
+            )
+        digest = interview_experience_service.render_digest(rows, top_n=min(6, n))
+        _track_event(
+            "interview_experience_search",
+            {
+                "keywords_count": len(keyword_list),
+                "sources_count": len(source_list),
+                "result_count": len(rows),
+                "location": location or "",
+            },
+        )
+        return _api_success(
+            {
+                "keywords": keyword_list,
+                "location": location or "",
+                "sources": source_list,
+                "total": len(rows),
+                "items": rows,
+                "interview_experiences": rows,
+                "interview_experience_digest": digest,
+            }
+        )
+    except Exception as e:
+        _track_event("api_error", {"api": "/api/interview/experiences/search", "error": str(e)[:300]})
+        return _api_error(str(e), status_code=500, code="interview_experience_search_failed")
+
+
 @app.get("/api/jobs/search")
 async def search_jobs(
     keywords: str = None,
@@ -2090,21 +3015,37 @@ async def search_jobs(
     salary_min: int = None,
     experience: str = None,
     limit: int = 50,
-    allow_portal_fallback: bool = True,
+    allow_portal_fallback: bool = False,
+    provider: str = None,
 ):
     """搜索真实岗位"""
     try:
         cfg_mode = os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower()
+        provider_override = str(provider or "").strip().lower()
+        if provider_override and provider_override not in {
+            "auto",
+            "cloud",
+            "baidu",
+            "bing",
+            "brave",
+            "jooble",
+            "openclaw",
+            "enterprise_api",
+            "local",
+            "offline",
+        }:
+            return _api_error(f"unsupported provider: {provider_override}", status_code=400, code="invalid_provider")
+        effective_mode = provider_override or cfg_mode
         n = int(limit) if limit is not None else 50
         n = max(1, min(n, 100))
         keyword_list = keywords.split(",") if keywords else []
         kw = [k.strip() for k in keyword_list if k and k.strip()]
         allow_portal = bool(allow_portal_fallback) or (
-            os.getenv("ALLOW_CN_PORTAL_FALLBACK", "1").strip().lower() in {"1", "true", "yes", "on"}
+            os.getenv("ALLOW_CN_PORTAL_FALLBACK", "").strip().lower() in {"1", "true", "yes", "on"}
         )
 
         # Cloud mode: prefer crawler cache; fallback to cloud-safe real-time providers.
-        if cfg_mode == "cloud" or cloud_jobs_cache:
+        if effective_mode == "cloud" or (effective_mode == "auto" and cloud_jobs_cache):
             jobs = _filter_cloud_cache_by_query(kw, location, limit=n)
             jobs = _enforce_cn_market_jobs(jobs)
             warning = None
@@ -2115,6 +3056,7 @@ async def search_jobs(
                     location,
                     limit=n,
                     allow_portal_fallback=allow_portal,
+                    force_provider=provider_override or None,
                 )
                 jobs = _enforce_cn_market_jobs(fallback_jobs)
                 mode = fallback_mode or "cloud"
@@ -2127,14 +3069,11 @@ async def search_jobs(
                         else "cloud cache is empty and no real jobs were found"
                     )
                 )
-            if not jobs and allow_portal:
-                jobs = _search_jobs_cn_entrypoints(kw, location, limit=n)
-                mode = "cn_portal"
-                warning = warning or "switched to CN portal entrypoint fallback"
             _track_event(
                 "job_search",
                 {
                     "provider_mode": mode,
+                    "provider_override": provider_override or "",
                     "result_count": len(jobs),
                     "cloud_mode": True,
                 },
@@ -2144,6 +3083,7 @@ async def search_jobs(
                 "total": len(jobs),
                 "jobs": jobs,
                 "provider_mode": mode,
+                "provider_override": provider_override or None,
                 "warning": warning,
             })
 
@@ -2158,8 +3098,14 @@ async def search_jobs(
                 )
             )
 
+        search_service = real_job_service
+        if provider_override and provider_override not in {"cloud", "enterprise_api"}:
+            from app.services.real_job_service import RealJobService
+            search_service = RealJobService()
+            search_service.provider_name = provider_override
+
         try:
-            jobs = real_job_service.search_jobs(
+            jobs = search_service.search_jobs(
                 keywords=kw,
                 location=location,
                 salary_min=salary_min,
@@ -2169,35 +3115,53 @@ async def search_jobs(
             )
             jobs = _normalize_real_jobs(jobs, limit=n)
             jobs = _enforce_cn_market_jobs(jobs)
-            mode = (real_job_service.get_statistics() or {}).get("provider_mode", cfg_mode)
-            if not jobs and allow_portal:
+            mode = (search_service.get_statistics() or {}).get("provider_mode", effective_mode)
+            if not jobs:
                 fallback_jobs, fallback_mode, _ = _search_jobs_without_browser(
                     kw,
                     location,
                     limit=n,
-                    allow_portal_fallback=True,
+                    allow_portal_fallback=allow_portal,
+                    force_provider=provider_override or None,
                 )
-                fallback_jobs = _enforce_cn_market_jobs(fallback_jobs)
-                if fallback_jobs:
-                    jobs = fallback_jobs
-                    mode = fallback_mode or mode
-            if not jobs and allow_portal:
-                jobs = _search_jobs_cn_entrypoints(kw, location, limit=n)
-                mode = "cn_portal"
+                jobs = _enforce_cn_market_jobs(fallback_jobs)
+                mode = fallback_mode or mode
         except Exception as e:
-            jobs, mode, _ = _search_jobs_without_browser(
+            jobs, mode, fallback_err = _search_jobs_without_browser(
                 kw,
                 location,
                 limit=n,
                 allow_portal_fallback=allow_portal,
+                force_provider=provider_override or None,
             )
             jobs = _enforce_cn_market_jobs(jobs)
             if not jobs:
-                raise e
+                warning = fallback_err or str(e)
+                _track_event(
+                    "job_search",
+                    {
+                        "provider_mode": mode or "no_real_jobs",
+                        "provider_override": provider_override or "",
+                        "result_count": 0,
+                        "cloud_mode": False,
+                        "warning": warning[:300],
+                    },
+                )
+                return _api_success(
+                    {
+                        "total": 0,
+                        "jobs": [],
+                        "provider_mode": mode or "no_real_jobs",
+                        "provider_override": provider_override or None,
+                        "warning": warning,
+                        "code": "job_search_no_result",
+                    }
+                )
         _track_event(
             "job_search",
             {
                 "provider_mode": mode,
+                "provider_override": provider_override or "",
                 "result_count": len(jobs),
                 "cloud_mode": False,
             },
@@ -2207,22 +3171,17 @@ async def search_jobs(
             "total": len(jobs),
             "jobs": jobs,
             "provider_mode": mode,
+            "provider_override": provider_override or None,
         })
     except Exception as e:
         _track_event("api_error", {"api": "/api/jobs/search", "error": str(e)[:300]})
-        fallback_jobs: List[Dict[str, Any]] = []
-        if allow_portal_fallback:
-            try:
-                kw = [k.strip() for k in (keywords or "").split(",") if k and k.strip()]
-                fallback_jobs = _search_jobs_cn_entrypoints(kw, location, limit=max(1, min(int(limit or 10), 30)))
-            except Exception:
-                fallback_jobs = []
         # Do not hard-fail the UI when provider is rate-limited/captcha-blocked.
         # Return an empty-but-success payload so the frontend can keep the full flow available.
         return _api_success({
-            "total": len(fallback_jobs),
-            "jobs": fallback_jobs,
-            "provider_mode": ("cn_portal" if fallback_jobs else (os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower() or "auto")),
+            "total": 0,
+            "jobs": [],
+            "provider_mode": os.getenv("JOB_DATA_PROVIDER", "auto").strip().lower() or "auto",
+            "provider_override": str(provider or "").strip().lower() or None,
             "warning": str(e),
             "code": "job_search_failed",
         })
@@ -2421,7 +3380,9 @@ async def get_crawler_status():
 
 # 全局任务管理
 auto_apply_tasks: Dict[str, Dict[str, Any]] = {}
+auto_apply_runtime_tasks: Dict[str, asyncio.Task] = {}
 task_lock = asyncio.Lock()
+TERMINAL_TASK_STATUSES = {"completed", "failed", "stopped"}
 
 # 平台映射
 PLATFORM_APPLIERS = {
@@ -2430,18 +3391,175 @@ PLATFORM_APPLIERS = {
     'linkedin': 'app.services.auto_apply.linkedin_applier.LinkedInApplier'
 }
 
+TASK_STATUS_TRANSITIONS = {
+    "starting": {"running", "failed", "stopped"},
+    "running": {"paused", "completed", "failed", "stopped"},
+    "paused": {"running", "stopped", "failed"},
+    "completed": set(),
+    "failed": set(),
+    "stopped": set(),
+}
+NON_RETRYABLE_ERROR_MARKERS = (
+    "already",
+    "已投递",
+    "blacklist",
+    "黑名单",
+    "缺少链接",
+    "missing",
+    "invalid",
+    "not found",
+    "不支持",
+)
+
+
+def _transition_task_status(task: Dict[str, Any], target: str) -> None:
+    current = str(task.get("status") or "starting")
+    if current == target:
+        return
+    allowed = TASK_STATUS_TRANSITIONS.get(current, set())
+    if target in allowed:
+        task["status"] = target
+    else:
+        logger.warning("ignore_invalid_task_transition from=%s to=%s task_id=%s", current, target, task.get("task_id"))
+
+
+def _resolve_apply_interval_seconds(config: Dict[str, Any]) -> float:
+    interval = float(config.get("apply_interval_seconds") or 0.0)
+    if interval > 0:
+        return interval
+    min_delay = float(config.get("random_delay_min") or 0.0)
+    max_delay = float(config.get("random_delay_max") or min_delay)
+    return max(min_delay, max_delay)
+
+
+def _is_retryable_error(message: str) -> bool:
+    msg = str(message or "").lower()
+    return not any(marker in msg for marker in NON_RETRYABLE_ERROR_MARKERS)
+
+
+def _auto_apply_job_key(job: Dict[str, Any]) -> str:
+    link = str(job.get("link") or job.get("apply_url") or job.get("url") or "").strip().lower()
+    jid = str(job.get("id") or "").strip().lower()
+    title = str(job.get("title") or job.get("job_title") or "").strip().lower()
+    company = str(job.get("company") or "").strip().lower()
+    return link or jid or f"{title}|{company}"
+
+
+def _auto_apply_job_score(job: Dict[str, Any], keywords: str, location: str) -> float:
+    title = str(job.get("title") or job.get("job_title") or "").lower()
+    link = str(job.get("link") or job.get("apply_url") or job.get("url") or "").lower()
+    company = str(job.get("company") or "").lower()
+    target_location = str(location or "").strip().lower()
+    job_location = str(job.get("location") or "").strip().lower()
+
+    try:
+        match_value = float(job.get("match_rate") or job.get("match_score") or 0.0)
+    except Exception:
+        match_value = 0.0
+    if match_value > 1.0:
+        match_value = match_value / 100.0
+    match_value = max(0.0, min(1.0, match_value))
+
+    score = match_value * 100.0
+    for token in str(keywords or "").split():
+        tk = token.strip().lower()
+        if not tk:
+            continue
+        if tk in title:
+            score += 3.0
+        if tk in link:
+            score += 1.0
+    if target_location and target_location in job_location:
+        score += 4.0
+    if company:
+        score += 1.0
+    return score
+
+
+def _prepare_auto_apply_jobs(jobs: List[Dict[str, Any]], max_count: int, config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    dedupe_enabled = bool(config.get("dedupe_before_apply", True))
+    scoring_enabled = bool(config.get("enable_job_scoring", True))
+    keywords = str(config.get("keywords") or "")
+    location = str(config.get("location") or "")
+
+    prepared: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for one in jobs or []:
+        if not isinstance(one, dict):
+            continue
+        if dedupe_enabled:
+            key = _auto_apply_job_key(one)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+        prepared.append(one)
+
+    if scoring_enabled:
+        prepared.sort(key=lambda row: _auto_apply_job_score(row, keywords=keywords, location=location), reverse=True)
+
+    return prepared[: max(1, int(max_count or 50))]
+
+
+async def _apply_with_retry_async(
+    apply_fn,
+    job: Dict[str, Any],
+    max_retries: int,
+    retry_backoff_seconds: float,
+) -> Dict[str, Any]:
+    attempt = 0
+    final_result: Dict[str, Any] = {}
+    max_retry_safe = max(0, int(max_retries or 0))
+    backoff = max(0.0, float(retry_backoff_seconds or 0.0))
+
+    while attempt <= max_retry_safe:
+        attempt += 1
+        try:
+            result = await apply_fn(job)
+            if not isinstance(result, dict):
+                result = {"success": False, "message": "apply returned non-dict", "job": job}
+        except Exception as e:
+            result = {"success": False, "message": str(e), "job": job}
+        result.setdefault("job", job)
+        result["attempts"] = attempt
+        result.setdefault("timestamp", datetime.now().isoformat())
+        final_result = result
+
+        if result.get("success"):
+            break
+        if attempt > max_retry_safe:
+            break
+        if not _is_retryable_error(result.get("message")):
+            break
+        if backoff > 0:
+            await asyncio.sleep(backoff * attempt)
+
+    return final_result
+
 
 def _set_task_stopped(task: Dict[str, Any]) -> None:
     """统一设置任务为停止状态。"""
-    task["status"] = "stopped"
+    _transition_task_status(task, "stopped")
     task["completed_at"] = datetime.now().isoformat()
+
+
+def _set_task_failed(task: Dict[str, Any], error: str) -> None:
+    """统一设置任务为失败状态。"""
+    _transition_task_status(task, "failed")
+    task["error"] = error
+    task["completed_at"] = datetime.now().isoformat()
+
+
+def _cancel_runtime_task(task_id: str) -> None:
+    """取消后台运行中的任务（如果存在）。"""
+    runtime_task = auto_apply_runtime_tasks.get(task_id)
+    if runtime_task and not runtime_task.done():
+        runtime_task.cancel()
 
 @app.post("/api/auto-apply/start")
 async def start_auto_apply(request: Request):
     """启动自动投递"""
     try:
-        raw_data = await request.json()
-        data = _apply_haitou_defaults(raw_data if isinstance(raw_data, dict) else {})
+        data = await request.json()
 
         # 生成任务ID
         task_id = str(uuid.uuid4())
@@ -2449,13 +3567,24 @@ async def start_auto_apply(request: Request):
         # 获取配置
         config = {
             'platform': data.get('platform', 'boss'),
-            'max_apply_per_session': data.get('max_count', HAITOU_DEFAULT_POLICY["max_count"]),
+            'max_apply_per_session': data.get('max_count', 50),
             'keywords': data.get('keywords', ''),
             'location': data.get('location', ''),
             'company_blacklist': data.get('blacklist', []),
             'user_profile': data.get('user_profile', {}),
             'pause_before_submit': data.get('pause_before_submit', False),
-            'headless': data.get('headless', HAITOU_DEFAULT_POLICY["headless"]),
+            'headless': data.get('headless', False),
+            'dedupe_before_apply': data.get('dedupe_before_apply', True),
+            'enable_job_scoring': data.get('enable_job_scoring', True),
+            'max_retries': data.get('max_retries', 3),
+            'retry_backoff_seconds': data.get('retry_backoff_seconds', 1.5),
+            'apply_interval_seconds': data.get('apply_interval_seconds', 0),
+            'random_delay_min': data.get('random_delay_min', 2),
+            'random_delay_max': data.get('random_delay_max', 5),
+            'captcha_mode': data.get('captcha_mode', 'manual'),
+            'captcha_wait_timeout': data.get('captcha_wait_timeout', 180),
+            'login_wait_timeout': data.get('login_wait_timeout', 240),
+            'login_call_timeout': data.get('login_call_timeout', 150),
         }
 
         # 验证配置
@@ -2471,7 +3600,6 @@ async def start_auto_apply(request: Request):
             'task_id': task_id,
             'status': 'starting',
             'config': config,
-            'strategy': HAITOU_DEFAULT_POLICY["strategy_version"],
             'progress': {
                 'applied': 0,
                 'failed': 0,
@@ -2483,8 +3611,9 @@ async def start_auto_apply(request: Request):
             'completed_at': None
         }
 
-        # 异步启动投递任务
-        asyncio.create_task(_run_auto_apply_task(task_id, config, data.get('jobs', [])))
+        # 异步启动投递任务（保存句柄，便于 stop/cancel）
+        runtime_task = asyncio.create_task(_run_auto_apply_task(task_id, config, data.get('jobs', [])))
+        auto_apply_runtime_tasks[task_id] = runtime_task
 
         return _api_success({
             'task_id': task_id,
@@ -2498,67 +3627,179 @@ async def start_auto_apply(request: Request):
 
 async def _run_auto_apply_task(task_id: str, config: Dict[str, Any], jobs: List[Dict[str, Any]]):
     """运行自动投递任务（异步）"""
-    try:
-        from app.services.auto_apply.linkedin_applier import LinkedInApplier
+    applier = None
+    hard_timeout = int(config.get('task_timeout', 900) or 900)
+    platform = str(config.get('platform') or 'boss').strip().lower()
 
-        # 更新状态
-        auto_apply_tasks[task_id]['status'] = 'running'
-        auto_apply_tasks[task_id]['started_at'] = datetime.now().isoformat()
+    async def _core_run() -> None:
+        nonlocal applier
 
-        # 创建投递器
-        llm_client = None
-        if config.get('use_ai_answers', True):
-            try:
-                from app.core.llm_client import LLMClient
-                llm_client = LLMClient()
-            except Exception:
-                # Keep single-platform flow available even when optional LLM client is absent.
-                llm_client = None
-        applier = LinkedInApplier(config, llm_client)
+        if platform not in PLATFORM_APPLIERS:
+            raise Exception(f"不支持的平台: {platform}")
+
+        # 动态导入平台 Applier
+        module_path, class_name = PLATFORM_APPLIERS[platform].rsplit('.', 1)
+        module = __import__(module_path, fromlist=[class_name])
+        ApplierClass = getattr(module, class_name)
+
+        # 创建投递器（LinkedIn 兼容 llm_client，其他平台直接使用 config）
+        if platform == 'linkedin':
+            llm_client = None
+            if config.get('use_ai_answers', True):
+                try:
+                    from app.core.llm_client import LLMClient
+                    llm_client = LLMClient()
+                except Exception:
+                    llm_client = None
+            applier = ApplierClass(config, llm_client)
+        else:
+            applier = ApplierClass(config)
 
         # 登录（如果需要）
-        email = config.get('user_profile', {}).get('email')
-        password = config.get('user_profile', {}).get('password')
-
-        if email and password:
-            login_success = await asyncio.to_thread(applier.login, email, password)
-            if not login_success:
-                auto_apply_tasks[task_id]['status'] = 'failed'
-                auto_apply_tasks[task_id]['error'] = '登录失败'
-                return
-
-        # 如果没有提供职位列表，则搜索
-        if not jobs:
-            jobs = await asyncio.to_thread(
-                applier.search_jobs,
-                keywords=config.get('keywords', ''),
-                location=config.get('location', ''),
-                filters={},
+        user_profile = config.get('user_profile', {}) or {}
+        login_success = True
+        login_call_timeout = int(config.get('login_call_timeout', 150) or 150)
+        if platform == 'boss':
+            phone = user_profile.get('phone') or config.get('phone') or ""
+            if not str(phone).strip():
+                raise Exception("Boss 自动投递需要手机号：user_profile.phone")
+            if hasattr(applier, "_async_login"):
+                login_success = await asyncio.wait_for(
+                    applier._async_login(str(phone).strip()),
+                    timeout=login_call_timeout,
+                )
+            else:
+                login_success = await asyncio.wait_for(
+                    asyncio.to_thread(applier.login, str(phone).strip()),
+                    timeout=login_call_timeout,
+                )
+        elif platform == 'linkedin':
+            email = user_profile.get('email') or config.get('email') or ""
+            password = user_profile.get('password') or config.get('password') or ""
+            if not (str(email).strip() and str(password).strip()):
+                raise Exception("LinkedIn 自动投递需要邮箱和密码")
+            login_success = await asyncio.wait_for(
+                asyncio.to_thread(applier.login, str(email).strip(), str(password)),
+                timeout=login_call_timeout,
+            )
+        elif platform == 'zhilian':
+            username = user_profile.get('username') or user_profile.get('email') or config.get('username') or ""
+            password = user_profile.get('password') or config.get('password') or ""
+            if not (str(username).strip() and str(password).strip()):
+                raise Exception("智联自动投递需要账号和密码")
+            login_success = await asyncio.wait_for(
+                asyncio.to_thread(applier.login, str(username).strip(), str(password)),
+                timeout=login_call_timeout,
             )
 
-        auto_apply_tasks[task_id]['progress']['total'] = len(jobs)
+        task = auto_apply_tasks.get(task_id)
+        if task is None:
+            return
+        task['platform'] = platform
+        if task.get('status') == 'stopped':
+            return
+
+        if not login_success:
+            _set_task_failed(task, f'{platform} 登录失败')
+            return
+
+        # 如果没有提供职位列表，则搜索
+        local_jobs = list(jobs or [])
+        if not local_jobs:
+            if platform == 'boss' and hasattr(applier, "_async_search_jobs"):
+                local_jobs = await applier._async_search_jobs(
+                    keywords=config.get('keywords', ''),
+                    location=config.get('location', ''),
+                    filters={},
+                )
+            else:
+                local_jobs = await asyncio.to_thread(
+                    applier.search_jobs,
+                    keywords=config.get('keywords', ''),
+                    location=config.get('location', ''),
+                    filters={},
+                )
+
+        max_count = int(config.get('max_apply_per_session', 50) or 50)
+        selected_jobs = _prepare_auto_apply_jobs(local_jobs or [], max_count=max_count, config=config)
+        task['progress']['total'] = len(selected_jobs)
 
         # 批量投递
-        result = await asyncio.to_thread(
-            applier.batch_apply,
-            jobs,
-            config.get('max_apply_per_session', 50),
-        )
+        if platform == 'boss' and hasattr(applier, "_async_apply_job"):
+            max_retries = int(config.get("max_retries", 3) or 3)
+            retry_backoff = float(config.get("retry_backoff_seconds", 1.5) or 1.5)
+            apply_interval = _resolve_apply_interval_seconds(config)
 
-        # 更新最终状态
-        auto_apply_tasks[task_id]['status'] = 'completed'
-        auto_apply_tasks[task_id]['completed_at'] = datetime.now().isoformat()
-        auto_apply_tasks[task_id]['result'] = result
-        auto_apply_tasks[task_id]['progress']['applied'] = result['applied']
-        auto_apply_tasks[task_id]['progress']['failed'] = result['failed']
+            applied = 0
+            failed = 0
+            details: List[Dict[str, Any]] = []
+            for idx, job in enumerate(selected_jobs):
+                if task.get('status') == 'stopped':
+                    break
+                task['progress']['current_job'] = job.get('title') or job.get('id') or 'unknown_job'
+                one = await _apply_with_retry_async(
+                    applier._async_apply_job,
+                    job,
+                    max_retries=max_retries,
+                    retry_backoff_seconds=retry_backoff,
+                )
+                details.append(one)
+                if one.get('success'):
+                    applied += 1
+                else:
+                    failed += 1
+                if apply_interval > 0 and idx < len(selected_jobs) - 1:
+                    await asyncio.sleep(apply_interval)
+            result = {
+                'total_attempted': len(details),
+                'applied': applied,
+                'failed': failed,
+                'results': details,
+            }
+        else:
+            result = await asyncio.to_thread(
+                applier.batch_apply,
+                selected_jobs,
+                max_count,
+            )
 
-        # 清理资源
-        await asyncio.to_thread(applier.cleanup)
+        task['result'] = result
+        task['progress']['applied'] = int((result or {}).get('applied', 0))
+        task['progress']['failed'] = int((result or {}).get('failed', 0))
+        task['progress']['current_job'] = None
+        if task.get('status') != 'stopped':
+            _transition_task_status(task, "completed")
+            task['completed_at'] = datetime.now().isoformat()
 
+    try:
+        task = auto_apply_tasks.get(task_id)
+        if task is None:
+            return
+        _transition_task_status(task, "running")
+        task['started_at'] = datetime.now().isoformat()
+        await asyncio.wait_for(_core_run(), timeout=hard_timeout)
+    except asyncio.TimeoutError:
+        logger.error("自动投递任务超时: %s (>%ss)", task_id, hard_timeout)
+        task = auto_apply_tasks.get(task_id)
+        if task and task.get('status') not in TERMINAL_TASK_STATUSES:
+            _set_task_failed(task, f"任务超时（>{hard_timeout}s）")
+    except asyncio.CancelledError:
+        task = auto_apply_tasks.get(task_id)
+        if task and task.get('status') not in TERMINAL_TASK_STATUSES:
+            _set_task_stopped(task)
+        raise
     except Exception as e:
         logger.exception(f"自动投递任务失败: {task_id}")
-        auto_apply_tasks[task_id]['status'] = 'failed'
-        auto_apply_tasks[task_id]['error'] = str(e)
+        task = auto_apply_tasks.get(task_id)
+        if task and task.get('status') not in TERMINAL_TASK_STATUSES:
+            _set_task_failed(task, str(e))
+    finally:
+        auto_apply_runtime_tasks.pop(task_id, None)
+        if applier is not None:
+            try:
+                await asyncio.wait_for(asyncio.to_thread(applier.cleanup), timeout=8)
+            except Exception:
+                pass
 
 
 @app.post("/api/auto-apply/stop")
@@ -2579,8 +3820,9 @@ async def stop_auto_apply(request: Request):
                 'status': task['status'],
             })
 
-        # 设置停止标志（实际停止逻辑在 applier 中处理）
+        # 设置停止标志并取消后台协程
         _set_task_stopped(task)
+        _cancel_runtime_task(task_id)
 
         return _api_success({
             'message': '停止指令已发送'
@@ -2601,6 +3843,7 @@ async def stop_auto_apply_by_path(task_id: str):
         task = auto_apply_tasks[task_id]
         if task['status'] not in ['completed', 'failed', 'stopped']:
             _set_task_stopped(task)
+            _cancel_runtime_task(task_id)
 
         return _api_success({
             'task_id': task_id,
@@ -2622,10 +3865,10 @@ async def pause_auto_apply_by_path(task_id: str):
         if task['status'] in ['completed', 'failed', 'stopped']:
             return _api_error('任务已结束，无法暂停', 400)
 
-        task['status'] = 'paused'
+        _transition_task_status(task, "paused")
         return _api_success({
             'task_id': task_id,
-            'status': 'paused',
+            'status': task.get('status'),
             'message': '任务已暂停'
         })
     except Exception as e:
@@ -2643,10 +3886,10 @@ async def resume_auto_apply_by_path(task_id: str):
         if task['status'] in ['completed', 'failed', 'stopped']:
             return _api_error('任务已结束，无法继续', 400)
 
-        task['status'] = 'running'
+        _transition_task_status(task, "running")
         return _api_success({
             'task_id': task_id,
-            'status': 'running',
+            'status': task.get('status'),
             'message': '任务已继续'
         })
     except Exception as e:
@@ -2754,18 +3997,16 @@ async def auto_apply_progress_ws(websocket: WebSocket, task_id: str):
 async def start_multi_platform_apply(request: Request):
     """启动多平台自动投递"""
     try:
-        incoming = await request.json()
-        data = _apply_haitou_defaults(incoming if isinstance(incoming, dict) else {})
-        platforms = _normalize_platform_list(data.get('platforms')) or list(HAITOU_DEFAULT_POLICY["fallback_platforms"])
-        config = dict(data.get('config') or {})
-        config['max_count'] = int(HAITOU_DEFAULT_POLICY["max_count"])
-        config['headless'] = bool(HAITOU_DEFAULT_POLICY["headless"])
-        config['verification_wait_seconds'] = int(HAITOU_DEFAULT_POLICY["verification_wait_seconds"])
-        if not config.get('keywords'):
-            config['keywords'] = str(data.get('keywords') or '')
-        if not config.get('location'):
-            locs = _to_string_list(data.get('locations'))
-            config['location'] = locs[0] if locs else str(data.get('location') or '')
+        data = await request.json()
+        platforms = data.get('platforms', ['boss'])
+        config = data.get('config', {}) or {}
+        config.setdefault('dedupe_before_apply', True)
+        config.setdefault('enable_job_scoring', True)
+        config.setdefault('max_retries', 3)
+        config.setdefault('retry_backoff_seconds', 1.5)
+        config.setdefault('apply_interval_seconds', 0)
+        config.setdefault('random_delay_min', 2)
+        config.setdefault('random_delay_max', 5)
 
         # 生成任务ID
         task_id = str(uuid.uuid4())
@@ -2777,7 +4018,6 @@ async def start_multi_platform_apply(request: Request):
                 'status': 'starting',
                 'platforms': platforms,
                 'config': config,
-                'strategy': HAITOU_DEFAULT_POLICY["strategy_version"],
                 'progress': {
                     'total_platforms': len(platforms),
                     'completed_platforms': 0,
@@ -2790,8 +4030,9 @@ async def start_multi_platform_apply(request: Request):
                 'completed_at': None
             }
 
-        # 异步启动多平台投递
-        asyncio.create_task(_run_multi_platform_apply(task_id, platforms, config))
+        # 异步启动多平台投递（保存句柄，便于 stop/cancel）
+        runtime_task = asyncio.create_task(_run_multi_platform_apply(task_id, platforms, config))
+        auto_apply_runtime_tasks[task_id] = runtime_task
 
         return _api_success({
             'task_id': task_id,
@@ -2803,83 +4044,11 @@ async def start_multi_platform_apply(request: Request):
         return _api_error(str(e), 500)
 
 
-@app.post("/api/auto-apply/boss/submit-code")
-async def submit_boss_sms_code(request: Request):
-    """提交 Boss 短信验证码，供运行中的任务继续登录。"""
-    try:
-        data = await request.json()
-        task_id = _resolve_auto_apply_task_id(
-            task_id=str(data.get("task_id") or "").strip(),
-            gh_task_id=str(data.get("gh_task_id") or "").strip(),
-        )
-        code = "".join(ch for ch in str(data.get("code") or "") if ch.isdigit())
-
-        if not task_id:
-            return _api_error("task_id 不能为空（或提供有效 gh_task_id）", status_code=400)
-        if len(code) < 4:
-            return _api_error("验证码格式错误", status_code=400)
-
-        _set_boss_sms_code(task_id, code)
-
-        task = auto_apply_tasks.get(task_id) or {}
-        boss_row = (task.get("progress") or {}).get("platform_progress", {}).get("boss")
-        if isinstance(boss_row, dict):
-            boss_row["status"] = "verifying"
-            boss_row["message"] = "已收到验证码，正在登录验证"
-
-        return _api_success(
-            {
-                "task_id": task_id,
-                "accepted": True,
-                "message": "验证码已提交，任务将继续执行",
-            }
-        )
-    except Exception as e:
-        logger.exception("提交 Boss 验证码失败")
-        return _api_error(str(e), status_code=500)
-
-
-@app.post("/api/auto-apply/boss/resend-code")
-async def resend_boss_sms_code(request: Request):
-    """触发运行中 Boss 任务重发短信验证码。"""
-    try:
-        data = await request.json()
-        task_id = _resolve_auto_apply_task_id(
-            task_id=str(data.get("task_id") or "").strip(),
-            gh_task_id=str(data.get("gh_task_id") or "").strip(),
-        )
-        if not task_id:
-            return _api_error("task_id 不能为空（或提供有效 gh_task_id）", status_code=400)
-
-        task = auto_apply_tasks.get(task_id) or {}
-        boss_row = (task.get("progress") or {}).get("platform_progress", {}).get("boss")
-        if not isinstance(boss_row, dict):
-            return _api_error("当前任务未运行 Boss 投递器", status_code=400)
-        if str(boss_row.get("status") or "").strip() not in {"waiting_verification", "verifying", "opening"}:
-            return _api_error("当前状态不可重发验证码", status_code=400)
-
-        _push_boss_control_action(task_id, "resend_sms")
-        boss_row["message"] = "已请求重发验证码，请留意短信"
-        boss_row["status"] = "waiting_verification"
-        boss_row["need_sms_code"] = True
-
-        return _api_success(
-            {
-                "task_id": task_id,
-                "accepted": True,
-                "message": "已发送重发验证码指令",
-            }
-        )
-    except Exception as e:
-        logger.exception("重发 Boss 验证码失败")
-        return _api_error(str(e), status_code=500)
-
-
 async def _run_multi_platform_apply(task_id: str, platforms: List[str], config: Dict[str, Any]):
     """运行多平台投递任务"""
     try:
         # 更新状态
-        auto_apply_tasks[task_id]['status'] = 'running'
+        _transition_task_status(auto_apply_tasks[task_id], "running")
         auto_apply_tasks[task_id]['started_at'] = datetime.now().isoformat()
 
         # 并发执行多个平台
@@ -2905,36 +4074,20 @@ async def _run_multi_platform_apply(task_id: str, platforms: List[str], config: 
 
         # 更新最终状态（若已手动停止则保持 stopped）
         task = auto_apply_tasks.get(task_id, {})
+        if task.get('status') != 'stopped':
+            _transition_task_status(task, "completed")
+            task['completed_at'] = datetime.now().isoformat()
         task.setdefault('progress', {})
-        platform_progress = task['progress'].get('platform_progress', {})
-        platform_states = [
-            str((platform_progress.get(p) or {}).get('status') or '')
-            for p in platforms
-        ]
-        failed_platforms = sum(1 for s in platform_states if s == 'failed')
-        done_platforms = sum(1 for s in platform_states if s in ('completed', 'failed', 'stopped'))
-
-        task['progress']['completed_platforms'] = done_platforms
         task['progress']['total_applied'] = total_applied
         task['progress']['total_failed'] = total_failed
 
-        if task.get('status') != 'stopped':
-            if done_platforms == 0 and platforms:
-                task['status'] = 'failed'
-                task['error'] = '未执行任何平台任务'
-            elif failed_platforms == len([p for p in platforms if p in PLATFORM_APPLIERS]) and total_applied == 0:
-                task['status'] = 'failed'
-                task['error'] = '全部平台执行失败'
-            elif failed_platforms > 0:
-                task['status'] = 'completed_with_errors'
-            else:
-                task['status'] = 'completed'
-            task['completed_at'] = datetime.now().isoformat()
-
     except Exception as e:
         logger.exception(f"多平台投递任务失败: {task_id}")
-        auto_apply_tasks[task_id]['status'] = 'failed'
-        auto_apply_tasks[task_id]['error'] = str(e)
+        task = auto_apply_tasks.get(task_id)
+        if task:
+            _set_task_failed(task, str(e))
+    finally:
+        auto_apply_runtime_tasks.pop(task_id, None)
 
 
 async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[str, Any]):
@@ -2949,61 +4102,21 @@ async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[s
         ApplierClass = getattr(module, class_name)
 
         # 获取平台特定配置
-        raw_platform_config = config.get(f'{platform}_config', {})
-        platform_config = dict(raw_platform_config) if isinstance(raw_platform_config, dict) else {}
-        platform_headless = platform_config.get('headless')
-        if platform_headless is None:
-            platform_headless = config.get('headless', HAITOU_DEFAULT_POLICY["headless"])
-        force_headless = os.getenv("FORCE_HEADLESS_BROWSER", "1").strip().lower() in {"1", "true", "yes", "on"}
-        if force_headless:
-            platform_headless = True
+        platform_config = config.get(f'{platform}_config', {})
         platform_config.update({
             'keywords': config.get('keywords', ''),
             'location': config.get('location', ''),
             'max_apply_per_session': config.get('max_count', 50),
             'company_blacklist': config.get('blacklist', []),
-            'headless': bool(platform_headless),
+            'headless': config.get('headless', False),
+            'dedupe_before_apply': config.get('dedupe_before_apply', True),
+            'enable_job_scoring': config.get('enable_job_scoring', True),
+            'max_retries': config.get('max_retries', 3),
+            'retry_backoff_seconds': config.get('retry_backoff_seconds', 1.5),
+            'apply_interval_seconds': config.get('apply_interval_seconds', 0),
+            'random_delay_min': config.get('random_delay_min', 2),
+            'random_delay_max': config.get('random_delay_max', 5),
         })
-
-        auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
-            'status': 'initializing',
-            'message': '正在初始化平台'
-        }
-
-        if platform == 'boss':
-            def _boss_progress(payload: Dict[str, Any]):
-                stage = str(payload.get("stage") or "").strip()
-                message = str(payload.get("message") or "").strip()
-                row = auto_apply_tasks.get(task_id, {}).get('progress', {}).get('platform_progress', {}).get(platform, {})
-                if stage == "waiting_sms_code":
-                    row.update({
-                        'status': 'waiting_verification',
-                        'message': message or '等待短信验证码',
-                        'need_sms_code': True,
-                        'phone': _mask_phone(str(platform_config.get('phone') or '')),
-                    })
-                elif stage == "sms_code_submitted":
-                    row.update({'status': 'verifying', 'message': message or '验证码已提交，验证中'})
-                elif stage == "login_success":
-                    row.update({'status': 'logged_in', 'message': message or '登录成功'})
-                elif stage == "login_failed":
-                    row.update({'status': 'failed', 'error': message or '登录失败'})
-                elif stage == "login_open":
-                    row.update({'status': 'opening', 'message': message or '打开登录页中'})
-                elif stage == "sms_resent":
-                    row.update({'status': 'waiting_verification', 'message': message or '验证码已重发，请查收'})
-                elif stage == "sms_send_failed":
-                    row.update({'status': 'failed', 'error': message or '验证码发送失败'})
-                auto_apply_tasks.get(task_id, {}).get('progress', {}).get('platform_progress', {})[platform] = row
-
-            platform_config.update({
-                'task_id': task_id,
-                'verification_wait_seconds': int(config.get('verification_wait_seconds', 180)),
-                'sms_code_fetcher': (lambda tid=task_id: _pop_boss_sms_code(tid)),
-                'control_action_fetcher': (lambda tid=task_id: _pop_boss_control_action(tid)),
-                'progress_hook': _boss_progress,
-                'sms_code': str(platform_config.get('sms_code') or config.get('sms_code') or '').strip() or None,
-            })
 
         # 创建投递器（兼容不同的构造函数）
         # LinkedIn 需要 llm_client 参数，其他平台不应受其可用性影响。
@@ -3024,8 +4137,7 @@ async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[s
         if platform == 'boss':
             phone = platform_config.get('phone')
             if phone:
-                sms_code = platform_config.get('sms_code')
-                login_success = await asyncio.to_thread(applier.login, phone, sms_code)
+                login_success = await asyncio.to_thread(applier.login, phone)
         elif platform == 'zhilian':
             username = platform_config.get('username')
             password = platform_config.get('password')
@@ -3047,11 +4159,13 @@ async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[s
             location=platform_config.get('location', ''),
             filters={},
         )
+        max_count = int(platform_config.get('max_apply_per_session', 50) or 50)
+        prepared_jobs = _prepare_auto_apply_jobs(jobs or [], max_count=max_count, config=platform_config)
 
         # 更新进度
         auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
             'status': 'running',
-            'total': len(jobs),
+            'total': len(prepared_jobs),
             'applied': 0,
             'failed': 0
         }
@@ -3064,14 +4178,14 @@ async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[s
         # 批量投递
         result = await asyncio.to_thread(
             applier.batch_apply,
-            jobs,
-            platform_config.get('max_apply_per_session', 50),
+            prepared_jobs,
+            max_count,
         )
 
         # 更新平台进度
         auto_apply_tasks[task_id]['progress']['platform_progress'][platform] = {
             'status': 'completed',
-            'total': len(jobs),
+            'total': len(prepared_jobs),
             'applied': result['applied'],
             'failed': result['failed']
         }
@@ -3090,10 +4204,6 @@ async def _run_single_platform_apply(task_id: str, platform: str, config: Dict[s
             'error': str(e)
         }
         return {'applied': 0, 'failed': 0}
-    finally:
-        if platform == 'boss':
-            _pop_boss_sms_code(task_id)
-            _pop_boss_control_action(task_id)
 
 
 @app.get("/api/auto-apply/platforms")
@@ -3264,8 +4374,7 @@ async def resume_templates():
 async def resume_structure(request: Request):
     """Resume text -> structured JSON, optionally persisted as profile."""
     try:
-        raw_data = await request.json()
-        data = _apply_haitou_defaults(raw_data if isinstance(raw_data, dict) else {})
+        data = await request.json()
         resume_text = str(data.get("resume_text") or "").strip()
         if len(resume_text) < 20:
             return _api_error("resume_text 太短，至少 20 个字符", status_code=400)
@@ -3595,491 +4704,6 @@ async def email_send_batch(request: Request):
     except Exception as e:
         logger.exception("批量发送邮件失败")
         return _api_error(str(e), status_code=500, code="email_batch_send_failed")
-
-
-@app.get("/api/features/overview")
-async def features_overview():
-    aihawk = _aihawk_capability_snapshot()
-    return _api_success(
-        {
-            "features": {
-                "market_process": True,
-                "multi_agent_process": True,
-                "skills_graph": True,
-                "resume_profile": True,
-                "resume_render": True,
-                "job_search": True,
-                "email_campaign": True,
-                "auto_apply_platforms": True,
-                "github_highstar_prepare": bool(aihawk.get("can_prepare")),
-                "github_highstar_apply": bool(aihawk.get("can_run")),
-                "haitou_default_strategy": True,
-            },
-            "github_highstar": aihawk,
-            "haitou_default_policy": HAITOU_DEFAULT_POLICY,
-        }
-    )
-
-
-@app.get("/api/strategy/defaults")
-async def strategy_defaults():
-    return _api_success({"haitou_default_policy": HAITOU_DEFAULT_POLICY})
-
-
-@app.post("/api/skills/analyze")
-async def analyze_skills_graph(request: Request):
-    try:
-        data = await request.json()
-        resume_text = str(data.get("resume_text") or data.get("resume") or "").strip()
-        if not resume_text:
-            return _api_error("resume_text 不能为空", status_code=400)
-
-        target_role = str(data.get("target_role") or "").strip()
-        job_text = str(data.get("job_text") or "").strip()
-        payload = _skills_graph_payload(resume_text, target_role, job_text)
-        return _api_success({"skills_graph": payload})
-    except Exception as e:
-        logger.exception("skills_graph 分析失败")
-        return _api_error(str(e), status_code=500, code="skills_graph_failed")
-
-
-@app.post("/api/process/multi-agent")
-async def process_resume_multi_agent(request: Request):
-    """Run legacy multi-agent deep analysis pipeline + skills graph."""
-    try:
-        data = await request.json()
-        resume_text = str(data.get("resume") or data.get("resume_text") or "").strip()
-        if not resume_text:
-            return _api_error("简历内容不能为空", status_code=400, code="empty_resume")
-
-        _track_event(
-            "resume_process_started",
-            {"chars": len(resume_text), "engine_mode": "multi_agent"},
-        )
-
-        results = await asyncio.to_thread(pipeline.process_resume, resume_text)
-        downgraded = False
-        if _multi_agent_outputs_degraded(results):
-            try:
-                market_results = await market_engine.process_resume(resume_text)
-                results = {
-                    "career_analysis": str(market_results.get("market_analysis") or ""),
-                    "job_recommendations": str(market_results.get("job_recommendations") or ""),
-                    "optimized_resume": str(market_results.get("optimized_resume") or ""),
-                    "interview_prep": str(market_results.get("interview_prep") or ""),
-                    "mock_interview": str(market_results.get("salary_analysis") or ""),
-                }
-                downgraded = True
-            except Exception:
-                logger.exception("multi-agent 降级到 market_engine 失败")
-        info = analyzer.extract_info(resume_text)
-
-        seed_keywords: List[str] = []
-        if info.get("job_intention") and info["job_intention"] != "未指定":
-            seed_keywords.append(str(info["job_intention"]))
-        seed_keywords.extend([str(x) for x in (info.get("skills") or [])[:6]])
-        seed_keywords = [k for k in seed_keywords if k]
-        seed_location = (info.get("preferred_locations") or [None])[0]
-
-        provider_mode = "none"
-        recommended_jobs: List[Dict[str, Any]] = []
-        try:
-            jobs, provider_mode, _ = _search_jobs_without_browser(
-                seed_keywords,
-                seed_location,
-                limit=8,
-                allow_portal_fallback=True,
-            )
-            recommended_jobs = _public_job_payload(_enforce_cn_market_jobs(jobs), limit=8)
-        except Exception:
-            logger.exception("multi-agent 岗位检索失败")
-
-        skills_payload = _skills_graph_payload(
-            resume_text,
-            str(info.get("job_intention") or ""),
-            str(results.get("job_recommendations") or ""),
-        )
-
-        response_payload = {
-            "career_analysis": str(results.get("career_analysis") or ""),
-            "job_recommendations": str(results.get("job_recommendations") or ""),
-            "optimized_resume": str(results.get("optimized_resume") or ""),
-            "interview_prep": str(results.get("interview_prep") or ""),
-            "mock_interview": str(results.get("mock_interview") or ""),
-            "recommended_jobs": recommended_jobs,
-            "job_provider_mode": provider_mode,
-            "engine_mode": "multi_agent",
-            "fallback_downgraded": downgraded,
-            "skills_graph": skills_payload,
-        }
-        _track_event(
-            "resume_processed",
-            {
-                "ok": True,
-                "engine_mode": "multi_agent",
-                "provider_mode": provider_mode,
-                "jobs": len(recommended_jobs),
-            },
-        )
-        return _api_success(response_payload)
-    except Exception as e:
-        logger.exception("multi-agent 简历处理失败")
-        _track_event(
-            "resume_processed",
-            {"ok": False, "engine_mode": "multi_agent", "error": str(e)[:300]},
-        )
-        return _api_error(str(e), status_code=500, code="process_multi_agent_failed")
-
-
-def _normalize_platform_list(raw: Any) -> List[str]:
-    valid = {"boss", "zhilian", "linkedin"}
-    items = _to_string_list(raw)
-    out: List[str] = []
-    for item in items:
-        key = str(item).strip().lower()
-        if key in valid and key not in out:
-            out.append(key)
-    return out
-
-
-def _build_fallback_auto_apply_config(
-    payload: Dict[str, Any],
-    keywords: List[str],
-    locations: List[str],
-    max_count: int,
-) -> Dict[str, Any]:
-    cfg: Dict[str, Any] = {
-        "keywords": ",".join(keywords or []),
-        "location": (locations[0] if locations else ""),
-        "max_count": int(HAITOU_DEFAULT_POLICY["max_count"]),
-        "blacklist": _to_string_list(payload.get("blacklist") or payload.get("company_blacklist")),
-        "headless": bool(HAITOU_DEFAULT_POLICY["headless"]),
-        "use_ai_answers": bool(payload.get("use_ai_answers", True)),
-        "verification_wait_seconds": int(HAITOU_DEFAULT_POLICY["verification_wait_seconds"]),
-        "sms_code": str(payload.get("sms_code") or "").strip() or None,
-    }
-
-    boss_cfg = payload.get("boss_config") if isinstance(payload.get("boss_config"), dict) else {}
-    zhilian_cfg = payload.get("zhilian_config") if isinstance(payload.get("zhilian_config"), dict) else {}
-    linkedin_cfg = payload.get("linkedin_config") if isinstance(payload.get("linkedin_config"), dict) else {}
-
-    cfg["boss_config"] = {
-        **boss_cfg,
-        "phone": str(
-            boss_cfg.get("phone")
-            or payload.get("boss_phone")
-            or payload.get("phone")
-            or ""
-        ).strip(),
-        "sms_code": str(
-            boss_cfg.get("sms_code")
-            or payload.get("boss_sms_code")
-            or payload.get("sms_code")
-            or ""
-        ).strip() or None,
-    }
-    cfg["zhilian_config"] = {
-        **zhilian_cfg,
-        "username": str(
-            zhilian_cfg.get("username")
-            or payload.get("zhilian_username")
-            or payload.get("username")
-            or ""
-        ).strip(),
-        "password": str(
-            zhilian_cfg.get("password")
-            or payload.get("zhilian_password")
-            or ""
-        ),
-    }
-    cfg["linkedin_config"] = {
-        **linkedin_cfg,
-        "email": str(
-            linkedin_cfg.get("email")
-            or payload.get("linkedin_email")
-            or payload.get("email")
-            or ""
-        ).strip(),
-        "password": str(
-            linkedin_cfg.get("password")
-            or payload.get("linkedin_password")
-            or ""
-        ),
-    }
-    return cfg
-
-
-def _filter_platforms_by_credentials(platforms: List[str], config: Dict[str, Any]) -> Tuple[List[str], List[str]]:
-    accepted: List[str] = []
-    blockers: List[str] = []
-    for p in platforms:
-        if p == "boss":
-            phone = str((config.get("boss_config") or {}).get("phone") or "").strip()
-            if phone:
-                accepted.append(p)
-            else:
-                blockers.append("boss 缺少手机号（boss_config.phone）")
-        elif p == "zhilian":
-            u = str((config.get("zhilian_config") or {}).get("username") or "").strip()
-            pw = str((config.get("zhilian_config") or {}).get("password") or "")
-            if u and pw:
-                accepted.append(p)
-            else:
-                blockers.append("zhilian 缺少账号密码（zhilian_config.username/password）")
-        elif p == "linkedin":
-            e = str((config.get("linkedin_config") or {}).get("email") or "").strip()
-            pw = str((config.get("linkedin_config") or {}).get("password") or "")
-            if e and pw:
-                accepted.append(p)
-            else:
-                blockers.append("linkedin 缺少邮箱密码（linkedin_config.email/password）")
-    return accepted, blockers
-
-
-async def _create_multi_platform_auto_apply_task(platforms: List[str], config: Dict[str, Any]) -> str:
-    task_id = str(uuid.uuid4())
-    async with task_lock:
-        auto_apply_tasks[task_id] = {
-            "task_id": task_id,
-            "status": "starting",
-            "platforms": platforms,
-            "config": config,
-            "progress": {
-                "total_platforms": len(platforms),
-                "completed_platforms": 0,
-                "total_applied": 0,
-                "total_failed": 0,
-                "platform_progress": {},
-            },
-            "created_at": datetime.now().isoformat(),
-            "started_at": None,
-            "completed_at": None,
-        }
-    asyncio.create_task(_run_multi_platform_apply(task_id, platforms, config))
-    return task_id
-
-
-async def _run_github_auto_apply_task(task_id: str, payload: Dict[str, Any]):
-    task = github_apply_tasks.get(task_id)
-    if not task:
-        return
-    task["status"] = "running"
-    task["started_at"] = datetime.now().isoformat()
-    try:
-        snapshot = _aihawk_capability_snapshot()
-        task["capability"] = snapshot
-        if not snapshot.get("can_prepare"):
-            task["status"] = "blocked"
-            task["error"] = (
-                "AIHawk 运行环境不完整，无法生成任务配置。"
-                f" missing_required={snapshot.get('missing_required')} missing_deps={snapshot.get('missing_deps')}"
-            )
-            task["completed_at"] = datetime.now().isoformat()
-            return
-
-        # Lazy import to avoid startup hard dependency.
-        from app.core.aihawk_client import aihawk_client
-
-        resume_text = str(payload.get("resume_text") or "").strip()
-        keywords = _to_string_list(payload.get("keywords"))
-        locations = _to_string_list(payload.get("locations"))
-        max_count = max(1, min(200, int(payload.get("max_count") or 20)))
-        llm_key = (
-            os.getenv("DEEPSEEK_API_KEY", "").strip()
-            or os.getenv("OPENAI_API_KEY", "").strip()
-        )
-
-        config_dir = await asyncio.to_thread(
-            aihawk_client.create_config_files,
-            task_id,
-            keywords or ["Python"],
-            locations or ["北京"],
-            max_count,
-            resume_text,
-            llm_key or "missing_api_key",
-        )
-        task["prepared"] = True
-        task["config_dir"] = config_dir
-
-        enable_fallback = bool(payload.get("enable_fallback_auto_apply", True)) or bool(HAITOU_DEFAULT_POLICY["enabled"])
-        requested_platforms = _normalize_platform_list(
-            payload.get("fallback_platforms") or payload.get("platforms")
-        ) or list(HAITOU_DEFAULT_POLICY["fallback_platforms"])
-
-        # Current upstream AIHawk package in this repo may not include auto-apply plugins.
-        if not snapshot.get("has_auto_apply_plugins"):
-            if enable_fallback:
-                fallback_cfg = _build_fallback_auto_apply_config(
-                    payload, keywords, locations, max_count
-                )
-                accepted, blockers = _filter_platforms_by_credentials(
-                    requested_platforms,
-                    fallback_cfg,
-                )
-                if accepted:
-                    linked_task_id = await _create_multi_platform_auto_apply_task(
-                        accepted,
-                        fallback_cfg,
-                    )
-                    task["status"] = "fallback_started"
-                    task["linked_auto_apply_task_id"] = linked_task_id
-                    task["result"] = {
-                        "message": (
-                            "AIHawk 插件缺失，已自动切换到内置多平台自动投递引擎。"
-                        ),
-                        "platforms": accepted,
-                        "linked_auto_apply_task_id": linked_task_id,
-                    }
-                else:
-                    task["status"] = "prepared_only"
-                    task["result"] = {
-                        "message": (
-                            "已生成 AIHawk 配置文件，但未提供可用平台凭据，无法自动切换真实投递。"
-                        ),
-                        "blockers": blockers,
-                    }
-            else:
-                task["status"] = "prepared_only"
-                task["result"] = {
-                    "message": (
-                        "已生成 AIHawk 配置文件，但当前仓库缺少 auto-apply 插件代码。"
-                        " 如需真实自动投递，请切回含插件的历史版本或私有分支。"
-                    )
-                }
-            task["completed_at"] = datetime.now().isoformat()
-            return
-
-        if not snapshot.get("can_run"):
-            task["status"] = "blocked"
-            task["error"] = "AIHawk 可准备但不可运行，请检查依赖和 LLM_KEY。"
-            task["completed_at"] = datetime.now().isoformat()
-            return
-
-        run_result = await asyncio.to_thread(aihawk_client.run_aihawk, task_id, max_count)
-        task["status"] = "completed" if run_result.get("success") else "failed"
-        task["result"] = run_result
-        task["completed_at"] = datetime.now().isoformat()
-    except Exception as e:
-        logger.exception("github 高星自动投递任务失败")
-        task["status"] = "failed"
-        task["error"] = str(e)
-        task["completed_at"] = datetime.now().isoformat()
-
-
-@app.get("/api/github-auto-apply/health")
-async def github_auto_apply_health():
-    return _api_success({"capability": _aihawk_capability_snapshot()})
-
-
-@app.post("/api/github-auto-apply/start")
-async def github_auto_apply_start(request: Request):
-    """
-    Start GitHub high-star AIHawk task.
-    Payload:
-      resume_text (required),
-      keywords (list or csv),
-      locations (list or csv),
-      max_count (int)
-    """
-    try:
-        raw_data = await request.json()
-        data = _apply_haitou_defaults(raw_data if isinstance(raw_data, dict) else {})
-        resume_text = str(data.get("resume_text") or "").strip()
-        if not resume_text:
-            profile_id = str(data.get("profile_id") or "").strip()
-            if profile_id:
-                profile = resume_profile_service.get_profile(profile_id)
-                if profile:
-                    resume_json = profile.get("resume_json") or {}
-                    resume_text = json.dumps(resume_json, ensure_ascii=False)
-        if not resume_text:
-            return _api_error("resume_text 不能为空（或提供 profile_id）", status_code=400)
-
-        info = analyzer.extract_info(resume_text)
-        keywords = _to_string_list(data.get("keywords"))
-        if not keywords:
-            keywords = [str(info.get("job_intention") or "").strip()]
-            keywords.extend([str(x) for x in (info.get("skills") or [])[:5]])
-            keywords = [k for k in keywords if k]
-        locations = _to_string_list(data.get("locations"))
-        if not locations:
-            locations = [str(x) for x in (info.get("preferred_locations") or [])[:3] if str(x).strip()]
-        if not locations:
-            locations = ["北京"]
-
-        task_id = f"gh_{uuid.uuid4().hex[:10]}"
-        task = {
-            "task_id": task_id,
-            "status": "queued",
-            "keywords": keywords,
-            "locations": locations,
-            "max_count": int(HAITOU_DEFAULT_POLICY["max_count"]),
-            "enable_fallback_auto_apply": True,
-            "requested_fallback_platforms": list(HAITOU_DEFAULT_POLICY["fallback_platforms"]),
-            "created_at": datetime.now().isoformat(),
-            "prepared": False,
-            "strategy": HAITOU_DEFAULT_POLICY["strategy_version"],
-        }
-        github_apply_tasks[task_id] = task
-        asyncio.create_task(
-            _run_github_auto_apply_task(
-                task_id,
-                {
-                    "resume_text": resume_text,
-                    "keywords": keywords,
-                    "locations": locations,
-                    "max_count": task["max_count"],
-                    "enable_fallback_auto_apply": True,
-                    "fallback_platforms": task["requested_fallback_platforms"],
-                    "boss_config": data.get("boss_config"),
-                    "zhilian_config": data.get("zhilian_config"),
-                    "linkedin_config": data.get("linkedin_config"),
-                    "headless": bool(HAITOU_DEFAULT_POLICY["headless"]),
-                    "use_ai_answers": data.get("use_ai_answers", True),
-                    "verification_wait_seconds": int(HAITOU_DEFAULT_POLICY["verification_wait_seconds"]),
-                    "sms_code": data.get("sms_code"),
-                    "blacklist": data.get("blacklist"),
-                    "company_blacklist": data.get("company_blacklist"),
-                    "boss_phone": data.get("boss_phone"),
-                    "boss_sms_code": data.get("boss_sms_code"),
-                    "phone": data.get("phone"),
-                    "zhilian_username": data.get("zhilian_username"),
-                    "zhilian_password": data.get("zhilian_password"),
-                    "linkedin_email": data.get("linkedin_email"),
-                    "linkedin_password": data.get("linkedin_password"),
-                },
-            )
-        )
-        return _api_success({"task_id": task_id, "status": "queued"})
-    except Exception as e:
-        logger.exception("启动 github 高星自动投递失败")
-        return _api_error(str(e), status_code=500, code="github_auto_apply_start_failed")
-
-
-@app.get("/api/github-auto-apply/status/{task_id}")
-async def github_auto_apply_status(task_id: str):
-    task = github_apply_tasks.get(task_id)
-    if not task:
-        return _api_error("任务不存在", status_code=404, code="task_not_found")
-    linked_id = str(task.get("linked_auto_apply_task_id") or "").strip()
-    linked_task = auto_apply_tasks.get(linked_id) if linked_id else None
-    return _api_success(
-        {
-            "task": task,
-            "linked_auto_apply_task": linked_task,
-        }
-    )
-
-
-@app.get("/api/github-auto-apply/history")
-async def github_auto_apply_history(limit: int = 20):
-    rows = sorted(
-        github_apply_tasks.values(),
-        key=lambda x: x.get("created_at", ""),
-        reverse=True,
-    )
-    rows = rows[: max(1, min(200, int(limit or 20)))]
-    return _api_success({"tasks": rows, "total": len(github_apply_tasks)})
 
 
 if __name__ == "__main__":

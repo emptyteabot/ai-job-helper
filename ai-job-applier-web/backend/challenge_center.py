@@ -3,15 +3,32 @@ from __future__ import annotations
 import json
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from playwright.async_api import async_playwright
 
 
+ACTIVE_STATES = {"checking", "challenge_required", "ready", "resumed"}
+FINAL_STATES = {"closed", "expired", "failed"}
+SESSION_TTL = timedelta(minutes=20)
+CLOSED_RETENTION = timedelta(hours=12)
+MAX_ACTIVE_SESSIONS_PER_USER = 3
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_ts(value: Any) -> datetime:
+    raw = str(value or "").strip()
+    if not raw:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return datetime.min.replace(tzinfo=timezone.utc)
 
 
 class ChallengeCenter:
@@ -36,13 +53,68 @@ class ChallengeCenter:
         return {str(key): dict(value) for key, value in raw.items() if isinstance(value, dict)}
 
     def _save_store(self) -> None:
-        self.store_file.write_text(json.dumps(self._sessions, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.store_file.parent.mkdir(parents=True, exist_ok=True)
+        self.store_file.write_text(
+            json.dumps(self._sessions, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     async def _ensure_playwright(self):
         if self._playwright is not None:
             return self._playwright
         self._playwright = await async_playwright().start()
         return self._playwright
+
+    def _runtime_alive(self, session_id: str) -> bool:
+        runtime = self._runtime.get(session_id)
+        if not runtime:
+            return False
+        page = runtime.get("page")
+        browser = runtime.get("browser")
+        if page is None or browser is None:
+            return False
+        try:
+            if page.is_closed():
+                return False
+        except Exception:
+            return False
+        try:
+            if not browser.is_connected():
+                return False
+        except Exception:
+            return False
+        return True
+
+    async def _close_runtime(self, session_id: str) -> None:
+        runtime = self._runtime.pop(session_id, None)
+        if not runtime:
+            return
+        try:
+            await runtime["context"].close()
+        except Exception:
+            pass
+        try:
+            await runtime["browser"].close()
+        except Exception:
+            pass
+
+    async def _load_cookies(self, context, cookie_file: str) -> None:
+        raw_path = str(cookie_file or "").strip()
+        if not raw_path:
+            return
+        target = Path(raw_path)
+        if not target.exists():
+            return
+        try:
+            cookies = json.loads(target.read_text(encoding="utf-8") or "[]")
+        except Exception:
+            return
+        if not isinstance(cookies, list) or not cookies:
+            return
+        try:
+            await context.add_cookies(cookies)
+        except Exception:
+            return
 
     async def _persist_cookies(self, session_id: str) -> None:
         session = self._sessions.get(session_id, {})
@@ -52,66 +124,231 @@ class ChallengeCenter:
             return
         try:
             cookies = await runtime["context"].cookies()
+        except Exception:
+            return
+        try:
             target = Path(cookie_file)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(json.dumps(cookies, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             return
 
+    async def _safe_navigate(self, page, url: str) -> None:
+        attempts = (
+            ("domcontentloaded", 45000, 2500),
+            ("commit", 15000, 3000),
+        )
+        for wait_until, timeout_ms, settle_ms in attempts:
+            try:
+                await page.goto(url, wait_until=wait_until, timeout=timeout_ms)
+                await page.wait_for_timeout(settle_ms)
+                return
+            except Exception:
+                continue
+        await page.wait_for_timeout(5000)
+
+    async def _relaunch_runtime(self, session_id: str) -> bool:
+        session = self._sessions.get(session_id, {})
+        target_url = str(session.get("target_url") or "").strip()
+        if not target_url:
+            return False
+
+        await self._close_runtime(session_id)
+        playwright = await self._ensure_playwright()
+        browser = await playwright.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
+        context = await browser.new_context(viewport={"width": 1440, "height": 960})
+        await self._load_cookies(context, str(session.get("cookie_file") or ""))
+        page = await context.new_page()
+        await self._safe_navigate(page, target_url)
+        self._runtime[session_id] = {
+            "browser": browser,
+            "context": context,
+            "page": page,
+        }
+        return True
+
+    async def _stabilize_session_start(self, session_id: str) -> Dict[str, Any]:
+        session = self._sessions.get(session_id, {})
+        target_url = str(session.get("target_url") or "").strip()
+        runtime = self._runtime.get(session_id)
+        if not runtime:
+            return dict(session)
+
+        page = runtime["page"]
+        last_state: Dict[str, Any] = {}
+        for _ in range(4):
+            last_state = await self._refresh_session(session_id)
+            current_url = str(last_state.get("current_url") or "").strip().lower()
+            state = str(last_state.get("state") or "")
+            if state != "checking" and current_url not in {"", "about:blank"}:
+                return last_state
+            if target_url:
+                try:
+                    await self._safe_navigate(page, target_url)
+                except Exception:
+                    pass
+
+        last_state = await self._refresh_session(session_id)
+        current_url = str(last_state.get("current_url") or "").strip().lower()
+        if current_url in {"", "about:blank"}:
+            relaunched = await self._relaunch_runtime(session_id)
+            if relaunched:
+                last_state = await self._refresh_session(session_id)
+                current_url = str(last_state.get("current_url") or "").strip().lower()
+        if current_url in {"", "about:blank"}:
+            last_state["state"] = "failed"
+            last_state["message"] = "Failed to reach the target page."
+            last_state["updated_at"] = _utc_now()
+            self._sessions[session_id] = last_state
+            self._save_store()
+        return last_state
+
     async def _detect_challenge(self, page) -> tuple[str, str]:
-        url = (page.url or "").lower()
-        markers = ("验证码", "安全验证", "captcha", "verify", "human verification", "passport/zp/verify", "security.html")
+        url = str(page.url or "").strip().lower()
+        if not url or url == "about:blank":
+            return "checking", "Page navigation is still in progress."
+
         try:
-            content = await page.content()
-            lowered = content.lower()
+            title = (await page.title()).lower()
         except Exception:
-            lowered = ""
-        if any(marker.lower() in lowered or marker.lower() in url for marker in markers):
-            return "challenge_required", "检测到验证码或安全验证，等待人工接管。"
-        return "ready", "页面可继续自动执行。"
+            title = ""
+        try:
+            content = (await page.content()).lower()
+        except Exception:
+            content = ""
+
+        markers = (
+            "captcha",
+            "verify",
+            "challenge",
+            "verify-slider",
+            "human verification",
+            "security",
+            "safe/verify",
+            "passport/zp/verify",
+            "滑块",
+            "验证码",
+            "安全验证",
+        )
+        haystack = " ".join((url, title, content))
+        if any(marker in haystack for marker in markers):
+            return "challenge_required", "Challenge detected. Human confirmation is required."
+        return "ready", "Page is ready to continue."
 
     async def _snapshot(self, session_id: str) -> str:
         runtime = self._runtime.get(session_id)
         if not runtime:
             return ""
         snapshot_path = self.snapshot_dir / f"{session_id}.png"
-        await runtime["page"].screenshot(path=str(snapshot_path), full_page=True)
+        await runtime["page"].screenshot(path=str(snapshot_path), full_page=False)
         return str(snapshot_path)
 
-    async def _refresh_session(self, session_id: str) -> Dict[str, Any]:
-        runtime = self._runtime.get(session_id)
-        if not runtime:
-            session = self._sessions.get(session_id, {})
-            session["message"] = session.get("message") or "运行时会话不存在。"
-            self._sessions[session_id] = session
-            self._save_store()
-            return session
+    async def _cleanup_sessions(self, user_id: Optional[str] = None) -> None:
+        now = datetime.now(timezone.utc)
+        changed = False
 
+        rows = sorted(
+            self._sessions.items(),
+            key=lambda item: _parse_ts(item[1].get("updated_at") or item[1].get("created_at")),
+            reverse=True,
+        )
+        active_per_user: Dict[str, List[str]] = {}
+
+        for session_id, session in rows:
+            owner = str(session.get("user_id") or "")
+            if user_id is not None and owner != str(user_id or ""):
+                continue
+
+            updated_at = _parse_ts(session.get("updated_at") or session.get("created_at"))
+            age = now - updated_at
+            state = str(session.get("state") or "")
+            runtime_alive = self._runtime_alive(session_id)
+
+            if state in FINAL_STATES and age > CLOSED_RETENTION:
+                await self._close_runtime(session_id)
+                self._sessions.pop(session_id, None)
+                snapshot_path = Path(str(session.get("screenshot_path") or "").strip())
+                if snapshot_path.exists():
+                    try:
+                        snapshot_path.unlink()
+                    except Exception:
+                        pass
+                changed = True
+                continue
+
+            if runtime_alive and state in ACTIVE_STATES:
+                active_per_user.setdefault(owner, []).append(session_id)
+
+            if age > SESSION_TTL and state in ACTIVE_STATES:
+                await self._close_runtime(session_id)
+                session["state"] = "expired"
+                session["message"] = "Challenge session expired. Start a new session."
+                session["updated_at"] = _utc_now()
+                self._sessions[session_id] = session
+                changed = True
+
+        for owner, active_ids in active_per_user.items():
+            if len(active_ids) <= MAX_ACTIVE_SESSIONS_PER_USER:
+                continue
+            overflow = active_ids[MAX_ACTIVE_SESSIONS_PER_USER :]
+            for session_id in overflow:
+                session = self._sessions.get(session_id, {})
+                await self._close_runtime(session_id)
+                session["state"] = "expired"
+                session["message"] = "Challenge session expired because too many active sessions were opened."
+                session["updated_at"] = _utc_now()
+                self._sessions[session_id] = session
+                changed = True
+
+        if changed:
+            self._save_store()
+
+    async def _refresh_session(self, session_id: str) -> Dict[str, Any]:
+        session = dict(self._sessions.get(session_id, {}))
+        if not session:
+            return {}
+
+        if not self._runtime_alive(session_id):
+            if session.get("state") not in FINAL_STATES:
+                session["state"] = "expired"
+                session["message"] = "Browser runtime is no longer available."
+                session["updated_at"] = _utc_now()
+                self._sessions[session_id] = session
+                self._save_store()
+            return dict(session)
+
+        runtime = self._runtime[session_id]
         page = runtime["page"]
-        session = self._sessions.get(session_id, {})
         try:
             state, message = await self._detect_challenge(page)
         except Exception:
             state = str(session.get("state") or "checking")
-            message = "页面正在跳转，暂时无法刷新挑战状态。"
+            message = "Failed to inspect the page state."
+
         try:
             screenshot_path = await self._snapshot(session_id)
         except Exception:
             screenshot_path = str(session.get("screenshot_path") or "")
+
         session.update(
             {
                 "id": session_id,
                 "state": state,
                 "message": message,
-                "current_url": page.url,
+                "current_url": str(page.url or ""),
                 "screenshot_path": screenshot_path,
                 "updated_at": _utc_now(),
             }
         )
         self._sessions[session_id] = session
         self._save_store()
-        if session.get("state") in {"ready", "resumed"}:
+
+        if state in {"ready", "resumed"}:
             await self._persist_cookies(session_id)
+
         return dict(session)
 
     async def start_session(
@@ -124,28 +361,34 @@ class ChallengeCenter:
         cookie_file: str = "",
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        for existing_id, session in list(self._sessions.items()):
+        await self._cleanup_sessions(user_id=str(user_id or ""))
+
+        for session_id, session in sorted(
+            self._sessions.items(),
+            key=lambda item: _parse_ts(item[1].get("updated_at") or item[1].get("created_at")),
+            reverse=True,
+        ):
             if str(session.get("user_id") or "") != str(user_id or ""):
                 continue
             if str(session.get("provider") or "") != str(provider or ""):
                 continue
-            if str(session.get("state") or "") == "closed":
+            if str(session.get("target_url") or "") != str(url or ""):
                 continue
-            return await self.get_session(existing_id, user_id=str(user_id or ""))
+            if not self._runtime_alive(session_id):
+                continue
+            if str(session.get("state") or "") not in ACTIVE_STATES:
+                continue
+            return await self._refresh_session(session_id)
 
         playwright = await self._ensure_playwright()
-        browser = await playwright.chromium.launch(headless=True, args=["--no-sandbox"])
+        browser = await playwright.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         context = await browser.new_context(viewport={"width": 1440, "height": 960})
+        await self._load_cookies(context, cookie_file)
         page = await context.new_page()
-        try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            await page.wait_for_timeout(2500)
-        except Exception:
-            try:
-                await page.goto(url, wait_until="commit", timeout=15000)
-                await page.wait_for_timeout(3000)
-            except Exception:
-                await page.wait_for_timeout(5000)
+        await self._safe_navigate(page, url)
 
         session_id = uuid.uuid4().hex
         self._runtime[session_id] = {
@@ -156,36 +399,38 @@ class ChallengeCenter:
         self._sessions[session_id] = {
             "id": session_id,
             "user_id": str(user_id or ""),
-            "provider": provider,
+            "provider": str(provider or "playwright"),
             "title": title or "Challenge Session",
-            "target_url": url,
+            "target_url": str(url or ""),
             "created_at": _utc_now(),
             "updated_at": _utc_now(),
             "state": "checking",
-            "message": "会话已创建，正在检测挑战状态。",
-            "current_url": page.url,
+            "message": "Session created. Inspecting page state.",
+            "current_url": str(page.url or ""),
             "screenshot_path": "",
-            "cookie_file": cookie_file,
+            "cookie_file": str(cookie_file or ""),
             "metadata": dict(metadata or {}),
         }
         self._save_store()
-        return await self._refresh_session(session_id)
+        return await self._stabilize_session_start(session_id)
 
     def list_sessions(self, *, user_id: str) -> List[Dict[str, Any]]:
-        rows = [dict(row) for row in self._sessions.values() if str(row.get("user_id") or "") == str(user_id or "")]
-        rows.sort(key=lambda row: str(row.get("updated_at") or ""), reverse=True)
+        rows = [
+            dict(row)
+            for row in self._sessions.values()
+            if str(row.get("user_id") or "") == str(user_id or "")
+        ]
+        rows.sort(
+            key=lambda row: _parse_ts(row.get("updated_at") or row.get("created_at")),
+            reverse=True,
+        )
         return rows
 
     async def get_session(self, session_id: str, *, user_id: str) -> Dict[str, Any]:
         session = dict(self._sessions.get(str(session_id or ""), {}))
         if not session or str(session.get("user_id") or "") != str(user_id or ""):
             return {}
-        if session_id in self._runtime:
-            try:
-                return await self._refresh_session(session_id)
-            except Exception:
-                return session
-        return session
+        return await self._refresh_session(str(session_id or ""))
 
     def peek_session(self, session_id: str, *, user_id: str) -> Dict[str, Any]:
         session = dict(self._sessions.get(str(session_id or ""), {}))
@@ -199,13 +444,14 @@ class ChallengeCenter:
             return {}
         runtime = self._runtime.get(session_id)
         if not runtime:
-            session["message"] = "运行时浏览器会话不存在，无法继续提交验证码。"
+            session["state"] = "expired"
+            session["message"] = "Browser runtime is no longer available."
             self._sessions[session_id] = session
             self._save_store()
             return session
 
         page = runtime["page"]
-        locators = [
+        input_selectors = [
             "input[type='text']",
             "input[type='tel']",
             "input[type='number']",
@@ -213,52 +459,66 @@ class ChallengeCenter:
             "textarea",
         ]
         filled = False
-        for selector in locators:
+        for selector in input_selectors:
             locator = page.locator(selector)
             count = await locator.count()
             for index in range(min(count, 5)):
                 handle = locator.nth(index)
-                if await handle.is_visible():
-                    await handle.fill(str(code or ""))
-                    filled = True
-                    break
+                try:
+                    if await handle.is_visible() and await handle.is_enabled():
+                        await handle.fill(str(code or ""))
+                        filled = True
+                        break
+                except Exception:
+                    continue
             if filled:
                 break
 
         if not filled:
             session["state"] = "failed"
-            session["message"] = "未找到可填写的验证码输入框。"
+            session["message"] = "No visible text input was found on the challenge page."
+            session["updated_at"] = _utc_now()
             self._sessions[session_id] = session
             self._save_store()
             return session
 
-        button_selectors = [
-            "button:has-text('提交')",
-            "button:has-text('确定')",
-            "button:has-text('验证')",
-            "button:has-text('继续')",
-            "button:has-text('Submit')",
-            "button:has-text('Verify')",
-        ]
         clicked = False
+        button_selectors = [
+            "button[type='submit']",
+            "input[type='submit']",
+            "button",
+        ]
         for selector in button_selectors:
             locator = page.locator(selector)
             count = await locator.count()
-            if count and await locator.first.is_visible():
-                await locator.first.click()
-                clicked = True
+            for index in range(min(count, 5)):
+                handle = locator.nth(index)
+                try:
+                    if await handle.is_visible() and await handle.is_enabled():
+                        await handle.click()
+                        clicked = True
+                        break
+                except Exception:
+                    continue
+            if clicked:
                 break
+
         if not clicked:
-            await page.keyboard.press("Enter")
+            try:
+                await page.keyboard.press("Enter")
+            except Exception:
+                pass
 
         await page.wait_for_timeout(1200)
         session = await self._refresh_session(session_id)
-        if session.get("state") != "challenge_required":
+        if session.get("state") == "ready":
             session["state"] = "resumed"
-            session["message"] = "验证码已提交，浏览器会话已恢复。"
+            session["message"] = "Challenge input submitted. Session is ready to resume."
+            session["updated_at"] = _utc_now()
             self._sessions[session_id] = session
             self._save_store()
-        return session
+            await self._persist_cookies(session_id)
+        return dict(self._sessions.get(session_id, session))
 
     async def click(
         self,
@@ -273,22 +533,25 @@ class ChallengeCenter:
         session = self.peek_session(session_id, user_id=user_id)
         if not session:
             return {}
-        runtime = self._runtime.get(session_id)
-        if not runtime:
-            session["message"] = "运行时浏览器会话不存在，无法继续点击。"
+        if not self._runtime_alive(session_id):
+            session["state"] = "expired"
+            session["message"] = "Browser runtime is no longer available."
+            session["updated_at"] = _utc_now()
             self._sessions[session_id] = session
             self._save_store()
             return session
-        viewport = runtime["page"].viewport_size or {"width": 1440, "height": 960}
+
+        runtime = self._runtime[session_id]
+        page = runtime["page"]
+        viewport = page.viewport_size or {"width": 1440, "height": 960}
         actual_width = int(viewport.get("width") or 1440)
         actual_height = int(viewport.get("height") or 960)
-
         scale_x = actual_width / max(float(image_width or actual_width), 1.0)
         scale_y = actual_height / max(float(image_height or actual_height), 1.0)
         target_x = int(float(x) * scale_x)
         target_y = int(float(y) * scale_y)
-        await runtime["page"].mouse.click(target_x, target_y)
-        await runtime["page"].wait_for_timeout(800)
+        await page.mouse.click(target_x, target_y)
+        await page.wait_for_timeout(800)
         return await self._refresh_session(session_id)
 
     async def drag(
@@ -307,16 +570,19 @@ class ChallengeCenter:
         session = self.peek_session(session_id, user_id=user_id)
         if not session:
             return {}
-        runtime = self._runtime.get(session_id)
-        if not runtime:
-            session["message"] = "运行时浏览器会话不存在，无法继续拖拽。"
+        if not self._runtime_alive(session_id):
+            session["state"] = "expired"
+            session["message"] = "Browser runtime is no longer available."
+            session["updated_at"] = _utc_now()
             self._sessions[session_id] = session
             self._save_store()
             return session
-        viewport = runtime["page"].viewport_size or {"width": 1440, "height": 960}
+
+        runtime = self._runtime[session_id]
+        page = runtime["page"]
+        viewport = page.viewport_size or {"width": 1440, "height": 960}
         actual_width = int(viewport.get("width") or 1440)
         actual_height = int(viewport.get("height") or 960)
-
         scale_x = actual_width / max(float(image_width or actual_width), 1.0)
         scale_y = actual_height / max(float(image_height or actual_height), 1.0)
         start_x = int(float(from_x) * scale_x)
@@ -324,13 +590,15 @@ class ChallengeCenter:
         end_x = int(float(to_x) * scale_x)
         end_y = int(float(to_y) * scale_y)
 
-        page = runtime["page"]
         await page.mouse.move(start_x, start_y)
         await page.mouse.down()
         await page.mouse.move(end_x, end_y, steps=max(4, int(steps or 18)))
         await page.mouse.up()
         await page.wait_for_timeout(1200)
-        return await self._refresh_session(session_id)
+        session = await self._refresh_session(session_id)
+        if session.get("state") in {"ready", "resumed"}:
+            await self._persist_cookies(session_id)
+        return session
 
     async def refresh(self, session_id: str, *, user_id: str) -> Dict[str, Any]:
         return await self.get_session(session_id, user_id=user_id)
@@ -339,18 +607,9 @@ class ChallengeCenter:
         session = self.peek_session(session_id, user_id=user_id)
         if not session:
             return {}
-        runtime = self._runtime.pop(session_id, None)
-        if runtime:
-            try:
-                await runtime["context"].close()
-            except Exception:
-                pass
-            try:
-                await runtime["browser"].close()
-            except Exception:
-                pass
+        await self._close_runtime(session_id)
         session["state"] = "closed"
-        session["message"] = "会话已关闭。"
+        session["message"] = "Challenge session closed."
         session["updated_at"] = _utc_now()
         self._sessions[session_id] = session
         self._save_store()

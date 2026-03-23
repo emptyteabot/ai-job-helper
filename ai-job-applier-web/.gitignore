@@ -1,0 +1,7 @@
+data/
+backend/data/
+output/
+.playwright-cli/
+scripts/.status/
+!data/.gitkeep
+!backend/data/.gitkeep

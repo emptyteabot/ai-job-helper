@@ -457,7 +457,7 @@ def _is_direct_apply_target(job: Dict[str, Any]) -> bool:
         "job?query=",
     )
     blocked_title_markers = (
-        "搜索入口",
+        "鎼滅储鍏ュ彛",
         "search entry",
     )
     if any(marker in url for marker in blocked_url_markers):
@@ -928,8 +928,10 @@ def extract_text_from_file(file_path: Path) -> str:
     suffix = file_path.suffix.lower()
     if suffix == ".pdf":
         return extract_text_from_pdf(str(file_path))
-    if suffix in {".docx", ".doc"}:
+    if suffix == ".docx":
         return extract_text_from_docx(str(file_path))
+    if suffix == ".doc":
+        raise HTTPException(status_code=400, detail="legacy .doc is not supported, please convert it to .docx")
     if suffix == ".txt":
         return file_path.read_text(encoding="utf-8", errors="ignore").strip()
     raise HTTPException(status_code=400, detail="unsupported file type")
@@ -957,7 +959,7 @@ def _extract_years_experience(text: str) -> int:
 
 
 def _extract_location(text: str) -> str:
-    choices = ["beijing", "shanghai", "shenzhen", "hangzhou", "guangzhou", "chengdu", "鍖椾含", "涓婃捣", "娣卞湷", "鏉窞", "骞垮窞", "鎴愰兘"]
+    choices = ["beijing", "shanghai", "shenzhen", "hangzhou", "guangzhou", "chengdu", "北京", "上海", "深圳", "杭州", "广州", "成都"]
     lower_text = str(text or "").lower()
     for item in choices:
         if item.lower() in lower_text:
@@ -1131,7 +1133,7 @@ def _normalize_ddg_redirect(link: str) -> str:
 
 
 def _extract_company_from_title(title: str) -> str:
-    parts = [part.strip() for part in re.split(r"[-|_路]", title) if part.strip()]
+    parts = [part.strip() for part in re.split(r"[-|_璺痌", title) if part.strip()]
     if len(parts) >= 2:
         return parts[1]
     return ""
@@ -1582,7 +1584,7 @@ async def start_boss_challenge(
 
 @app.post("/api/boss/challenge/{session_id}/resume")
 async def resume_boss_challenge(session_id: str, user: User = Depends(get_current_user)) -> Dict[str, Any]:
-    session = challenge_center.peek_session(session_id, user_id=user.id)
+    session = await challenge_center.refresh(session_id, user_id=user.id)
     if not session:
         raise HTTPException(status_code=404, detail="challenge session not found")
     if session.get("state") not in {"ready", "resumed"}:
@@ -1599,10 +1601,18 @@ async def resume_boss_challenge(session_id: str, user: User = Depends(get_curren
         int(task.get("max_count") or 10),
         str(task.get("greeting_template") or ""),
     )
+    result_state = str(result.get("state") or "")
+    if result_state in {"challenge_required", "waiting_human"}:
+        return {
+            "success": False,
+            "requires_human": True,
+            "result": result,
+            "message": "Boss apply hit another human checkpoint. Pending task is still open.",
+        }
+
     _delete_pending_task(session_id)
     await challenge_center.close(session_id, user_id=user.id)
     return {"success": True, "result": result}
-
 @app.post("/api/analysis/resume")
 async def analyze_resume(req: ResumeAnalysisRequest) -> Dict[str, Any]:
     text = str(req.resume_text or "").strip()
@@ -1940,6 +1950,10 @@ async def upload_resume(
         file_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"failed to parse resume: {exc}") from exc
 
+    if not str(text or "").strip():
+        file_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=422, detail="resume text is empty after parsing")
+
     hr_store.upsert_candidate(_candidate_payload_from_resume(user, text, original_name))
     return {"success": True, "filename": original_name, "text": text}
 
@@ -1982,7 +1996,7 @@ async def delete_resume(filename: str, user: User = Depends(get_current_user)) -
 @app.get("/api/jobs/search")
 async def jobs_search(
     keyword: str = Query(..., min_length=1),
-    city: str = Query("鍏ㄥ浗"),
+    city: str = Query("全国"),
     max_count: int = Query(10, ge=1, le=50),
 ) -> Dict[str, Any]:
     loop = asyncio.get_running_loop()
@@ -2016,7 +2030,7 @@ async def boss_login() -> Dict[str, Any]:
 @app.get("/api/boss/search")
 async def boss_search(
     keyword: str = Query(..., min_length=1),
-    city: str = Query("鍏ㄥ浗"),
+    city: str = Query("全国"),
     max_count: int = Query(10, ge=1, le=50),
 ) -> Dict[str, Any]:
     result = await asyncio.to_thread(boss_bridge.search_jobs, keyword, city, max_count)
@@ -2026,7 +2040,7 @@ async def boss_search(
 @app.post("/api/boss/apply")
 async def boss_apply(
     keyword: str = Query(..., min_length=1),
-    city: str = Query("鍏ㄥ浗"),
+    city: str = Query("全国"),
     max_count: int = Query(10, ge=1, le=50),
     greeting_template: str = "",
 ) -> Dict[str, Any]:
@@ -2101,7 +2115,7 @@ async def websocket_apply(websocket: WebSocket) -> None:
         _acquire_apply_slot(slot_user_id, slot_client_ip)
 
         keyword = str(data.get("keyword") or "").strip()
-        city = str(data.get("city") or "鍏ㄥ浗").strip()
+        city = str(data.get("city") or "全国").strip()
         resume_text = str(data.get("resume_text") or "").strip()
         max_count = min(int(data.get("max_count") or 10), user.remaining_quota)
         apply_mode = str(data.get("apply_mode") or "").strip().lower()
@@ -2453,4 +2467,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=8765)
-

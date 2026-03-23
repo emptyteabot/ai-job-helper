@@ -1,0 +1,8 @@
+services:
+  - name: ai-job-applier-web
+    type: web
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: bash start.sh --build
+    startCommand: bash start.sh

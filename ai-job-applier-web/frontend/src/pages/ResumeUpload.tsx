@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, Button, message, Card, List, Typography, Popconfirm } from 'antd';
-import { UploadOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
+﻿import React, { useEffect, useState } from 'react';
+import { Button, List, Popconfirm, Typography, Upload, message } from 'antd';
+import { DeleteOutlined, FileTextOutlined, UploadOutlined } from '@ant-design/icons';
+import { apiUrl, authHeaders } from '../lib/api';
+import CinematicLegacyShell from '../components/CinematicLegacyShell';
 
 const { Text, Paragraph } = Typography;
 
@@ -13,8 +15,8 @@ interface Resume {
 const ResumeUpload: React.FC = () => {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedResume, setSelectedResume] = useState<string>('');
-  const [resumeText, setResumeText] = useState<string>('');
+  const [selectedResume, setSelectedResume] = useState('');
+  const [resumeText, setResumeText] = useState('');
 
   useEffect(() => {
     loadResumes();
@@ -23,12 +25,9 @@ const ResumeUpload: React.FC = () => {
   const loadResumes = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8765/api/resume/list');
+      const response = await fetch(apiUrl('/api/resume/list'), { headers: authHeaders() });
       const result = await response.json();
-
-      if (result.success) {
-        setResumes(result.resumes || []);
-      }
+      if (result.success) setResumes(result.resumes || []);
     } catch (error) {
       console.error('加载简历列表失败', error);
     } finally {
@@ -41,15 +40,8 @@ const ResumeUpload: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-
-      // 直接使用 fetch 上传文件
-      const response = await fetch('http://localhost:8765/api/resume/upload', {
-        method: 'POST',
-        body: formData
-      });
-
+      const response = await fetch(apiUrl('/api/resume/upload'), { method: 'POST', headers: authHeaders(), body: formData });
       const result = await response.json();
-
       if (result.success) {
         message.success('简历上传成功');
         loadResumes();
@@ -57,7 +49,6 @@ const ResumeUpload: React.FC = () => {
         message.error(result.detail || '简历上传失败');
       }
     } catch (error) {
-      console.error('上传错误:', error);
       message.error('简历上传失败');
     } finally {
       setLoading(false);
@@ -67,12 +58,8 @@ const ResumeUpload: React.FC = () => {
 
   const handleDelete = async (filename: string) => {
     try {
-      const response = await fetch(`http://localhost:8765/api/resume/${filename}`, {
-        method: 'DELETE'
-      });
-
+      const response = await fetch(apiUrl(`/api/resume/${filename}`), { method: 'DELETE', headers: authHeaders() });
       const result = await response.json();
-
       if (result.success) {
         message.success('简历删除成功');
         loadResumes();
@@ -90,9 +77,8 @@ const ResumeUpload: React.FC = () => {
 
   const handleView = async (filename: string) => {
     try {
-      const response = await fetch(`http://localhost:8765/api/resume/text/${filename}`);
+      const response = await fetch(apiUrl(`/api/resume/text/${filename}`), { headers: authHeaders() });
       const result = await response.json();
-
       if (result.success) {
         setSelectedResume(filename);
         setResumeText(result.text || '');
@@ -111,71 +97,58 @@ const ResumeUpload: React.FC = () => {
   };
 
   return (
-    <div>
-      <h1>简历管理</h1>
+    <CinematicLegacyShell
+      sectionId="resumeupload"
+      title="简历管理"
+      highlight="资产仓库"
+      subtitle="简历不是一次性文件，而是会被重写、选取和回看的资产。这个页面就该像资产仓库，而不是临时上传框。"
+      terminalLabel="Resume_Upload::Terminal"
+      terminalPrompt={loading ? '正在同步简历仓库状态...' : '简历仓库已连接，等待上传或查看...'}
+      primaryCta="刷新简历仓库"
+      onPrimaryClick={loadResumes}
+      terminalLines={[
+        { time: '10:31:01', level: 'STORE', text: 'Syncing resume file list...' },
+        { time: '10:31:04', level: 'FILES', text: `Current files: ${resumes.length}` },
+        { time: '10:31:08', level: 'READY', text: 'Resume storage surface is ready.' },
+      ]}
+    >
+      <div className="space-y-6">
+        <div className="glass-panel rounded-2xl p-8">
+          <Upload beforeUpload={handleUpload} accept=".pdf,.doc,.docx" maxCount={1} showUploadList={false}>
+            <Button icon={<UploadOutlined />} type="primary" size="large">上传简历</Button>
+          </Upload>
+          <Text type="secondary" style={{ marginLeft: 16 }}>支持 PDF、Word，最大 10MB</Text>
+        </div>
 
-      <Card style={{ marginBottom: 16 }}>
-        <Upload
-          beforeUpload={handleUpload}
-          accept=".pdf,.doc,.docx"
-          maxCount={1}
-          showUploadList={false}
-        >
-          <Button icon={<UploadOutlined />} type="primary" size="large">
-            上传简历
-          </Button>
-        </Upload>
-        <Text type="secondary" style={{ marginLeft: 16 }}>
-          支持 PDF、Word 格式，最大 10MB
-        </Text>
-      </Card>
+        <div className="glass-panel rounded-2xl p-8">
+          <List
+            loading={loading}
+            dataSource={resumes}
+            renderItem={(resume) => (
+              <List.Item
+                actions={[
+                  <Button type="link" icon={<FileTextOutlined />} onClick={() => handleView(resume.filename)}>查看</Button>,
+                  <Popconfirm title="确定删除这份简历吗？" onConfirm={() => handleDelete(resume.filename)} okText="确定" cancelText="取消">
+                    <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+                  </Popconfirm>,
+                ]}
+              >
+                <List.Item.Meta avatar={<FileTextOutlined style={{ fontSize: 24 }} />} title={resume.filename} description={`大小: ${formatFileSize(resume.size)}`} />
+              </List.Item>
+            )}
+          />
+        </div>
 
-      <Card title="我的简历" loading={loading}>
-        <List
-          dataSource={resumes}
-          renderItem={(resume) => (
-            <List.Item
-              actions={[
-                <Button
-                  type="link"
-                  icon={<FileTextOutlined />}
-                  onClick={() => handleView(resume.filename)}
-                >
-                  查看
-                </Button>,
-                <Popconfirm
-                  title="确定删除这份简历吗？"
-                  onConfirm={() => handleDelete(resume.filename)}
-                  okText="确定"
-                  cancelText="取消"
-                >
-                  <Button type="link" danger icon={<DeleteOutlined />}>
-                    删除
-                  </Button>
-                </Popconfirm>
-              ]}
-            >
-              <List.Item.Meta
-                avatar={<FileTextOutlined style={{ fontSize: 24 }} />}
-                title={resume.filename}
-                description={`大小: ${formatFileSize(resume.size)}`}
-              />
-            </List.Item>
-          )}
-        />
-      </Card>
-
-      {selectedResume && (
-        <Card title={`简历内容 - ${selectedResume}`} style={{ marginTop: 16 }}>
-          <Paragraph
-            ellipsis={{ rows: 10, expandable: true, symbol: '展开' }}
-            style={{ whiteSpace: 'pre-wrap' }}
-          >
-            {resumeText}
-          </Paragraph>
-        </Card>
-      )}
-    </div>
+        {selectedResume ? (
+          <div className="glass-panel rounded-2xl p-8">
+            <h3 className="text-cyan-100 text-xl font-bold mb-4">{selectedResume}</h3>
+            <Paragraph ellipsis={{ rows: 10, expandable: true, symbol: '展开' }} style={{ whiteSpace: 'pre-wrap', color: '#e0f2fe' }}>
+              {resumeText}
+            </Paragraph>
+          </div>
+        ) : null}
+      </div>
+    </CinematicLegacyShell>
   );
 };
 

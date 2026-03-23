@@ -1,0 +1,7 @@
+﻿John Doe
+Senior Backend Engineer
+Experience: 5+ years delivering Python, FastAPI, PostgreSQL, Redis, Docker, Kubernetes, and LangChain-backed automation.
+Contributed to scalable REST APIs, GraphQL endpoints, and observability tooling.
+Projects: microservice mesh, event-driven ETL, and real-time dashboards.
+Skills: Python, FastAPI, Django, React, TypeScript, Node.js, Docker, Kubernetes, PostgreSQL, Redis, LangChain.
+Education: B.S. Computer Science

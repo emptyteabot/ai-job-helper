@@ -10,3 +10,5 @@ playwright
 playwright-stealth
 redis
 celery
+tencentcloud-sdk-python
+twilio

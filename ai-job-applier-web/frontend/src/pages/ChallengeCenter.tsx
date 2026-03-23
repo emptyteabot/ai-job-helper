@@ -41,6 +41,7 @@ interface FormPayload {
 const ChallengeCenter: React.FC = () => {
   const [sessions, setSessions] = useState<ChallengeSession[]>([]);
   const [active, setActive] = useState<ChallengeSession | null>(null);
+  const [autostartHandled, setAutostartHandled] = useState(false);
   const [startingBoss, setStartingBoss] = useState(false);
   const [startingGeneric, setStartingGeneric] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -163,6 +164,7 @@ const ChallengeCenter: React.FC = () => {
         message.error(result.detail || result.message || '创建 Boss challenge 会话失败');
         return;
       }
+      window.localStorage.setItem('last_boss_session_id', result.session.id);
       setActive(result.session);
       setFields([]);
       setProfile({});
@@ -345,14 +347,31 @@ const ChallengeCenter: React.FC = () => {
 
   useEffect(() => {
     const search = new URLSearchParams(window.location.search);
-    if (search.get('provider') === 'boss' && search.get('autostart') === '1') {
+    const explicitSessionId = search.get('session_id') || window.localStorage.getItem('last_boss_session_id') || '';
+    if (explicitSessionId && sessions.length) {
+      const matched = sessions.find((item) => item.id === explicitSessionId);
+      if (matched) {
+        setActive(matched);
+        setAutostartHandled(true);
+        return;
+      }
+    }
+    if (!autostartHandled && search.get('provider') === 'boss' && search.get('autostart') === '1' && sessions.length) {
+      const reusable = sessions.find((item) => item.provider?.includes('boss') && !['closed', 'expired', 'failed'].includes(item.state || ''));
+      if (reusable) {
+        setActive(reusable);
+        window.localStorage.setItem('last_boss_session_id', reusable.id);
+        setAutostartHandled(true);
+        return;
+      }
+      setAutostartHandled(true);
       void startBossSession({
         keyword: search.get('keyword') || 'python',
         city: search.get('city') || '全国',
         max_count: search.get('max_count') || '10',
       });
     }
-  }, []);
+  }, [autostartHandled, sessions]);
 
   useEffect(() => {
     if (!active?.id) return undefined;
@@ -475,6 +494,23 @@ const ChallengeCenter: React.FC = () => {
               <div>
                 <div className="text-xl font-bold text-cyan-100">{active?.title || '未选择会话'}</div>
                 <div className="mt-1 break-all text-sm text-cyan-100/60">{active?.message || '请选择左侧会话，或新建一个官网/Boss 会话。'}</div>
+                {active?.provider?.includes('boss') ? (
+                  <div className="mt-2 text-xs text-cyan-300/80">
+                    {['ready', 'resumed'].includes(active?.state || '')
+                      ? '当前已具备恢复条件，可继续 Boss 执行。'
+                      : ['challenge_required', 'waiting_human'].includes(active?.state || '')
+                        ? '先在截图中处理验证，再点击恢复 Boss 执行。'
+                        : '当前会话尚未进入可恢复状态。'}
+                  </div>
+                ) : null}
+                {active?.metadata ? (
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs text-cyan-100/60">
+                    {active.metadata.keyword ? <Tag color="cyan">keyword: {String(active.metadata.keyword)}</Tag> : null}
+                    {active.metadata.city ? <Tag color="cyan">city: {String(active.metadata.city)}</Tag> : null}
+                    {active.metadata.max_count ? <Tag color="cyan">max_count: {String(active.metadata.max_count)}</Tag> : null}
+                    {active.updated_at ? <Tag color="default">updated: {active.updated_at}</Tag> : null}
+                  </div>
+                ) : null}
               </div>
               <Space wrap>
                 <Button disabled={!active?.id} onClick={() => active?.id && void refreshSession(active.id)}>刷新</Button>
@@ -484,7 +520,7 @@ const ChallengeCenter: React.FC = () => {
                 <Button disabled={!active?.id || fieldStats.total === 0} loading={autofilling} onClick={autofillFormFields}>
                   一键填写建议值
                 </Button>
-                <Button danger disabled={!active?.id} onClick={closeSession}>关闭会话</Button>
+                <Button danger disabled={!active?.id} onClick={() => { if (!active?.id) return; if (window.confirm('关闭后当前恢复链路会终止，确定继续吗？')) { void closeSession(); } }}>关闭会话</Button>
               </Space>
             </div>
 

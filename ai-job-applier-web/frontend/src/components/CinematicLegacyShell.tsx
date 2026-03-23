@@ -31,6 +31,7 @@ const defaultNavItems: NavItem[] = [
   { href: '#hero', label: '首页' },
   { href: '#workspace', label: '功能区' },
   { href: '#stream', label: '执行记录' },
+  { href: '/challenge-center', label: 'Challenge' },
   { href: '#footer', label: '页脚' },
 ];
 

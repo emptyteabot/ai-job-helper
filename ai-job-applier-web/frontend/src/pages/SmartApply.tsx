@@ -645,7 +645,7 @@ const SmartApply: React.FC = () => {
               <button className="glass-panel px-10 py-4 rounded-full text-cyan-200 font-medium border border-cyan-400/30 hover:bg-cyan-400/10 transition-all" type="button" onClick={() => document.getElementById('workspace-logs')?.scrollIntoView({ behavior: 'smooth' })}>
                 查看 AI 执行记录
               </button>
-              <button className="glass-panel px-10 py-4 rounded-full text-cyan-200 font-medium border border-cyan-400/30 hover:bg-cyan-400/10 transition-all" type="button" onClick={() => { const qs = new URLSearchParams({ provider: 'boss', autostart: '1', keyword: keyword || 'python', city: city || '全国', max_count: maxCount || '10' }); window.location.href = `/challenge-center?${qs.toString()}`; }}>
+              <button className="glass-panel px-10 py-4 rounded-full text-cyan-200 font-medium border border-cyan-400/30 hover:bg-cyan-400/10 transition-all" type="button" onClick={() => { const qs = new URLSearchParams({ provider: 'boss', autostart: '1', keyword: keyword || 'python', city: city || '全国', max_count: maxCount || '10' }); const lastBossSessionId = window.localStorage.getItem('last_boss_session_id') || ''; if (lastBossSessionId) qs.set('session_id', lastBossSessionId); window.location.href = `/challenge-center?${qs.toString()}`; }}>
                 前往 Challenge Center
               </button>
             </div>

@@ -438,6 +438,14 @@ class ChallengeCenter:
             return {}
         return session
 
+    def get_runtime(self, session_id: str, *, user_id: str) -> Optional[Dict[str, Any]]:
+        session = self.peek_session(session_id, user_id=user_id)
+        if not session:
+            return None
+        if not self._runtime_alive(session_id):
+            return None
+        return self._runtime.get(session_id)
+
     def _frame_token(self, frame) -> str:
         name = str(frame.name or "").strip()
         url = str(frame.url or "").strip()

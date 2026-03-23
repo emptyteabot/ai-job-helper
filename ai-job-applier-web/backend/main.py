@@ -1719,25 +1719,33 @@ async def resume_boss_challenge(session_id: str, user: User = Depends(get_curren
     if not task or str(task.get("user_id") or "") != user.id:
         raise HTTPException(status_code=404, detail="pending boss task not found")
 
-    result = await asyncio.to_thread(
-        boss_bridge.batch_apply,
+    runtime = challenge_center.get_runtime(session_id, user_id=user.id)
+    if runtime is None:
+        raise HTTPException(status_code=409, detail="challenge browser runtime is not available")
+
+    result = await boss_bridge.batch_apply_async(
         str(task.get("keyword") or ""),
-        str(task.get("city") or "全国"),
+        str(task.get("city") or "??"),
         int(task.get("max_count") or 10),
         str(task.get("greeting_template") or ""),
+        runtime=runtime,
+        runtime_session_id=session_id,
     )
     result_state = str(result.get("state") or "")
-    if result_state in {"challenge_required", "waiting_human"}:
+    if result_state in {"challenge_required", "waiting_human"} or result.get("busy"):
+        latest_session = await challenge_center.refresh(session_id, user_id=user.id)
         return {
             "success": False,
             "requires_human": True,
             "result": result,
             "message": "Boss apply hit another human checkpoint. Pending task is still open.",
+            "session": latest_session,
         }
 
     _delete_pending_task(session_id)
     await challenge_center.close(session_id, user_id=user.id)
     return {"success": True, "result": result}
+
 @app.post("/api/analysis/resume")
 async def analyze_resume(req: ResumeAnalysisRequest) -> Dict[str, Any]:
     text = str(req.resume_text or "").strip()

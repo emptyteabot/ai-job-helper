@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
+const AgentChatWorkspace = lazy(() => import('./pages/AgentChatWorkspace'));
 const SmartApply = lazy(() => import('./pages/SmartApply'));
 const AutoApply = lazy(() => import('./pages/AutoApply'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -38,7 +39,8 @@ const App: React.FC = () => {
       <Suspense fallback={<RouteFallback />}>
         <Routes>
           <Route path="/" element={<LandingPage />} />
-          <Route path="/app" element={<SmartApply />} />
+          <Route path="/app" element={<AgentChatWorkspace />} />
+          <Route path="/app-legacy" element={<SmartApply />} />
           <Route path="/auto-apply" element={<AutoApply />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/job-search" element={<JobSearch />} />

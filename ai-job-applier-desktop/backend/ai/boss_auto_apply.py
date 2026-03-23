@@ -1,4 +1,4 @@
-﻿"""Boss direct-apply automation using Playwright."""
+"""Boss direct-apply automation using Playwright."""
 
 from __future__ import annotations
 

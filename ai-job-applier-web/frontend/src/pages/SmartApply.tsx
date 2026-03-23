@@ -36,6 +36,13 @@ interface ApplyFormValues {
   max_count?: number | string;
 }
 
+interface ChatMessage {
+  id: string;
+  role: 'assistant' | 'user' | 'system';
+  text: string;
+  tone?: 'info' | 'success' | 'warning';
+}
+
 const defaultFeed = [
   {
     id: 'feed-ready',
@@ -568,6 +575,56 @@ const SmartApply: React.FC = () => {
       icon: 'monitoring',
     },
   ];
+
+  const [chatDraft, setChatDraft] = useState('');
+  const [toolPanelOpen, setToolPanelOpen] = useState(false);
+  const [userMessages, setUserMessages] = useState<ChatMessage[]>([]);
+
+  const formatRoleLabel = (role: ChatMessage['role']) => {
+    if (role === 'user') return 'YOU';
+    if (role === 'assistant') return 'AGENT';
+    return 'SYSTEM';
+  };
+
+  const conversationEntries = useMemo<ChatMessage[]>(() => {
+    const assistantHistory = feedItems.map((item) => ({
+      id: item.id,
+      role: 'assistant' as const,
+      text: `${item.meta}: ${item.title} · ${item.text}`,
+      tone: item.tone,
+    }));
+    const logHistory = logs.map((log, index) => ({
+      id: `${log.company}-${log.job}-${index}-${log.success}`,
+      role: 'assistant' as const,
+      text: `${log.company} · ${log.job} · ${log.greeting}`,
+      tone: log.success ? 'success' : 'warning',
+    }));
+    const systemMessage: ChatMessage = {
+      id: 'system-status',
+      role: 'system',
+      text: `阶段: ${stageLabel} · ${assistance.label}`,
+    };
+    return [...assistantHistory, ...logHistory, systemMessage, ...userMessages];
+  }, [feedItems, logs, stageLabel, assistance.label, userMessages]);
+
+  const handleConversationSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = chatDraft.trim();
+    if (!trimmed) {
+      return;
+    }
+    setUserMessages((current) => [
+      ...current,
+      {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        text: trimmed,
+      },
+    ]);
+    setChatDraft('');
+    setToolPanelOpen(true);
+    scrollToExecution();
+  };
 
   return (
     <div className="font-body text-cyan-100 selection:bg-cyan-500/30">

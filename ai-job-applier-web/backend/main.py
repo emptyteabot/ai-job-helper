@@ -28,9 +28,10 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from openai import AsyncOpenAI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from boss_bridge import BossBridge
+from chat_orchestrator import ChatSessionStore, heuristic_orchestrator_reply
 from challenge_center import ChallengeCenter
 from hr_store import HRStore
 from real_jobs_bridge import RealJobsBridge, _load_openclaw_provider, service_is_available
@@ -57,6 +58,7 @@ RECORDS_STORE_FILE = DATA_DIR / "application_records.json"
 CHALLENGE_STORE_FILE = DATA_DIR / "challenge_sessions.json"
 CHALLENGE_SNAPSHOT_DIR = DATA_DIR / "challenge_snapshots"
 BOSS_COOKIES_FILE = DATA_DIR / "boss_cookies.json"
+CHAT_STORE_FILE = DATA_DIR / "chat_sessions.json"
 FRONTEND_DIST_DIR = PROJECT_ROOT / "frontend" / "dist"
 FRONTEND_INDEX_FILE = FRONTEND_DIST_DIR / "index.html"
 
@@ -68,6 +70,12 @@ if (FRONTEND_DIST_DIR / "assets").exists():
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-me-in-production")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "").strip()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "").strip()
+OPENAI_CHAT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4").strip() or "gpt-5.4"
+OPENAI_REVIEW_MODEL = os.getenv("OPENAI_REVIEW_MODEL", OPENAI_CHAT_MODEL).strip() or OPENAI_CHAT_MODEL
+OPENAI_REASONING_EFFORT = os.getenv("OPENAI_REASONING_EFFORT", "xhigh").strip() or "xhigh"
+OPENAI_WIRE_API = os.getenv("OPENAI_WIRE_API", "responses").strip().lower() or "responses"
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
 CODE_TTL_SECONDS = int(os.getenv("AUTH_CODE_TTL_SECONDS", "600"))
 
@@ -148,6 +156,11 @@ llm_client = (
     if DEEPSEEK_API_KEY
     else None
 )
+chat_llm_client = (
+    AsyncOpenAI(api_key=OPENAI_API_KEY, base_url=OPENAI_BASE_URL or None)
+    if OPENAI_API_KEY
+    else llm_client
+)
 
 security = HTTPBearer(auto_error=False)
 storage_lock = threading.RLock()
@@ -161,7 +174,25 @@ hr_store = HRStore(HR_STORE_FILE)
 jobs_bridge = RealJobsBridge()
 boss_bridge = BossBridge()
 challenge_center = ChallengeCenter(CHALLENGE_STORE_FILE, CHALLENGE_SNAPSHOT_DIR)
+chat_store = ChatSessionStore(CHAT_STORE_FILE)
 cached_jobs_by_id: Dict[str, Dict[str, Any]] = {}
+
+ORCHESTRATION_SESSIONS: Dict[str, Dict[str, Any]] = {}
+ORCHESTRATION_HISTORY_LIMIT = 60
+ORCHESTRATION_LOCK = threading.RLock()
+ORCHESTRATION_CAPABILITIES = [
+    "search_jobs",
+    "resume_analysis",
+    "records_stats",
+    "records_list",
+    "challenge_start",
+    "challenge_refresh",
+    "challenge_submit",
+    "form_inspect",
+    "form_autofill",
+    "boss_challenge_start",
+    "boss_challenge_resume",
+]
 
 
 class User(BaseModel):
@@ -202,6 +233,14 @@ class LocalLoginRequest(BaseModel):
     password: str
 
 
+class OrchestrationActionRequest(BaseModel):
+    action: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    session_id: Optional[str] = None
+    message: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: Optional[str] = None
     new_password: str
@@ -240,6 +279,20 @@ class ChallengeDragRequest(BaseModel):
 
 class ChallengeAutofillRequest(BaseModel):
     overrides: Dict[str, Any] = {}
+
+
+class ChatCreateSessionRequest(BaseModel):
+    title: Optional[str] = None
+
+
+class ChatMessageRequest(BaseModel):
+    content: str
+
+
+class ChatEventRequest(BaseModel):
+    role: str = "system"
+    content: str
+    meta: Dict[str, Any] = {}
 
 
 class HRJobRequest(BaseModel):
@@ -856,6 +909,118 @@ def _application_record_stats(user_id: str = "") -> Dict[str, Any]:
     }
 
 
+def _create_orchestration_session(user: Optional[User], metadata: Dict[str, Any]) -> Dict[str, Any]:
+    session_id = uuid.uuid4().hex
+    now = _utc_now()
+    session: Dict[str, Any] = {
+        "id": session_id,
+        "user_id": user.id if user else "",
+        "created_at": now,
+        "last_active_at": now,
+        "state": "initialized",
+        "history": [],
+        "context": dict(metadata or {}),
+        "capabilities": ORCHESTRATION_CAPABILITIES,
+    }
+    with ORCHESTRATION_LOCK:
+        ORCHESTRATION_SESSIONS[session_id] = session
+    return session
+
+
+def _get_orchestration_session(session_id: str) -> Optional[Dict[str, Any]]:
+    if not session_id:
+        return None
+    with ORCHESTRATION_LOCK:
+        return ORCHESTRATION_SESSIONS.get(session_id)
+
+
+def _mark_orchestration_active(session: Dict[str, Any], state: Optional[str] = None) -> None:
+    with ORCHESTRATION_LOCK:
+        if state:
+            session["state"] = state
+        session["last_active_at"] = _utc_now()
+
+
+def _record_orchestration_event(session: Dict[str, Any], entry: Dict[str, Any]) -> None:
+    with ORCHESTRATION_LOCK:
+        history = session.setdefault("history", [])
+        history.append(entry)
+        if len(history) > ORCHESTRATION_HISTORY_LIMIT:
+            del history[: len(history) - ORCHESTRATION_HISTORY_LIMIT]
+
+
+def _session_summary(session: Dict[str, Any]) -> Dict[str, Any]:
+    with ORCHESTRATION_LOCK:
+        history = list(session.get("history", [])[-10:])
+        context = dict(session.get("context", {}))
+        return {
+            "session_id": session["id"],
+            "user_id": session.get("user_id", ""),
+            "state": session.get("state", "initialized"),
+            "created_at": session.get("created_at"),
+            "last_active_at": session.get("last_active_at"),
+            "history": history,
+            "context": context,
+            "capabilities": session.get("capabilities", ORCHESTRATION_CAPABILITIES),
+        }
+
+
+def _simplify_job(job: Dict[str, Any]) -> Dict[str, Any]:
+    fields = (
+        "job_id",
+        "id",
+        "title",
+        "company",
+        "salary",
+        "location",
+        "platform",
+        "provider",
+        "link",
+        "url",
+        "description",
+        "source",
+        "apply_priority",
+        "is_direct_apply",
+    )
+    simplified: Dict[str, Any] = {}
+    for field in fields:
+        if field in job:
+            simplified[field] = job[field]
+    return simplified
+
+
+async def _llm_orchestration_narrative(
+    action: str,
+    summary_text: str,
+    detail: Dict[str, Any],
+    user_message: Optional[str],
+) -> str:
+    if llm_client is None:
+        return summary_text
+
+    prompt = (
+        "You are an automation orchestrator synthesizing job-hunting actions.\n"
+        f"Action: {action}\n"
+        f"User message: {user_message or 'none'}\n"
+        f"Summary: {summary_text}\n"
+        f"Detail: {json.dumps(detail, ensure_ascii=False, default=str)}\n"
+        "Reply with a concise assistant note (max 80 words) describing the completed work."
+    )
+    try:
+        response = await llm_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=120,
+        )
+        narrative = (response.choices[0].message.content or "").strip()
+        if narrative:
+            return narrative
+    except Exception:
+        pass
+    return summary_text
+
+
 def _cache_jobs(rows: List[Dict[str, Any]]) -> None:
     with storage_lock:
         for row in rows:
@@ -1061,6 +1226,91 @@ def _build_autofill_profile(user: User, overrides: Optional[Dict[str, Any]] = No
             continue
         profile[str(key)] = str(value).strip()
     return profile
+
+
+def _latest_resume_metadata_for_user(user: User) -> Dict[str, Any]:
+    prefix = f"{user.id}__"
+    candidates = sorted(UPLOAD_DIR.glob(f"{prefix}*"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if not candidates:
+        return {"available": False, "filename": "", "text": ""}
+    file_path = candidates[0]
+    try:
+        text = extract_text_from_file(file_path)
+    except Exception:
+        text = ""
+    return {
+        "available": bool(text.strip()),
+        "filename": file_path.name[len(prefix):],
+        "text": text,
+    }
+
+
+def _build_chat_context(user: User, session: Dict[str, Any]) -> Dict[str, Any]:
+    resume_meta = _latest_resume_metadata_for_user(user)
+    context = dict(session.get("context") or {})
+    context.update(
+        {
+            "resume_available": resume_meta["available"],
+            "resume_filename": resume_meta["filename"],
+            "remaining_quota": user.remaining_quota,
+            "plan": user.plan,
+            "nickname": user.nickname,
+        }
+    )
+    return context
+
+
+async def _llm_chat_reply(message: str, context: Dict[str, Any]) -> Dict[str, Any]:
+    if chat_llm_client is None:
+        return heuristic_orchestrator_reply(message, context)
+
+    system_prompt = (
+        "You are the orchestration brain of AgentHelpJob. "
+        "Return only JSON with keys: assistant_message, actions, context_patch. "
+        "Actions must be an array of objects using only these action types: "
+        "search_jobs, run_apply, analyze_resume, show_records, open_challenge_center, request_resume_upload. "
+        "Do not promise captcha bypass. "
+        "If resume is missing, prefer request_resume_upload before run_apply."
+    )
+    user_prompt = json.dumps(
+        {
+            "message": message,
+            "context": context,
+        },
+        ensure_ascii=False,
+    )
+
+    try:
+        if OPENAI_WIRE_API == "responses" and hasattr(chat_llm_client, "responses"):
+            response = await chat_llm_client.responses.create(
+                model=OPENAI_CHAT_MODEL,
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                reasoning={"effort": OPENAI_REASONING_EFFORT},
+            )
+            raw_text = getattr(response, "output_text", "") or ""
+        else:
+            completion = await chat_llm_client.chat.completions.create(
+                model=OPENAI_CHAT_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.2,
+                response_format={"type": "json_object"},
+            )
+            raw_text = (completion.choices[0].message.content or "").strip()
+        parsed = json.loads(raw_text)
+        if not isinstance(parsed, dict):
+            raise ValueError("chat model did not return object")
+        parsed.setdefault("assistant_message", "我已经接住你的目标，接下来会按当前上下文推进。")
+        parsed.setdefault("actions", [])
+        parsed.setdefault("context_patch", {})
+        return parsed
+    except Exception:
+        return heuristic_orchestrator_reply(message, context)
 
 
 def _normalize_string_list(value: Any) -> List[str]:
@@ -2017,6 +2267,90 @@ async def local_login(req: LocalLoginRequest) -> Dict[str, Any]:
 @app.get("/api/user/info")
 async def get_user_info(user: User = Depends(get_current_user)) -> Dict[str, Any]:
     return {"success": True, "user": _serialize_user(user)}
+
+
+@app.get("/api/chat/sessions")
+async def list_chat_sessions(user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    return {"success": True, "sessions": chat_store.list_sessions(user.id)}
+
+
+@app.post("/api/chat/sessions")
+async def create_chat_session(
+    req: ChatCreateSessionRequest = Body(default=ChatCreateSessionRequest()),
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    session = chat_store.create_session(user.id, req.title or "New chat")
+    return {"success": True, "session": session}
+
+
+@app.get("/api/chat/sessions/{session_id}")
+async def get_chat_session(session_id: str, user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    session = chat_store.get_session(session_id, user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="chat session not found")
+    return {"success": True, "session": session}
+
+
+@app.post("/api/chat/sessions/{session_id}/messages")
+async def send_chat_message(session_id: str, req: ChatMessageRequest, user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    session = chat_store.get_session(session_id, user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="chat session not found")
+
+    content = str(req.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
+
+    title = session.get("title") or content[:32]
+    user_message = {
+        "id": uuid.uuid4().hex,
+        "role": "user",
+        "content": content,
+        "created_at": _utc_now().isoformat(),
+    }
+    session = chat_store.append_messages(session_id, user.id, [user_message], title=title)
+
+    context = _build_chat_context(user, session)
+    reply = await _llm_chat_reply(content, context)
+    assistant_message = {
+        "id": uuid.uuid4().hex,
+        "role": "assistant",
+        "content": str(reply.get("assistant_message") or "").strip() or "我已经接住这条请求。",
+        "created_at": _utc_now().isoformat(),
+        "actions": reply.get("actions") or [],
+    }
+    session = chat_store.append_messages(
+        session_id,
+        user.id,
+        [assistant_message],
+        context_patch=reply.get("context_patch") or {},
+        title=title,
+    )
+    return {"success": True, "session": session, "assistant": assistant_message}
+
+
+@app.post("/api/chat/sessions/{session_id}/events")
+async def append_chat_event(session_id: str, req: ChatEventRequest, user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    session = chat_store.get_session(session_id, user.id)
+    if not session:
+        raise HTTPException(status_code=404, detail="chat session not found")
+
+    content = str(req.content or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="content is required")
+
+    role = str(req.role or "system").strip().lower()
+    if role not in {"assistant", "system", "tool"}:
+        role = "system"
+    event_message = {
+        "id": uuid.uuid4().hex,
+        "role": role,
+        "content": content,
+        "created_at": _utc_now().isoformat(),
+        "meta": dict(req.meta or {}),
+    }
+    session = chat_store.append_messages(session_id, user.id, [event_message])
+    return {"success": True, "session": session, "message": event_message}
 
 
 @app.post("/api/auth/change-password")

@@ -238,6 +238,10 @@ class ChallengeDragRequest(BaseModel):
     steps: int = 18
 
 
+class ChallengeAutofillRequest(BaseModel):
+    overrides: Dict[str, Any] = {}
+
+
 class HRJobRequest(BaseModel):
     hr_id: str
     title: str
@@ -967,6 +971,98 @@ def _extract_location(text: str) -> str:
     return ""
 
 
+def _extract_email_from_text(text: str) -> str:
+    match = re.search(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", str(text or ""), re.I)
+    return str(match.group(0) or "").strip() if match else ""
+
+
+def _extract_phone_from_text(text: str) -> str:
+    candidates = re.findall(r"(?:\+?86[-\s]?)?(1[3-9]\d{9})", str(text or ""))
+    return str(candidates[0] or "").strip() if candidates else ""
+
+
+def _extract_url_from_text(text: str, keyword: str) -> str:
+    for match in re.findall(r"https?://[^\s)>\"]+", str(text or ""), re.I):
+        if keyword.lower() in match.lower():
+            return str(match).strip()
+    return ""
+
+
+def _extract_school_from_text(text: str) -> str:
+    school_keywords = ("大学", "学院", "university", "college", "institute")
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if len(line) > 80:
+            continue
+        if any(keyword.lower() in line.lower() for keyword in school_keywords):
+            return line
+    return ""
+
+
+def _extract_degree_from_text(text: str) -> str:
+    patterns = ("博士", "硕士", "本科", "专科", "phd", "master", "bachelor", "associate")
+    lower_text = str(text or "").lower()
+    for pattern in patterns:
+        if pattern.lower() in lower_text:
+            return pattern
+    return ""
+
+
+def _extract_major_from_text(text: str) -> str:
+    match = re.search(r"(?:专业|major)[:：]?\s*([^\n,，|]{2,40})", str(text or ""), re.I)
+    return str(match.group(1) or "").strip() if match else ""
+
+
+def _extract_name_from_text(text: str) -> str:
+    for raw_line in str(text or "").splitlines():
+        line = raw_line.strip()
+        if not line or "@" in line or len(line) > 24:
+            continue
+        if re.search(r"\d", line):
+            continue
+        if re.fullmatch(r"[\u4e00-\u9fff]{2,5}", line):
+            return line
+        if re.fullmatch(r"[A-Za-z]+(?:\s+[A-Za-z]+){0,2}", line):
+            return line
+    return ""
+
+
+def _get_latest_resume_text_for_user(user: User) -> str:
+    prefix = f"{user.id}__"
+    candidates = sorted(UPLOAD_DIR.glob(f"{prefix}*"), key=lambda path: path.stat().st_mtime, reverse=True)
+    if not candidates:
+        return ""
+    try:
+        return extract_text_from_file(candidates[0])
+    except Exception:
+        return ""
+
+
+def _build_autofill_profile(user: User, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    resume_text = _get_latest_resume_text_for_user(user)
+    nickname = str(user.nickname or "").strip()
+    full_name = nickname if nickname and nickname.lower() != "user" else _extract_name_from_text(resume_text)
+    profile = {
+        "full_name": full_name,
+        "email": str(user.email or "").strip() or _extract_email_from_text(resume_text),
+        "phone": str(user.phone or "").strip() or _extract_phone_from_text(resume_text),
+        "location_city": _extract_location(resume_text),
+        "school": _extract_school_from_text(resume_text),
+        "degree": _extract_degree_from_text(resume_text),
+        "major": _extract_major_from_text(resume_text),
+        "github_url": _extract_url_from_text(resume_text, "github.com"),
+        "linkedin_url": _extract_url_from_text(resume_text, "linkedin.com"),
+        "portfolio_url": _extract_url_from_text(resume_text, ""),
+        "summary": " ".join(line.strip() for line in resume_text.splitlines()[:6] if line.strip())[:600],
+        "resume_text": resume_text[:4000],
+    }
+    for key, value in (overrides or {}).items():
+        if value is None:
+            continue
+        profile[str(key)] = str(value).strip()
+    return profile
+
+
 def _normalize_string_list(value: Any) -> List[str]:
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
@@ -1543,6 +1639,35 @@ async def get_challenge_screenshot(session_id: str, user: User = Depends(get_cur
     if not screenshot_path.exists():
         raise HTTPException(status_code=404, detail="challenge screenshot not found")
     return FileResponse(screenshot_path)
+
+
+@app.get("/api/challenges/{session_id}/form-fields")
+async def get_challenge_form_fields(session_id: str, user: User = Depends(get_current_user)) -> Dict[str, Any]:
+    payload = await challenge_center.inspect_form(
+        session_id,
+        user_id=user.id,
+        profile=_build_autofill_profile(user),
+    )
+    if not payload:
+        raise HTTPException(status_code=404, detail="challenge session not found")
+    return {"success": True, **payload}
+
+
+@app.post("/api/challenges/{session_id}/autofill")
+async def autofill_challenge_form(
+    session_id: str,
+    req: ChallengeAutofillRequest,
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    payload = await challenge_center.autofill_form(
+        session_id,
+        user_id=user.id,
+        profile=_build_autofill_profile(user, req.overrides),
+        overrides=req.overrides,
+    )
+    if not payload:
+        raise HTTPException(status_code=404, detail="challenge session not found")
+    return {"success": True, **payload}
 
 
 @app.post("/api/boss/challenge/start")

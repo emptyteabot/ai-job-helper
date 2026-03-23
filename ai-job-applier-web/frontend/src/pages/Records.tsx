@@ -55,7 +55,7 @@ const Records: React.FC = () => {
           </div>
           <Button onClick={loadRecords}>刷新</Button>
         </div>
-        <Table dataSource={records} columns={columns} loading={loading} rowKey="id" pagination={{ pageSize: 8 }} />
+        <Table dataSource={records} columns={columns} loading={loading} rowKey="id" pagination={{ pageSize: 8 }} scroll={{ x: 'max-content' }} />
       </div>
     </CinematicLegacyShell>
   );

@@ -49,18 +49,22 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
   terminalLines = [],
   children,
 }) => {
+  const lines = terminalLines.length
+    ? terminalLines
+    : [{ time: '00:00:00', level: 'INFO', text: 'This page is active under the cinematic legacy shell.' }];
+
   return (
     <div className="font-body text-cyan-100 selection:bg-cyan-500/30 selection:text-white">
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
         <div className="grid-overlay" />
-        <div className="absolute -top-1/4 -left-1/4 w-[80vw] h-[80vw] glow-radial opacity-60" />
-        <div className="absolute -bottom-1/4 -right-1/4 w-[70vw] h-[70vw] glow-cyan opacity-40" />
+        <div className="absolute -left-1/4 -top-1/4 h-[80vw] w-[80vw] glow-radial opacity-60" />
+        <div className="absolute -bottom-1/4 -right-1/4 h-[70vw] w-[70vw] glow-cyan opacity-40" />
         <div className="particle-bg absolute inset-0 opacity-40" />
       </div>
 
       <main className="relative z-10">
         <header className="sticky top-0 z-50 w-full border-b border-cyan-400/30 bg-[#0d0e13]/40 backdrop-blur-3xl shadow-[0px_20px_40px_rgba(34,211,238,0.2)]">
-          <nav className="mx-auto flex w-full max-w-screen-2xl items-center justify-between px-8 py-4">
+          <nav className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-4 px-6 py-4 md:px-8">
             <a className="font-headline text-2xl font-black uppercase tracking-tighter text-cyan-300" href="/">
               AgentHelpJob
             </a>
@@ -80,7 +84,7 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
               ))}
             </div>
             <button
-              className="bg-gradient-to-r from-cyan-400 to-cyan-300 px-6 py-2.5 rounded-full font-bold text-[#0d0e13] transition-all duration-300 shadow-lg shadow-cyan-400/30 btn-glow hover:scale-105 active:scale-95"
+              className="btn-glow rounded-full bg-gradient-to-r from-cyan-400 to-cyan-300 px-5 py-2.5 font-bold text-[#0d0e13] transition-all duration-300 shadow-lg shadow-cyan-400/30 hover:scale-105 active:scale-95 md:px-6"
               type="button"
               onClick={onPrimaryClick}
             >
@@ -89,15 +93,15 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
           </nav>
         </header>
 
-        <section className="min-h-[70vh] flex flex-col items-center justify-center px-6 pt-20 pb-20" id="hero">
+        <section className="flex min-h-[70vh] flex-col items-center justify-center px-6 pb-20 pt-20" id="hero">
           <div className="mx-auto mb-12 max-w-5xl text-center">
             <div className="mb-8 inline-flex items-center space-x-2 rounded-full border border-cyan-400/40 bg-cyan-500/10 px-3 py-1">
-              <span className="w-2 h-2 rounded-full bg-cyan-300 animate-ping" />
-              <span className="text-[0.6875rem] uppercase tracking-[0.2em] text-cyan-300 font-bold">
-                System Status: Active // Legacy Page
+              <span className="h-2 w-2 animate-ping rounded-full bg-cyan-300" />
+              <span className="text-[0.6875rem] font-bold uppercase tracking-[0.2em] text-cyan-300">
+                System Status: Active // Unified Shell
               </span>
             </div>
-            <h1 className="mb-8 bg-gradient-to-b from-white to-cyan-300 bg-clip-text font-headline text-5xl font-bold leading-tight tracking-tighter text-transparent text-glow md:text-8xl">
+            <h1 className="text-glow mb-8 bg-gradient-to-b from-white to-cyan-300 bg-clip-text font-headline text-5xl font-bold leading-tight tracking-tighter text-transparent md:text-8xl">
               {title}
               {highlight ? (
                 <>
@@ -114,14 +118,14 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
               <div className="absolute -top-3 left-6 rounded border border-cyan-300/40 bg-[#0d0e13] px-3 text-[0.6rem] font-mono uppercase tracking-widest text-cyan-300">
                 {terminalLabel}
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-start gap-4">
                 <span className="material-symbols-outlined text-2xl text-cyan-300">terminal</span>
-                <div className="w-fit flex-1 border-r-2 border-cyan-400 pr-1 font-mono text-lg text-cyan-100 cursor-blink">
+                <div className="min-w-0 flex-1 break-words whitespace-normal border-r-2 border-cyan-400 pr-1 font-mono text-lg text-cyan-100">
                   {terminalPrompt}
                 </div>
               </div>
-              <div className="mt-4 flex items-center justify-between text-[0.65rem] font-mono uppercase tracking-tighter text-cyan-200/50">
-                <span>legacy page is now under the same cinematic shell</span>
+              <div className="mt-4 flex items-center justify-between gap-4 text-[0.65rem] font-mono uppercase tracking-tighter text-cyan-200/50">
+                <span className="min-w-0 flex-1 break-words whitespace-normal">legacy page is now under the same cinematic shell</span>
                 <span>{sectionId}</span>
               </div>
             </div>
@@ -139,11 +143,11 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
           </div>
         </section>
 
-        <section className="template-section-anchor mx-auto max-w-7xl px-8 py-20" id="workspace">
+        <section className="template-section-anchor mx-auto max-w-7xl px-6 py-20 md:px-8" id="workspace">
           {children}
         </section>
 
-        <section className="template-section-anchor max-w-6xl mx-auto px-8 py-20" id="stream">
+        <section className="template-section-anchor mx-auto max-w-6xl px-6 py-20 md:px-8" id="stream">
           <div className="relative overflow-hidden rounded-xl border border-cyan-400/30 bg-[#000000] shadow-2xl shadow-[0_0_30px_rgba(34,211,238,0.15)]">
             <div className="flex items-center justify-between border-b border-cyan-400/30 bg-cyan-900/40 px-6 py-3">
               <div className="flex space-x-2">
@@ -156,17 +160,15 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
               </div>
               <span className="material-symbols-outlined text-cyan-300">terminal</span>
             </div>
-            <div className="custom-scrollbar terminal-content terminal-glow h-72 overflow-y-auto bg-black/40 p-8 font-mono text-sm leading-relaxed">
-              {(terminalLines.length ? terminalLines : [{ time: '00:00:00', level: 'INFO', text: 'This page is active under the cinematic legacy shell.' }]).map(
-                (line, index) => (
-                  <div className="mb-2 flex space-x-3 tracking-tight" key={`${line.time}-${index}`}>
-                    <span className="font-mono text-cyan-900/60">[{line.time}]</span>
-                    <span className="font-mono text-[#4CD7F6]">
-                      {line.level}: {line.text}
-                    </span>
-                  </div>
-                ),
-              )}
+            <div className="custom-scrollbar terminal-content terminal-glow h-72 overflow-x-auto overflow-y-auto bg-black/40 p-6 font-mono text-sm leading-relaxed md:p-8">
+              {lines.map((line, index) => (
+                <div className="mb-2 flex min-w-0 space-x-3 tracking-tight" key={`${line.time}-${index}`}>
+                  <span className="font-mono text-cyan-900/60">[{line.time}]</span>
+                  <span className="min-w-0 break-words whitespace-normal font-mono text-[#4CD7F6]">
+                    {line.level}: {line.text}
+                  </span>
+                </div>
+              ))}
               <div className="mt-4 animate-pulse text-cyan-300">_</div>
             </div>
           </div>
@@ -176,10 +178,10 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
           <h2 className="mb-8 font-headline text-4xl font-bold leading-tight text-cyan-100 md:text-6xl">
             让旧页面也进入
             <br />
-            <span className="text-cyan-300 neon-glow-cyan">统一母版系统</span>
+            <span className="neon-glow-cyan text-cyan-300">统一母版系统</span>
           </h2>
           <button
-            className="rounded-full bg-cyan-400 px-10 py-4 font-bold text-[#0d0e13] shadow-[0_0_30px_rgba(34,211,238,0.4)] transition-all hover:-translate-y-1 hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] btn-glow"
+            className="btn-glow rounded-full bg-cyan-400 px-10 py-4 font-bold text-[#0d0e13] shadow-[0_0_30px_rgba(34,211,238,0.4)] transition-all hover:-translate-y-1 hover:shadow-[0_0_50px_rgba(34,211,238,0.6)]"
             type="button"
             onClick={onPrimaryClick}
           >
@@ -187,8 +189,8 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
           </button>
         </section>
 
-        <footer className="border-t border-cyan-900/50 bg-[#0D0E13] relative z-20" id="footer">
-          <div className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-12 px-12 py-16 md:grid-cols-4">
+        <footer className="relative z-20 border-t border-cyan-900/50 bg-[#0D0E13]" id="footer">
+          <div className="mx-auto grid max-w-screen-2xl grid-cols-1 gap-12 px-8 py-16 md:grid-cols-4 md:px-12">
             <div>
               <div className="mb-6 font-headline text-lg font-bold uppercase tracking-tighter text-cyan-300">
                 AgentHelpJob
@@ -198,7 +200,7 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
               </p>
             </div>
             <div>
-              <h4 className="mb-6 text-[0.6875rem] uppercase tracking-[0.1em] font-bold text-cyan-300">产品</h4>
+              <h4 className="mb-6 text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-cyan-300">产品</h4>
               <ul className="space-y-4 text-[0.6875rem] uppercase tracking-[0.1em] text-cyan-100/50">
                 <li>核心看板</li>
                 <li>AI 引擎</li>
@@ -206,7 +208,7 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
               </ul>
             </div>
             <div>
-              <h4 className="mb-6 text-[0.6875rem] uppercase tracking-[0.1em] font-bold text-cyan-300">资源</h4>
+              <h4 className="mb-6 text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-cyan-300">资源</h4>
               <ul className="space-y-4 text-[0.6875rem] uppercase tracking-[0.1em] text-cyan-100/50">
                 <li>开发文档</li>
                 <li>API 状态</li>
@@ -214,7 +216,7 @@ const CinematicLegacyShell: React.FC<CinematicLegacyShellProps> = ({
               </ul>
             </div>
             <div>
-              <h4 className="mb-6 text-[0.6875rem] uppercase tracking-[0.1em] font-bold text-cyan-300">法律</h4>
+              <h4 className="mb-6 text-[0.6875rem] font-bold uppercase tracking-[0.1em] text-cyan-300">法律</h4>
               <ul className="space-y-4 text-[0.6875rem] uppercase tracking-[0.1em] text-cyan-100/50">
                 <li>隐私协议</li>
                 <li>服务条款</li>

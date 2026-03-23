@@ -94,7 +94,7 @@ const Dashboard: React.FC = () => {
             <Card className="glass-panel"><Statistic title="成功率" value={stats.success_rate} suffix="%" prefix={<ClockCircleOutlined />} valueStyle={{ color: '#facc15' }} /></Card>
           </div>
           <Card className="glass-panel" title="最近投递记录" styles={{ header: { color: '#67e8f9' }, body: { padding: 24 } }}>
-            <Table dataSource={recentRecords} columns={columns} rowKey="id" pagination={false} />
+            <Table dataSource={recentRecords} columns={columns} rowKey="id" pagination={false} scroll={{ x: 'max-content' }} />
           </Card>
         </div>
       )}

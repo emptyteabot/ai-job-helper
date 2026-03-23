@@ -438,6 +438,316 @@ class ChallengeCenter:
             return {}
         return session
 
+    def _frame_token(self, frame) -> str:
+        name = str(frame.name or "").strip()
+        url = str(frame.url or "").strip()
+        if name:
+            return name
+        if url:
+            return url
+        return "__main__"
+
+    def _guess_profile_key(self, field: Dict[str, Any]) -> Optional[str]:
+        tokens = " ".join(
+            [
+                str(field.get("label") or ""),
+                str(field.get("name") or ""),
+                str(field.get("id_attr") or ""),
+                str(field.get("placeholder") or ""),
+                str(field.get("autocomplete") or ""),
+                str(field.get("type") or ""),
+            ]
+        ).lower()
+        if not tokens:
+            return None
+
+        mapping = [
+            ("email", ("email", "e-mail", "邮箱", "mail")),
+            ("phone", ("phone", "mobile", "tel", "电话", "手机")),
+            ("full_name", ("full name", "legal name", "name", "姓名")),
+            ("location_city", ("city", "location", "address", "城市", "地点")),
+            ("school", ("school", "university", "college", "学校", "学院")),
+            ("degree", ("degree", "学历", "学位", "bachelor", "master", "phd")),
+            ("major", ("major", "专业")),
+            ("github_url", ("github",)),
+            ("linkedin_url", ("linkedin",)),
+            ("portfolio_url", ("portfolio", "website", "personal site", "博客", "网站")),
+            ("summary", ("cover letter", "self introduction", "introduction", "summary", "about you", "why", "自我介绍", "个人介绍")),
+            ("resume_text", ("resume", "cv", "履历", "简历")),
+        ]
+
+        if "company" in tokens or "employer" in tokens:
+            return None
+
+        for profile_key, keywords in mapping:
+            if any(keyword in tokens for keyword in keywords):
+                return profile_key
+        return None
+
+    async def _collect_form_fields(self, page) -> List[Dict[str, Any]]:
+        frames = page.frames
+        rows: List[Dict[str, Any]] = []
+        script = """
+() => {
+  const cssEscape = (value) => {
+    if (window.CSS && CSS.escape) return CSS.escape(String(value));
+    return String(value).replace(/([ #;?%&,.+*~\\':"!^$\\[\\]()=>|\\/])/g, '\\\\$1');
+  };
+  const textOrEmpty = (value) => String(value || '').trim();
+  const isVisible = (el) => {
+    const rect = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+  };
+  const buildSelector = (el) => {
+    if (el.id) return `#${cssEscape(el.id)}`;
+    const tag = el.tagName.toLowerCase();
+    const name = textOrEmpty(el.getAttribute('name'));
+    const type = textOrEmpty(el.getAttribute('type')).toLowerCase();
+    if (name) return `${tag}[name="${cssEscape(name)}"]${type ? `[type="${cssEscape(type)}"]` : ''}`;
+    const parts = [];
+    let current = el;
+    while (current && current.nodeType === 1 && parts.length < 6) {
+      let selector = current.tagName.toLowerCase();
+      const siblings = current.parentElement ? Array.from(current.parentElement.children).filter((node) => node.tagName === current.tagName) : [];
+      if (siblings.length > 1) {
+        selector += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+      }
+      parts.unshift(selector);
+      current = current.parentElement;
+    }
+    return parts.join(' > ');
+  };
+  const labelText = (el) => {
+    if (el.labels && el.labels.length) {
+      return Array.from(el.labels).map((label) => textOrEmpty(label.innerText)).filter(Boolean).join(' ');
+    }
+    const forId = textOrEmpty(el.getAttribute('id'));
+    if (forId) {
+      const external = document.querySelector(`label[for="${cssEscape(forId)}"]`);
+      if (external) return textOrEmpty(external.innerText);
+    }
+    const parentLabel = el.closest('label');
+    if (parentLabel) return textOrEmpty(parentLabel.innerText);
+    const group = el.closest('.form-item, .field, .form-group, .ant-form-item');
+    if (group) {
+      const label = group.querySelector('label');
+      if (label) return textOrEmpty(label.innerText);
+    }
+    return '';
+  };
+  const nodes = Array.from(document.querySelectorAll('input, textarea, select'));
+  return nodes.slice(0, 200).map((el, index) => {
+    const tag = el.tagName.toLowerCase();
+    const type = textOrEmpty(el.getAttribute('type')).toLowerCase();
+    const selector = buildSelector(el);
+    const required = el.required || el.getAttribute('aria-required') === 'true';
+    const options = tag === 'select'
+      ? Array.from(el.options || []).slice(0, 50).map((option) => ({
+          label: textOrEmpty(option.textContent),
+          value: textOrEmpty(option.value),
+        }))
+      : [];
+    return {
+      local_index: index,
+      tag,
+      type,
+      selector,
+      name: textOrEmpty(el.getAttribute('name')),
+      id_attr: textOrEmpty(el.getAttribute('id')),
+      label: labelText(el),
+      placeholder: textOrEmpty(el.getAttribute('placeholder')),
+      autocomplete: textOrEmpty(el.getAttribute('autocomplete')).toLowerCase(),
+      required,
+      visible: isVisible(el),
+      enabled: !el.disabled,
+      value: tag === 'select' ? textOrEmpty(el.value) : textOrEmpty(el.value),
+      options,
+    };
+  }).filter((field) => field.visible && field.enabled && !['hidden', 'password', 'file'].includes(field.type));
+}
+"""
+        for frame in frames:
+            try:
+                frame_fields = await frame.evaluate(script)
+            except Exception:
+                continue
+            token = self._frame_token(frame)
+            frame_url = str(frame.url or "")
+            for field in frame_fields:
+                enriched = dict(field)
+                selector = str(enriched.get("selector") or "").strip()
+                enriched["frame_token"] = token
+                enriched["frame_url"] = frame_url
+                enriched["field_id"] = f"{token}::{selector or enriched.get('local_index', 'field')}"
+                rows.append(enriched)
+        return rows
+
+    def _suggest_field_value(self, field: Dict[str, Any], profile: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
+        profile_key = self._guess_profile_key(field)
+        if not profile_key:
+            return {"profile_key": None, "suggested_value": "", "confidence": 0.0, "status": "unmatched"}
+
+        override_value = overrides.get(profile_key)
+        value = override_value if override_value not in {None, ""} else profile.get(profile_key)
+        if value in {None, ""}:
+            return {
+                "profile_key": profile_key,
+                "suggested_value": "",
+                "confidence": 0.0,
+                "status": "review",
+            }
+
+        autocomplete = str(field.get("autocomplete") or "").strip().lower()
+        confidence = 0.95 if autocomplete else 0.82
+        status = "ready"
+        if field.get("tag") == "select":
+            options = field.get("options") or []
+            if not any(str(option.get("label") or "").strip().lower() == str(value).strip().lower() or str(option.get("value") or "").strip().lower() == str(value).strip().lower() for option in options):
+                status = "review"
+                confidence = min(confidence, 0.6)
+
+        return {
+            "profile_key": profile_key,
+            "suggested_value": str(value),
+            "confidence": confidence,
+            "status": status,
+        }
+
+    async def inspect_form(
+        self,
+        session_id: str,
+        *,
+        user_id: str,
+        profile: Optional[Dict[str, Any]] = None,
+        overrides: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        session = await self.get_session(session_id, user_id=user_id)
+        if not session:
+            return {}
+        runtime = self._runtime.get(session_id)
+        if not runtime:
+            return {"session": session, "fields": [], "profile": dict(profile or {}), "summary": {"total": 0, "ready": 0, "review": 0, "unmatched": 0}}
+
+        fields = await self._collect_form_fields(runtime["page"])
+        profile_data = dict(profile or {})
+        overrides_data = dict(overrides or {})
+        prepared: List[Dict[str, Any]] = []
+        summary = {"total": 0, "ready": 0, "review": 0, "unmatched": 0}
+        for field in fields:
+            suggestion = self._suggest_field_value(field, profile_data, overrides_data)
+            row = {**field, **suggestion}
+            prepared.append(row)
+            summary["total"] += 1
+            summary[str(suggestion["status"])] += 1
+
+        session.setdefault("metadata", {})
+        session["metadata"]["last_form_scan_at"] = _utc_now()
+        session["metadata"]["last_form_summary"] = summary
+        self._sessions[session_id] = session
+        self._save_store()
+        return {"session": session, "fields": prepared, "profile": profile_data, "summary": summary}
+
+    async def autofill_form(
+        self,
+        session_id: str,
+        *,
+        user_id: str,
+        profile: Optional[Dict[str, Any]] = None,
+        overrides: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        session = await self.get_session(session_id, user_id=user_id)
+        if not session:
+            return {}
+        runtime = self._runtime.get(session_id)
+        if not runtime:
+            return {"session": session, "filled": [], "skipped": [], "profile": dict(profile or {})}
+
+        inspection = await self.inspect_form(
+            session_id,
+            user_id=user_id,
+            profile=profile,
+            overrides=overrides,
+        )
+        fields = inspection.get("fields") or []
+        profile_data = dict(inspection.get("profile") or {})
+        filled: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+
+        page = runtime["page"]
+        frames = {self._frame_token(frame): frame for frame in page.frames}
+
+        for field in fields:
+            selector = str(field.get("selector") or "").strip()
+            frame = frames.get(str(field.get("frame_token") or "__main__"))
+            suggested_value = str(field.get("suggested_value") or "").strip()
+            profile_key = str(field.get("profile_key") or "").strip()
+            status = str(field.get("status") or "")
+            tag = str(field.get("tag") or "").strip().lower()
+            field_type = str(field.get("type") or "").strip().lower()
+
+            if not selector or frame is None:
+                skipped.append({"field_id": field.get("field_id"), "reason": "missing_selector"})
+                continue
+            if not profile_key or not suggested_value:
+                skipped.append({"field_id": field.get("field_id"), "reason": "no_suggestion"})
+                continue
+            if field_type in {"checkbox", "radio", "file"}:
+                skipped.append({"field_id": field.get("field_id"), "reason": "high_risk_field"})
+                continue
+            if status == "review" and tag == "select":
+                skipped.append({"field_id": field.get("field_id"), "reason": "select_requires_review"})
+                continue
+
+            locator = frame.locator(selector).first
+            try:
+                if tag == "select":
+                    option_matched = False
+                    for option in field.get("options") or []:
+                        label = str(option.get("label") or "").strip()
+                        value = str(option.get("value") or "").strip()
+                        if suggested_value.lower() in {label.lower(), value.lower()}:
+                            await locator.select_option(value=value or None, label=label or None)
+                            option_matched = True
+                            break
+                    if not option_matched:
+                        skipped.append({"field_id": field.get("field_id"), "reason": "select_option_not_found"})
+                        continue
+                else:
+                    await locator.fill(suggested_value)
+                    try:
+                        await locator.blur()
+                    except Exception:
+                        pass
+                filled.append(
+                    {
+                        "field_id": field.get("field_id"),
+                        "profile_key": profile_key,
+                        "value": suggested_value,
+                    }
+                )
+            except Exception as exc:
+                skipped.append({"field_id": field.get("field_id"), "reason": f"fill_failed:{exc.__class__.__name__}"})
+
+        await page.wait_for_timeout(800)
+        session = await self._refresh_session(session_id)
+        session.setdefault("metadata", {})
+        session["metadata"]["last_autofill_at"] = _utc_now()
+        session["metadata"]["last_autofill_count"] = len(filled)
+        self._sessions[session_id] = session
+        self._save_store()
+        return {
+            "session": session,
+            "fields": inspection.get("fields") or [],
+            "profile": profile_data,
+            "filled": filled,
+            "skipped": skipped,
+            "summary": {
+                "filled": len(filled),
+                "skipped": len(skipped),
+            },
+        }
+
     async def submit_code(self, session_id: str, *, user_id: str, code: str) -> Dict[str, Any]:
         session = await self.get_session(session_id, user_id=user_id)
         if not session:

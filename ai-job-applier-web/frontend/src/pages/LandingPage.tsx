@@ -384,27 +384,28 @@ const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="w-full max-w-2xl px-4">
-            <div className="glass-panel p-6 rounded-xl border border-cyan-300/40 shadow-[0_0_50px_rgba(34,211,238,0.2)] relative group">
-              <div className="absolute -top-3 left-6 px-3 bg-[#0d0e13] text-[0.6rem] font-mono tracking-widest text-cyan-300 border border-cyan-300/40 rounded uppercase">
-                Input_Prompt::Terminal
-              </div>
-              <div className="flex items-center space-x-4">
-                <span className="material-symbols-outlined text-cyan-300 text-2xl">search</span>
-                <div className="flex-1 font-mono text-lg typewriter-text w-fit flex items-center">
-                  <span id="typewriter-target">正在生成大厂面试真题...</span>
-                  <span className="cursor-breath h-6" />
+          <div className="w-full max-w-7xl px-4">
+            <div className="rounded-[32px] border border-cyan-400/25 bg-[#05080d]/70 backdrop-blur-2xl shadow-[0_30px_120px_rgba(0,0,0,0.45)] overflow-hidden">
+              <div className="flex flex-col gap-3 border-b border-cyan-400/15 px-6 py-5 md:flex-row md:items-center md:justify-between md:px-8 text-left">
+                <div>
+                  <div className="text-[0.72rem] font-mono uppercase tracking-[0.22em] text-cyan-300/80">
+                    AI Job Cockpit
+                  </div>
+                  <h2 className="mt-2 font-headline text-2xl font-bold text-cyan-50 md:text-3xl">
+                    ????????
+                  </h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-cyan-100/65 md:text-base">
+                    ??????????Challenge ????????????
+                  </p>
                 </div>
+                <a className="inline-flex items-center justify-center rounded-full border border-cyan-400/25 bg-cyan-400/10 px-5 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/18" href="/app">
+                  ???????
+                </a>
               </div>
-              <div className="mt-4 flex justify-between items-center text-[0.65rem] font-mono text-cyan-200/50 uppercase tracking-tighter">
-                <span>Scanning 1,000+ top-tier internship openings...</span>
-                <span>Shift + Enter to Execute</span>
+
+              <div className="relative h-[900px] w-full bg-[#04070c] md:h-[1020px]">
+                <iframe src="/app" title="AgentHelpJob Workspace" className="h-full w-full border-0 bg-[#04070c]" loading="lazy" />
               </div>
-            </div>
-            <div className="mt-8 flex justify-center">
-              <a className="bg-cyan-400 text-slate-950 font-bold px-10 py-4 rounded-full shadow-[0_0_30px_rgba(34,211,238,0.4)] hover:shadow-[0_0_50px_rgba(34,211,238,0.6)] transition-all transform hover:-translate-y-1 btn-glow" href="/app">
-                开启你的实习之旅
-              </a>
             </div>
           </div>
         </section>
@@ -423,32 +424,7 @@ const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="max-w-6xl mx-auto px-8 py-32 reveal" id="terminal">
-          <div className="bg-[#000000] border border-cyan-400/30 rounded-xl overflow-hidden shadow-2xl relative shadow-[0_0_30px_rgba(34,211,238,0.15)]">
-            <div className="bg-cyan-900/40 px-6 py-3 border-b border-cyan-400/30 flex items-center justify-between">
-              <div className="flex space-x-2">
-                <div className="w-3 h-3 rounded-full bg-red-500/60" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500/60" />
-                <div className="w-3 h-3 rounded-full bg-green-500/60" />
-              </div>
-              <div className="text-[0.65rem] font-mono tracking-widest text-cyan-300 uppercase">
-                SYSTEM_CORE::EXECUTION_STREAM_V4.0
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="material-symbols-outlined text-[1rem] text-cyan-300">terminal</span>
-              </div>
-            </div>
-            <div className="p-8 font-mono text-sm leading-relaxed h-80 overflow-y-auto custom-scrollbar terminal-content bg-black" style={{ fontFamily: "'Fira Code', monospace" }}>
-              <div className="space-y-1" id="terminal-typewriter-container">
-                <div className="flex space-x-3 mb-2 terminal-glow tracking-tight">
-                  <span className="text-cyan-900/60 font-mono">[{new Date().toTimeString().slice(0, 8)}]</span>
-                  <span className="text-[#4CD7F6] font-mono typewriter-line"></span>
-                  <span className="inline-block text-[#4CD7F6] font-bold terminal-cursor-breath" id="terminal-cursor">_</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+        <section className="max-w-7xl mx-auto px-6 pb-8 md:px-8 reveal" id="terminal" />
       </main>
 
       <footer className="bg-[#0D0E13] border-t border-cyan-900/50 relative z-20" id="footer">

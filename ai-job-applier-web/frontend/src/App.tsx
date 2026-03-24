@@ -38,7 +38,7 @@ const App: React.FC = () => {
     <BrowserRouter>
       <Suspense fallback={<RouteFallback />}>
         <Routes>
-          <Route path="/" element={<AgentChatWorkspace />} />
+          <Route path="/" element={<LandingPage />} />
           <Route path="/landing-legacy" element={<LandingPage />} />
           <Route path="/app" element={<AgentChatWorkspace />} />
           <Route path="/app-legacy" element={<SmartApply />} />

@@ -352,8 +352,8 @@ const LandingPage: React.FC = () => {
             <a className="text-cyan-100/70 hover:text-cyan-200 transition-colors font-['Space_Grotesk'] tracking-tight" href="#showcase">
               产品功能
             </a>
-            <a className="text-cyan-100/70 hover:text-cyan-200 transition-colors font-['Space_Grotesk'] tracking-tight" href="#terminal">
-              AI 执行记录
+            <a className="text-cyan-100/70 hover:text-cyan-200 transition-colors font-['Space_Grotesk'] tracking-tight" href="#workspace">
+              工作台
             </a>
             <a className="text-cyan-100/70 hover:text-cyan-200 transition-colors font-['Space_Grotesk'] tracking-tight" href="#footer">
               加入社群
@@ -366,7 +366,7 @@ const LandingPage: React.FC = () => {
       </header>
 
       <main className="relative z-10">
-        <section className="min-h-[90vh] flex flex-col items-center justify-center px-6 pt-20 pb-32" id="hero">
+        <section className="min-h-[90vh] flex flex-col items-center justify-center px-6 pt-20 pb-12" id="hero">
           <div className="text-center max-w-5xl mx-auto mb-16">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full border border-cyan-400/40 bg-cyan-500/10 mb-8">
               <span className="w-2 h-2 rounded-full bg-cyan-300 animate-ping" />
@@ -382,9 +382,25 @@ const LandingPage: React.FC = () => {
             <p className="text-xl md:text-2xl max-w-3xl mx-auto leading-relaxed font-['Space_Grotesk'] font-light tracking-wide terminal-glow text-cyan-50/80">
               AgentHelpJob：大学生专属 AI 求职管家。自动筛选、智能简历重构、自动化投递，你的第一个 Offer，由 AI 护航。
             </p>
+            <div className="mt-10 flex flex-wrap justify-center gap-4">
+              <a
+                className="inline-flex items-center justify-center rounded-full border border-transparent bg-gradient-to-r from-cyan-400 to-cyan-300 px-6 py-3 text-sm font-semibold text-[#0d0e13] transition hover:shadow-[0_10px_30px_rgba(6,182,212,0.45)]"
+                href="/app"
+              >
+                立即进入工作台
+              </a>
+              <a
+                className="inline-flex items-center justify-center rounded-full border border-cyan-400/40 bg-transparent px-6 py-3 text-sm font-semibold text-cyan-100 transition hover:border-cyan-300 hover:text-cyan-200"
+                href="#showcase"
+              >
+                探索产品能力
+              </a>
+            </div>
           </div>
+        </section>
 
-          <div className="w-full max-w-7xl px-4">
+        <section className="px-4 pb-24" id="workspace">
+          <div className="w-full max-w-7xl mx-auto">
             <div className="rounded-[32px] border border-cyan-400/25 bg-[#05080d]/70 backdrop-blur-2xl shadow-[0_30px_120px_rgba(0,0,0,0.45)] overflow-hidden">
               <div className="flex flex-col gap-3 border-b border-cyan-400/15 px-6 py-5 md:flex-row md:items-center md:justify-between md:px-8 text-left">
                 <div>
@@ -424,7 +440,6 @@ const LandingPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="max-w-7xl mx-auto px-6 pb-8 md:px-8 reveal" id="terminal" />
       </main>
 
       <footer className="bg-[#0D0E13] border-t border-cyan-900/50 relative z-20" id="footer">

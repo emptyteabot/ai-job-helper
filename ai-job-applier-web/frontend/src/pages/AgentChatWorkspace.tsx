@@ -498,39 +498,137 @@ const AgentChatWorkspace: React.FC = () => {
   const guidance = assistedGuidance[assistedStatus];
 
   const renderMessage = (row: ChatMessage) => {
-    const roleLabel = row.role === 'user' ? '用户' : row.role === 'assistant' ? '智能体' : row.role === 'tool' ? '工具' : '系统';
-    const chipClass = row.role === 'user'
-      ? 'bg-cyan-400 text-[#0d0e13]'
+    const roleLabel = row.role === 'user'
+      ? '用户'
       : row.role === 'assistant'
-        ? 'border border-cyan-400/16 bg-[#10141f]/88 text-cyan-50'
-        : 'border border-cyan-400/12 bg-black/26 text-cyan-100/75';
+        ? '智能体'
+        : row.role === 'tool'
+          ? '工具'
+          : '系统';
+
+    if (row.role === 'user') {
+      return (
+        <div key={row.id} className="flex justify-end">
+          <div className="max-w-[88%] rounded-[28px] bg-cyan-500/10 px-5 py-4 text-sm leading-7 md:text-[15px] text-[#0d0e13]">
+            <div className="mb-1 text-[11px] uppercase tracking-[0.16em] text-cyan-100/70">{roleLabel}</div>
+            <div className="break-words whitespace-pre-wrap">{row.content}</div>
+          </div>
+        </div>
+      );
+    }
+
+    const isTool = row.role === 'tool';
+    const isTakeover = Boolean(row.meta?.href) || String(row.meta?.action || '').toLowerCase().includes('challenge');
+    const cardLabel = isTakeover ? '接管卡' : isTool ? '工具结果卡' : '状态卡';
+    const variant = isTakeover
+      ? {
+        border: 'border-amber-400/50',
+        bg: 'bg-gradient-to-br from-amber-500/15 via-black/40 to-black/80',
+        shadow: 'shadow-[0_25px_70px_rgba(191,129,16,0.35)]',
+        text: 'text-amber-100',
+      }
+      : isTool
+        ? {
+          border: 'border-cyan-400/30',
+          bg: 'bg-cyan-500/10',
+          shadow: 'shadow-[0_20px_50px_rgba(34,211,238,0.25)]',
+          text: 'text-cyan-100',
+        }
+        : {
+          border: 'border-cyan-400/20',
+          bg: 'bg-[#10131f]/90',
+          shadow: 'shadow-[0_20px_60px_rgba(6,10,18,0.8)]',
+          text: 'text-cyan-200',
+        };
+
+    const metaEntries: React.ReactNode[] = [];
+    if (row.meta?.action) {
+      metaEntries.push(
+        <div key={`${row.id}-action`} className="text-xs text-cyan-100/70">
+          动作：{String(row.meta.action)}
+        </div>,
+      );
+    }
+    if (row.meta?.stage) {
+      metaEntries.push(
+        <div key={`${row.id}-stage`} className="text-xs text-cyan-100/70">
+          阶段：{String(row.meta.stage)}
+        </div>,
+      );
+    }
+    if (row.meta?.provider) {
+      metaEntries.push(
+        <div key={`${row.id}-provider`} className="text-xs text-cyan-100/70">
+          来源：{String(row.meta.provider)}
+        </div>,
+      );
+    }
+    if (typeof row.meta?.count === 'number') {
+      metaEntries.push(
+        <div key={`${row.id}-count`} className="text-xs text-cyan-100/70">
+          数量：{String(row.meta.count)}
+        </div>,
+      );
+    }
+    if (row.meta?.filename) {
+      metaEntries.push(
+        <div key={`${row.id}-file`} className="text-xs text-cyan-100/70">
+          文件：{String(row.meta.filename)}
+        </div>,
+      );
+    }
+    if (row.meta?.error) {
+      metaEntries.push(
+        <div key={`${row.id}-error`} className="text-xs text-rose-300">
+          错误：{String(row.meta.error)}
+        </div>,
+      );
+    }
+    if (row.meta?.href) {
+      metaEntries.push(
+        <a
+          key={`${row.id}-href`}
+          className="text-xs text-cyan-100/80 underline decoration-dotted decoration-cyan-300/60"
+          href={String(row.meta.href)}
+          target="_blank"
+          rel="noreferrer"
+        >
+          前往接管页面
+        </a>,
+      );
+    }
+
     return (
-      <div key={row.id} className={`flex ${row.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-        <div className={`max-w-[88%] rounded-[28px] px-5 py-4 text-sm leading-7 md:text-[15px] ${chipClass}`}>
-          <div className="mb-1 text-[11px] uppercase tracking-[0.16em] opacity-60">{roleLabel}</div>
-          <div className="break-words whitespace-pre-wrap">{row.content}</div>
+      <div key={row.id} className="flex justify-start">
+        <div className={`max-w-[88%] rounded-[28px] border px-5 py-4 text-sm leading-7 md:text-[15px] ${variant.border} ${variant.bg} ${variant.shadow}`}>
+          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em]">
+            <span className="opacity-70">{cardLabel}</span>
+            <span className={`text-[11px] uppercase tracking-[0.16em] opacity-70 ${variant.text}`}>{roleLabel}</span>
+          </div>
+          <div className="mt-2 break-words whitespace-pre-wrap text-cyan-50">{row.content}</div>
           {row.actions?.length ? (
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-cyan-300/70">
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.16em] text-cyan-200/70">
               {row.actions.map((action, index) => (
-                <span key={`${row.id}-${index}`} className="rounded-full border border-cyan-400/15 px-2 py-1">
+                <span key={`${row.id}-${index}`} className="rounded-full border border-cyan-400/30 px-2 py-1">
                   {String(action.type || 'action')}
                 </span>
               ))}
             </div>
           ) : null}
-          {row.meta?.action ? (
-            <div className="mt-3 rounded-2xl border border-cyan-400/12 bg-cyan-500/5 px-3 py-3 text-xs text-cyan-100/70">
-              <div className="uppercase tracking-[0.16em] text-cyan-300/75">步骤卡</div>
-              <div className="mt-2">动作：{String(row.meta.action)}</div>
-              {row.meta.stage ? <div>阶段：{String(row.meta.stage)}</div> : null}
-              {row.meta.provider ? <div>来源：{String(row.meta.provider)}</div> : null}
-              {typeof row.meta.count === 'number' ? <div>数量：{String(row.meta.count)}</div> : null}
+          {metaEntries.length ? (
+            <div className="mt-3 space-y-1 text-xs text-cyan-100/70">
+              {metaEntries}
             </div>
           ) : null}
         </div>
       </div>
     );
   };
+
+  const stageLabel = stage && stage !== '????' ? stage : '待命中';
+  const statusWidth = Math.min(Math.max(progress, completionRate), 100);
+  const guidanceActionLink = guidance.actionUrl || (assistedStatus === 'challenge_required' ? '/challenge-center' : undefined);
+  const infoCardBase = 'rounded-[28px] border border-cyan-400/16 bg-black/24 px-5 py-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl';
 
   return (
     <div className="min-h-screen bg-[#0d0e13] text-cyan-50">
@@ -564,119 +662,167 @@ const AgentChatWorkspace: React.FC = () => {
           </div>
         </header>
 
-        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-6 pt-6 md:px-6">
-          <div className="mb-6">
+        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 pb-8 pt-6 md:px-6">
+          <section className="space-y-5">
             <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-500/8 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-cyan-300">
               <span className="h-2 w-2 animate-pulse rounded-full bg-cyan-300" />
               智能体控制台已就绪
             </div>
-            <h1 className="mt-5 max-w-4xl font-headline text-4xl font-bold tracking-tight text-white md:text-6xl">
+            <h1 className="max-w-4xl font-headline text-4xl font-bold tracking-tight text-white md:text-6xl">
               把求职藏进一个对话框，
               <span className="block text-cyan-300">把复杂度埋进冰山下面。</span>
             </h1>
-            <p className="mt-4 max-w-3xl text-base leading-7 text-cyan-100/68 md:text-lg">
+            <p className="max-w-3xl text-base leading-7 text-cyan-100/68 md:text-lg">
               你只描述目标。后台会去做搜索、简历分析、执行推进、Challenge 接管和表单填充。中途你可以像和 GPT 对话一样追加条件。
             </p>
-          </div>
+          </section>
 
-          <div className="grid flex-1 grid-cols-1 gap-4 xl:grid-cols-[1fr_280px]">
-            <section className="flex min-h-[65vh] flex-col overflow-hidden rounded-[32px] border border-cyan-400/18 bg-black/28 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-              <div className="border-b border-cyan-400/12 px-5 py-4 md:px-6">
-                <div className="text-sm font-semibold text-cyan-100">对话工作台</div>
-                <div className="mt-1 text-sm text-cyan-100/52">
-                  {running ? '后台正在执行隐藏动作并持续回流结果。' : '用一句自然语言描述目标，其他能力都藏在下面。'}
-                </div>
+          <section className="mt-6 flex min-h-[65vh] flex-col overflow-hidden rounded-[32px] border border-cyan-400/18 bg-black/28 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
+            <div className="border-b border-cyan-400/12 px-5 py-4 md:px-6">
+              <div className="text-sm font-semibold text-cyan-100">对话工作台</div>
+              <div className="mt-1 text-sm text-cyan-100/52">
+                {running ? '后台正在执行隐藏动作并持续回流结果。' : '用一句自然语言描述目标，其他能力都藏在下面。'}
               </div>
+            </div>
 
-              <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
-                {messages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-center">
-                    <div className="max-w-2xl">
-                      <div className="text-2xl font-semibold text-cyan-100">从一句自然语言开始</div>
-                      <div className="mt-3 text-cyan-100/55">
-                        例如：帮我找深圳 AI 产品实习，并开始执行。或者：先看最近投递记录，再帮我调整下一轮策略。
-                      </div>
-                    </div>
-                    <div className="mt-8 flex flex-wrap justify-center gap-3">
-                      {STARTER_PROMPTS.map((prompt) => (
-                        <button key={prompt} className="rounded-full border border-cyan-400/20 bg-cyan-500/6 px-4 py-2 text-sm text-cyan-100/80 transition hover:border-cyan-300/45 hover:bg-cyan-500/12" type="button" onClick={() => void sendPrompt(prompt)}>
-                          {prompt}
-                        </button>
-                      ))}
+            <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
+              {messages.length === 0 ? (
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <div className="max-w-2xl">
+                    <div className="text-2xl font-semibold text-cyan-100">从一句自然语言开始</div>
+                    <div className="mt-3 text-cyan-100/55">
+                      例如：帮我找深圳 AI 产品实习，并开始执行。或者：先看最近投递记录，再帮我调整下一轮策略。
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-5">
-                    {messages.map(renderMessage)}
-                    <div ref={messagesEndRef} />
+                  <div className="mt-8 flex flex-wrap justify-center gap-3">
+                    {STARTER_PROMPTS.map((prompt) => (
+                      <button key={prompt} className="rounded-full border border-cyan-400/20 bg-cyan-500/6 px-4 py-2 text-sm text-cyan-100/80 transition hover:border-cyan-300/45 hover:bg-cyan-500/12" type="button" onClick={() => void sendPrompt(prompt)}>
+                        {prompt}
+                      </button>
+                    ))}
                   </div>
-                )}
-              </div>
-
-              <div className="border-t border-cyan-400/12 px-4 py-4 md:px-6">
-                <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-cyan-100/48">
-                  <span className="rounded-full border border-cyan-400/12 px-3 py-1">隐藏能力：搜索 / 执行 / Challenge / 表单填充 / 记录</span>
-                  {resumeReady ? <span className="rounded-full border border-cyan-400/12 px-3 py-1">简历已就绪</span> : null}
-                  {latestAssistant?.actions?.length ? <span className="rounded-full border border-cyan-400/12 px-3 py-1">已生成动作建议</span> : null}
                 </div>
-                <div className="flex items-end gap-3">
-                  <button className="rounded-full border border-cyan-400/20 px-4 py-3 text-sm text-cyan-100/75 transition hover:bg-cyan-500/10" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-                    {uploading ? '上传中...' : '上传简历'}
-                  </button>
-                  <div className="flex-1 rounded-[28px] border border-cyan-400/18 bg-black/22 px-4 py-3">
-                    <textarea
-                      className="min-h-[56px] w-full resize-none bg-transparent text-[15px] leading-7 text-cyan-50 outline-none placeholder:text-cyan-100/32"
-                      placeholder="例如：帮我找上海 AI 产品实习，先筛岗位，再开始执行。"
-                      value={input}
-                      onChange={(event) => setInput(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault();
-                          void sendPrompt();
-                        }
-                      }}
-                    />
+              ) : (
+                <div className="space-y-5">
+                  {messages.map(renderMessage)}
+                  <div ref={messagesEndRef} />
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-cyan-400/12 px-4 py-4 md:px-6">
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-cyan-100/48">
+                <span className="rounded-full border border-cyan-400/12 px-3 py-1">隐藏能力：搜索 / 执行 / Challenge / 表单填充 / 记录</span>
+                {resumeReady ? <span className="rounded-full border border-cyan-400/12 px-3 py-1">简历已就绪</span> : null}
+                {latestAssistant?.actions?.length ? <span className="rounded-full border border-cyan-400/12 px-3 py-1">已生成动作建议</span> : null}
+              </div>
+              <div className="flex items-end gap-3">
+                <button className="rounded-full border border-cyan-400/20 px-4 py-3 text-sm text-cyan-100/75 transition hover:bg-cyan-500/10" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                  {uploading ? '上传中...' : '上传简历'}
+                </button>
+                <div className="flex-1 rounded-[28px] border border-cyan-400/18 bg-black/22 px-4 py-3">
+                  <textarea
+                    className="min-h-[56px] w-full resize-none bg-transparent text-[15px] leading-7 text-cyan-50 outline-none placeholder:text-cyan-100/32"
+                    placeholder="例如：帮我找上海 AI 产品实习，先筛岗位，再开始执行。"
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        void sendPrompt();
+                      }
+                    }}
+                  />
+                </div>
+                <button className="rounded-full bg-cyan-400 px-6 py-3 text-sm font-bold text-[#0d0e13] shadow-[0_0_30px_rgba(34,211,238,0.24)] transition hover:-translate-y-[1px]" type="button" disabled={sending || !input.trim()} onClick={() => void sendPrompt()}>
+                  {sending ? '处理中...' : '发送'}
+                </button>
+              </div>
+              <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void uploadResume(file);
+                event.currentTarget.value = '';
+              }} />
+            </div>
+          </section>
+
+          <section className="mt-6 space-y-4">
+            <div className={infoCardBase}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">对话状态</div>
+                  <div className="mt-1 text-xl font-semibold text-white">{stageLabel}</div>
+                </div>
+                <div className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs uppercase tracking-[0.2em] ${running ? 'border-emerald-300/60 bg-emerald-500/10 text-emerald-200' : 'border-cyan-400/40 text-cyan-100/70'}`}>
+                  <span className={`h-2 w-2 rounded-full ${running ? 'bg-emerald-400' : 'bg-cyan-400/70'}`} />
+                  {running ? '运行中' : '空闲'}
+                </div>
+              </div>
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-500" style={{ width: `${statusWidth}%` }} />
+              </div>
+              <div className="mt-3 flex flex-wrap gap-4 text-sm text-cyan-100/70">
+                <div>成功：<span className="font-semibold text-white">{successCount}</span></div>
+                <div>失败：<span className="font-semibold text-white">{failedCount}</span></div>
+                <div>完成率：<span className="font-semibold text-white">{completionRate}%</span></div>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.2em] text-cyan-100/60">
+                <span className="rounded-full border border-cyan-400/40 px-3 py-1">{resumeReady ? '简历已就绪' : '等待简历上传'}</span>
+                <span className="rounded-full border border-cyan-400/40 px-3 py-1">{session?.id ? `会话 ${session.id.slice(0, 8)}` : '会话未创建'}</span>
+              </div>
+            </div>
+
+            <div className={infoCardBase}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">接管指引</div>
+                  <div className="mt-1 text-lg font-semibold text-white">{guidance.label}</div>
+                </div>
+                <div className="text-xs uppercase tracking-[0.18em] text-cyan-100/60">{assistedStatus}</div>
+              </div>
+              <p className="mt-3 text-sm text-cyan-100/70">{guidance.description}</p>
+              {guidance.actionLabel ? (
+                <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+                  {guidanceActionLink ? (
+                    <a
+                      className="rounded-full border border-cyan-400/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-cyan-100 transition hover:bg-cyan-400/10"
+                      href={guidanceActionLink}
+                      target={guidanceActionLink.startsWith('http') ? '_blank' : undefined}
+                      rel={guidanceActionLink.startsWith('http') ? 'noreferrer' : undefined}
+                    >
+                      {guidance.actionLabel}
+                    </a>
+                  ) : (
+                    <span className="rounded-full border border-cyan-400/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-cyan-100/70">
+                      {guidance.actionLabel}
+                    </span>
+                  )}
+                  {guidance.actionHint ? <p className="text-xs text-cyan-200/60">{guidance.actionHint}</p> : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className={infoCardBase}>
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">动作层</div>
+              <div className="mt-3 space-y-2 text-sm text-cyan-100/70">
+                {['搜索与来源过滤', '简历分析与改写准备', '自动执行与回流日志', 'Challenge Center / 表单填充'].map((item) => (
+                  <div key={item} className="flex items-center gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
+                    <span>{item}</span>
                   </div>
-                  <button className="rounded-full bg-cyan-400 px-6 py-3 text-sm font-bold text-[#0d0e13] shadow-[0_0_30px_rgba(34,211,238,0.24)] transition hover:-translate-y-[1px]" type="button" disabled={sending || !input.trim()} onClick={() => void sendPrompt()}>
-                    {sending ? '处理中...' : '发送'}
-                  </button>
-                </div>
-                <input ref={fileInputRef} type="file" accept=".pdf,.docx,.txt" className="hidden" onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) void uploadResume(file);
-                  event.currentTarget.value = '';
-                }} />
+                ))}
               </div>
-            </section>
+            </div>
 
-            <aside className="space-y-4">
-              <div className="rounded-[28px] border border-cyan-400/16 bg-black/24 p-5 backdrop-blur-xl">
-                <div className="text-xs uppercase tracking-[0.16em] text-cyan-300/70">状态</div>
-                <div className="mt-3 text-sm text-cyan-100/70">{user ? `账号：${user.nickname || user.email}` : '未登录'}</div>
-                <div className="mt-2 text-sm text-cyan-100/70">{user ? `套餐：${user.plan} · 剩余额度 ${user.remaining_quota}` : '登录后显示'}</div>
-                <div className="mt-2 text-sm text-cyan-100/70">会话：{session?.id ? session.id.slice(0, 8) : '未创建'}</div>
+            <div className={infoCardBase}>
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">快捷入口</div>
+              <div className="mt-3 flex flex-col gap-2">
+                <a className="rounded-full border border-cyan-400/18 px-4 py-2 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10" href="/challenge-center">Challenge Center</a>
+                <a className="rounded-full border border-cyan-400/18 px-4 py-2 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10" href="/dashboard">执行看板</a>
+                <a className="rounded-full border border-cyan-400/18 px-4 py-2 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10" href="/records">投递记录</a>
               </div>
-
-              <div className="rounded-[28px] border border-cyan-400/16 bg-black/24 p-5 backdrop-blur-xl">
-                <div className="text-xs uppercase tracking-[0.16em] text-cyan-300/70">动作层</div>
-                <div className="mt-3 space-y-2 text-sm text-cyan-100/70">
-                  <div>搜索与来源过滤</div>
-                  <div>简历分析与改写准备</div>
-                  <div>自动执行与回流日志</div>
-                  <div>Challenge Center / 表单填充</div>
-                </div>
-              </div>
-
-              <div className="rounded-[28px] border border-cyan-400/16 bg-black/24 p-5 backdrop-blur-xl">
-                <div className="text-xs uppercase tracking-[0.16em] text-cyan-300/70">快捷入口</div>
-                <div className="mt-3 flex flex-col gap-2">
-                  <a className="rounded-full border border-cyan-400/18 px-4 py-2 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10" href="/challenge-center">Challenge Center</a>
-                  <a className="rounded-full border border-cyan-400/18 px-4 py-2 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10" href="/dashboard">执行看板</a>
-                  <a className="rounded-full border border-cyan-400/18 px-4 py-2 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10" href="/records">投递记录</a>
-                </div>
-              </div>
-            </aside>
-          </div>
+            </div>
+          </section>
         </main>
       </div>
 

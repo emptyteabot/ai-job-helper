@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Form, Input, Modal, message } from 'antd';
 import { apiUrl, authHeaders, wsUrl } from '../lib/api';
+import { assistedGuidance, AssistedStatus, deriveAssistedStatus } from './assistedGuidance';
 
 type Role = 'assistant' | 'user' | 'system' | 'tool';
 
@@ -54,6 +55,11 @@ const AgentChatWorkspace: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [resumeReady, setResumeReady] = useState(false);
+  const [stage, setStage] = useState('????');
+  const [progress, setProgress] = useState(0);
+  const [successCount, setSuccessCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
+  const [assistedStatus, setAssistedStatus] = useState<AssistedStatus>('standby');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -296,6 +302,11 @@ const AgentChatWorkspace: React.FC = () => {
   const executeActions = async (actions: Array<Record<string, any>>) => {
     if (!actions.length) return;
     setRunning(true);
+    setStage('????');
+    setProgress(4);
+    setSuccessCount(0);
+    setFailedCount(0);
+    setAssistedStatus('standby');
     for (const action of actions) {
       const actionType = String(action.type || '');
       try {
@@ -321,6 +332,8 @@ const AgentChatWorkspace: React.FC = () => {
         }
 
         if (actionType === 'analyze_resume') {
+          setStage('????');
+          setProgress((value) => Math.max(value, 20));
           const resume = await fetchLatestResumeText();
           if (!resume.text.trim()) {
             await persistEvent('当前没有可分析的简历文本。先上传简历，再让我分析。');
@@ -340,6 +353,8 @@ const AgentChatWorkspace: React.FC = () => {
         }
 
         if (actionType === 'show_records') {
+          setStage('????');
+          setProgress((value) => Math.max(value, 24));
           const response = await fetch(apiUrl(`/api/records?limit=${Number(action.limit || 8)}`), { headers: authHeaders({ Authorization: `Bearer ${token}` }) });
           const payload = await response.json();
           const records = payload.records || [];
@@ -351,6 +366,7 @@ const AgentChatWorkspace: React.FC = () => {
         }
 
         if (actionType === 'open_challenge_center') {
+          setAssistedStatus('challenge_required');
           const qs = new URLSearchParams({
             provider: 'boss',
             autostart: '1',
@@ -365,6 +381,8 @@ const AgentChatWorkspace: React.FC = () => {
         }
 
         if (actionType === 'run_apply') {
+          setStage('????');
+          setProgress((value) => Math.max(value, 32));
           const resume = await fetchLatestResumeText();
           if (!resume.text.trim()) {
             await persistEvent('执行前缺少简历文本。先上传简历。');
@@ -468,9 +486,16 @@ const AgentChatWorkspace: React.FC = () => {
     setSession(null);
     setMessages([]);
     setShowLogin(true);
+    setStage('????');
+    setProgress(0);
+    setSuccessCount(0);
+    setFailedCount(0);
+    setAssistedStatus('standby');
   };
 
   const latestAssistant = useMemo(() => messages.slice().reverse().find((item) => item.role === 'assistant') || null, [messages]);
+  const completionRate = successCount + failedCount > 0 ? Math.round((successCount / (successCount + failedCount)) * 100) : 0;
+  const guidance = assistedGuidance[assistedStatus];
 
   const renderMessage = (row: ChatMessage) => {
     const roleLabel = row.role === 'user' ? '用户' : row.role === 'assistant' ? '智能体' : row.role === 'tool' ? '工具' : '系统';

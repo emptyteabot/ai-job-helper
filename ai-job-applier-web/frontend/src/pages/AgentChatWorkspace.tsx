@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Form, Input, Modal, message } from 'antd';
+import { Form, Input, message } from 'antd';
 import { apiUrl, authHeaders, wsUrl } from '../lib/api';
 import { assistedGuidance, AssistedStatus, deriveAssistedStatus } from './assistedGuidance';
 
@@ -55,15 +55,29 @@ const AgentChatWorkspace: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [resumeReady, setResumeReady] = useState(false);
-  const [stage, setStage] = useState('????');
+  const [stage, setStage] = useState('等待启动');
   const [progress, setProgress] = useState(0);
   const [successCount, setSuccessCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [assistedStatus, setAssistedStatus] = useState<AssistedStatus>('standby');
+  const [seedPromptPending, setSeedPromptPending] = useState('');
+  const [seedPromptAutoSent, setSeedPromptAutoSent] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const seeded = (params.get('seed_prompt') || '').trim();
+    if (seeded) {
+      setSeedPromptPending(seeded);
+      setInput((current) => current || seeded);
+      setStage('已接收首页指令');
+      params.delete('seed_prompt');
+      const nextQuery = params.toString();
+      const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ''}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', nextUrl);
+    }
+
     const savedToken = window.localStorage.getItem('token') || '';
     if (!savedToken) {
       setShowLogin(true);
@@ -301,21 +315,33 @@ const AgentChatWorkspace: React.FC = () => {
 
   const executeActions = async (actions: Array<Record<string, any>>) => {
     if (!actions.length) return;
+    const total = actions.length;
+    let completed = 0;
+    let runSuccess = 0;
+    let runFailed = 0;
     setRunning(true);
-    setStage('????');
+    setStage('准备执行');
     setProgress(4);
-    setSuccessCount(0);
-    setFailedCount(0);
     setAssistedStatus('standby');
+
+    const markProgress = (nextStage: string, floor: number) => {
+      setStage(nextStage);
+      setProgress((value) => Math.max(value, Math.min(95, Math.max(floor, Math.round((completed / total) * 100)))));
+    };
+
     for (const action of actions) {
       const actionType = String(action.type || '');
+      let actionSucceeded = false;
       try {
         if (actionType === 'request_resume_upload') {
+          markProgress('等待简历上传', 14);
           await persistEvent('当前还没有可用简历。先上传一份简历，我再继续推进。');
+          actionSucceeded = true;
           continue;
         }
 
         if (actionType === 'search_jobs') {
+          markProgress('搜索岗位', 20);
           await persistEvent(`正在搜索 ${action.city || '全国'} / ${action.keyword || '岗位'} ...`, 'tool', { action: actionType });
           const response = await fetch(
             apiUrl(`/api/jobs/search?keyword=${encodeURIComponent(action.keyword || '产品实习生')}&city=${encodeURIComponent(action.city || '全国')}&max_count=${Number(action.max_count || 10)}`),
@@ -328,15 +354,16 @@ const AgentChatWorkspace: React.FC = () => {
             ? `已找到 ${jobs.length} 个岗位，来源 ${payload.provider || 'unknown'}。样例：${sample}`
             : '这轮搜索没有返回可用岗位结果。';
           await persistEvent(content, 'tool', { action: actionType, count: jobs.length, provider: payload.provider || '' });
+          actionSucceeded = response.ok;
           continue;
         }
 
         if (actionType === 'analyze_resume') {
-          setStage('????');
-          setProgress((value) => Math.max(value, 20));
+          markProgress('分析简历', 38);
           const resume = await fetchLatestResumeText();
           if (!resume.text.trim()) {
             await persistEvent('当前没有可分析的简历文本。先上传简历，再让我分析。');
+            actionSucceeded = false;
             continue;
           }
           const response = await fetch(apiUrl('/api/analysis/resume'), {
@@ -349,12 +376,12 @@ const AgentChatWorkspace: React.FC = () => {
           const keys = Object.keys(results);
           const preview = keys.slice(0, 3).map((key) => `${key}: ${JSON.stringify(results[key]).slice(0, 90)}`).join(' | ');
           await persistEvent(keys.length ? `简历分析完成。${preview}` : '简历分析没有返回有效结果。', 'tool', { action: actionType, keys });
+          actionSucceeded = response.ok && keys.length > 0;
           continue;
         }
 
         if (actionType === 'show_records') {
-          setStage('????');
-          setProgress((value) => Math.max(value, 24));
+          markProgress('读取记录', 52);
           const response = await fetch(apiUrl(`/api/records?limit=${Number(action.limit || 8)}`), { headers: authHeaders({ Authorization: `Bearer ${token}` }) });
           const payload = await response.json();
           const records = payload.records || [];
@@ -362,10 +389,12 @@ const AgentChatWorkspace: React.FC = () => {
             ? `最近 ${records.length} 条记录：${records.slice(0, 5).map((row: any) => `${row.job_title || row.title} / ${row.status}`).join('；')}`
             : '当前还没有可展示的执行记录。';
           await persistEvent(content, 'tool', { action: actionType, count: records.length });
+          actionSucceeded = response.ok;
           continue;
         }
 
         if (actionType === 'open_challenge_center') {
+          markProgress('等待人工接管', 70);
           setAssistedStatus('challenge_required');
           const qs = new URLSearchParams({
             provider: 'boss',
@@ -377,18 +406,21 @@ const AgentChatWorkspace: React.FC = () => {
           const lastBossSessionId = window.localStorage.getItem('last_boss_session_id') || '';
           if (lastBossSessionId) qs.set('session_id', lastBossSessionId);
           await persistEvent(`需要人工接管时，请进入 /challenge-center?${qs.toString()}`, 'system', { action: actionType, href: `/challenge-center?${qs.toString()}` });
+          actionSucceeded = true;
           continue;
         }
 
         if (actionType === 'run_apply') {
-          setStage('????');
-          setProgress((value) => Math.max(value, 32));
+          markProgress('执行投递', 82);
           const resume = await fetchLatestResumeText();
           if (!resume.text.trim()) {
             await persistEvent('执行前缺少简历文本。先上传简历。');
+            actionSucceeded = false;
             continue;
           }
           await persistEvent(`开始执行：${action.city || '全国'} / ${action.keyword || '岗位'}`, 'system', { action: actionType });
+          let wsCompleted = false;
+          let wsErrored = false;
           await new Promise<void>((resolve) => {
             const ws = new WebSocket(wsUrl('/api/apply/ws'));
             ws.onopen = () => {
@@ -403,6 +435,7 @@ const AgentChatWorkspace: React.FC = () => {
             ws.onmessage = (event) => {
               const payload = JSON.parse(event.data);
               if (payload.error) {
+                wsErrored = true;
                 void persistEvent(payload.message || '执行失败', 'system', { action: actionType, error: true });
                 ws.close();
                 return;
@@ -410,26 +443,66 @@ const AgentChatWorkspace: React.FC = () => {
               if (payload.stage && payload.message) {
                 void persistEvent(`${payload.stage}: ${payload.message}`, 'tool', { action: actionType, stage: payload.stage });
               }
-              if (payload.stage === 'completed') ws.close();
+              if (payload.stage === 'completed') {
+                wsCompleted = true;
+                ws.close();
+              }
             };
             ws.onerror = () => {
+              wsErrored = true;
               void persistEvent('执行链路连接异常。', 'system', { action: actionType, error: true });
               resolve();
             };
             ws.onclose = () => resolve();
           });
+          actionSucceeded = wsCompleted && !wsErrored;
+          continue;
         }
+
+        markProgress(`执行 ${actionType || '动作'}`, 60);
+        await persistEvent(`暂未实现动作：${actionType || 'unknown'}`, 'system', { action: actionType, error: true });
+        actionSucceeded = false;
       } catch {
         await persistEvent(`${actionType} 执行失败。`, 'system', { action: actionType, error: true });
+        actionSucceeded = false;
+      } finally {
+        completed += 1;
+        if (actionSucceeded) {
+          runSuccess += 1;
+          setSuccessCount((value) => value + 1);
+        } else {
+          runFailed += 1;
+          setFailedCount((value) => value + 1);
+        }
+        setProgress((value) => Math.max(value, Math.min(98, Math.round((completed / total) * 100))));
       }
     }
+    setStage(runFailed > 0 ? '部分完成' : '执行完成');
+    setProgress((value) => Math.max(value, runFailed > 0 ? 96 : 100));
     setRunning(false);
   };
 
+  const requireReadyWorkspace = (pendingContent?: string) => {
+    if (token && session?.id) return true;
+    if (pendingContent?.trim()) {
+      setInput(pendingContent.trim());
+    }
+    setShowLogin(true);
+    if (!token) {
+      setStage('等待登录');
+      message.warning('请先登录后再发送任务。');
+      return false;
+    }
+    setStage('恢复会话中');
+    void ensureSession(token);
+    message.warning('会话尚未就绪，请先完成登录验证。');
+    return false;
+  };
+
   const sendPrompt = async (customPrompt?: string) => {
-    if (!session?.id || !token) return;
     const content = (customPrompt || input).trim();
     if (!content) return;
+    if (!requireReadyWorkspace(content)) return;
     setSending(true);
     setInput('');
     try {
@@ -451,6 +524,14 @@ const AgentChatWorkspace: React.FC = () => {
       setSending(false);
     }
   };
+
+  useEffect(() => {
+    if (!seedPromptPending || seedPromptAutoSent) return;
+    if (!token || !session?.id) return;
+    setSeedPromptAutoSent(true);
+    void sendPrompt(seedPromptPending);
+    setSeedPromptPending('');
+  }, [seedPromptPending, seedPromptAutoSent, token, session?.id]);
 
   const uploadResume = async (file: File) => {
     if (!token) return;
@@ -486,7 +567,7 @@ const AgentChatWorkspace: React.FC = () => {
     setSession(null);
     setMessages([]);
     setShowLogin(true);
-    setStage('????');
+    setStage('等待启动');
     setProgress(0);
     setSuccessCount(0);
     setFailedCount(0);
@@ -625,10 +706,18 @@ const AgentChatWorkspace: React.FC = () => {
     );
   };
 
-  const stageLabel = stage && stage !== '????' ? stage : '待命中';
+  const stageLabel = stage ? stage : '待命中';
   const statusWidth = Math.min(Math.max(progress, completionRate), 100);
+  const workspaceStageLabel = `控制台阶段 · ${stageLabel}`;
+  const workspaceProgressWidth = statusWidth;
+  const workspaceStatusBadges = [
+    resumeReady ? '简历已就绪' : '等待简历上传',
+    session?.id ? `会话 ${session.id.slice(0, 8)}` : '会话未就绪',
+    `动作 ${successCount + failedCount} · 成功 ${successCount} / 失败 ${failedCount}`,
+  ];
   const guidanceActionLink = guidance.actionUrl || (assistedStatus === 'challenge_required' ? '/challenge-center' : undefined);
   const infoCardBase = 'rounded-[28px] border border-cyan-400/16 bg-black/24 px-5 py-5 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur-3xl';
+  const authLockRequired = !token || !session?.id;
 
   return (
     <div className="min-h-screen bg-[#0d0e13] text-cyan-50">
@@ -677,15 +766,44 @@ const AgentChatWorkspace: React.FC = () => {
             </p>
           </section>
 
-          <section className="mt-6 flex min-h-[65vh] flex-col overflow-hidden rounded-[32px] border border-cyan-400/18 bg-black/28 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl">
-            <div className="border-b border-cyan-400/12 px-5 py-4 md:px-6">
+          <section className="mt-6">
+            <div className={`${infoCardBase} border-cyan-400/25 bg-[#03060f]/80`}>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <div className="text-[0.65rem] uppercase tracking-[0.28em] text-cyan-200/70">Landing → Workspace</div>
+                  <div className="text-2xl font-semibold text-white">{workspaceStageLabel}</div>
+                </div>
+                <span className="text-[0.65rem] uppercase tracking-[0.35em] text-cyan-100/60">粒子场同步</span>
+              </div>
+              <div className="mt-4 h-2 w-full rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-sky-500 to-blue-500"
+                  style={{ width: `${workspaceProgressWidth}%` }}
+                />
+              </div>
+              <p className="mt-3 text-sm text-cyan-100/70">
+                当前控制台就是刚才首页光环的延伸。粒子背景、按钮节奏、阶段提示都会跟着这个房间一起振幅。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {workspaceStatusBadges.map((badge) => (
+                  <span key={badge} className="rounded-full border border-cyan-400/30 px-3 py-1 text-[10px] uppercase tracking-[0.25em] text-cyan-100/80">
+                    {badge}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-6 flex min-h-[65vh] flex-col overflow-hidden rounded-[32px] border border-cyan-400/25 bg-gradient-to-br from-[#05080d]/70 via-[#03050c]/60 to-[#010308]/80 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-3xl relative">
+            <div className="pointer-events-none absolute inset-0 z-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_55%),radial-gradient(circle_at_bottom,rgba(76,215,246,0.08),transparent_60%)]" />
+            <div className="relative z-10 border-b border-cyan-400/12 px-5 py-4 md:px-6">
               <div className="text-sm font-semibold text-cyan-100">对话工作台</div>
               <div className="mt-1 text-sm text-cyan-100/52">
                 {running ? '后台正在执行隐藏动作并持续回流结果。' : '用一句自然语言描述目标，其他能力都藏在下面。'}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
+            <div className="relative z-10 flex-1 overflow-y-auto px-4 py-5 md:px-6">
               {messages.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-center">
                   <div className="max-w-2xl">
@@ -710,11 +828,12 @@ const AgentChatWorkspace: React.FC = () => {
               )}
             </div>
 
-            <div className="border-t border-cyan-400/12 px-4 py-4 md:px-6">
+            <div className="relative z-10 border-t border-cyan-400/12 px-4 py-4 md:px-6">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-cyan-100/48">
                 <span className="rounded-full border border-cyan-400/12 px-3 py-1">隐藏能力：搜索 / 执行 / Challenge / 表单填充 / 记录</span>
                 {resumeReady ? <span className="rounded-full border border-cyan-400/12 px-3 py-1">简历已就绪</span> : null}
                 {latestAssistant?.actions?.length ? <span className="rounded-full border border-cyan-400/12 px-3 py-1">已生成动作建议</span> : null}
+                {seedPromptPending ? <span className="rounded-full border border-cyan-400/25 bg-cyan-500/8 px-3 py-1 text-cyan-100/90">已接收 seed_prompt，登录后自动发送</span> : null}
               </div>
               <div className="flex items-end gap-3">
                 <button className="rounded-full border border-cyan-400/20 px-4 py-3 text-sm text-cyan-100/75 transition hover:bg-cyan-500/10" type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
@@ -826,23 +945,61 @@ const AgentChatWorkspace: React.FC = () => {
         </main>
       </div>
 
-      <Modal title={authMode === 'login' ? '登录工作台' : '注册工作台'} open={showLogin} footer={null} onCancel={() => setShowLogin(false)}>
-        <Form layout="vertical" onFinish={handleAuth}>
-          <Form.Item label="邮箱" name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码' }]}>
-            <Input.Password />
-          </Form.Item>
-          {authMode === 'register' ? <Form.Item label="昵称" name="nickname"><Input /></Form.Item> : null}
-          <button className="mt-2 w-full rounded-full bg-cyan-400 px-4 py-3 font-bold text-[#0d0e13]" type="submit">
-            {authMode === 'login' ? '登录' : '注册'}
-          </button>
-        </Form>
-        <button className="mt-4 w-full rounded-full border border-cyan-400/18 px-4 py-3 text-sm text-cyan-100/80" type="button" onClick={() => setAuthMode((current) => (current === 'login' ? 'register' : 'login'))}>
-          {authMode === 'login' ? '没有账号，去注册' : '已有账号，去登录'}
-        </button>
-      </Modal>
+      {showLogin ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#020712]/82 px-4 backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.18),transparent_42%),radial-gradient(circle_at_bottom,rgba(56,189,248,0.1),transparent_35%)]" />
+          <div className="relative w-full max-w-md overflow-hidden rounded-[28px] border border-cyan-400/30 bg-[linear-gradient(155deg,rgba(2,6,23,0.96),rgba(5,15,34,0.94))] p-6 shadow-[0_35px_110px_rgba(0,0,0,0.72)]">
+            <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/70 to-transparent" />
+            <div className="flex items-start justify-between gap-4 border-b border-cyan-400/18 pb-4">
+              <div>
+                <div className="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-cyan-300">
+                  {authMode === 'login' ? 'Authenticate Workspace' : 'Create Workspace Access'}
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-white">{authMode === 'login' ? '登录工作台' : '注册工作台'}</div>
+                <p className="mt-2 text-sm leading-6 text-cyan-100/68">
+                  先完成认证，再让控制台接住你的 Prompt、会话和执行链路。
+                </p>
+              </div>
+              {!authLockRequired ? (
+                <button
+                  className="rounded-full border border-cyan-400/25 px-3 py-1 text-xs uppercase tracking-[0.18em] text-cyan-100/70 transition hover:bg-cyan-400/10"
+                  type="button"
+                  onClick={() => setShowLogin(false)}
+                >
+                  关闭
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-cyan-400/14 bg-black/18 p-4">
+              <Form layout="vertical" onFinish={handleAuth} requiredMark={false}>
+                <Form.Item label={<span className="text-cyan-100/85">邮箱</span>} name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
+                  <Input style={{ background: 'rgba(8,21,40,0.66)', borderColor: 'rgba(34,211,238,0.35)', color: '#e0f2fe' }} />
+                </Form.Item>
+                <Form.Item label={<span className="text-cyan-100/85">密码</span>} name="password" rules={[{ required: true, message: '请输入密码' }]}>
+                  <Input.Password style={{ background: 'rgba(8,21,40,0.66)', borderColor: 'rgba(34,211,238,0.35)', color: '#e0f2fe' }} />
+                </Form.Item>
+                {authMode === 'register' ? (
+                  <Form.Item label={<span className="text-cyan-100/85">昵称</span>} name="nickname">
+                    <Input style={{ background: 'rgba(8,21,40,0.66)', borderColor: 'rgba(34,211,238,0.35)', color: '#e0f2fe' }} />
+                  </Form.Item>
+                ) : null}
+                <button className="mt-2 w-full rounded-full bg-cyan-400 px-4 py-3 font-bold text-[#0d0e13] shadow-[0_0_30px_rgba(34,211,238,0.28)]" type="submit">
+                  {authMode === 'login' ? '登录' : '注册'}
+                </button>
+              </Form>
+              {authLockRequired ? <div className="mt-3 text-center text-xs text-cyan-100/65">需要完成认证并建立会话后才能离开这里。</div> : null}
+              <button
+                className="mt-4 w-full rounded-full border border-cyan-400/18 px-4 py-3 text-sm text-cyan-100/80 transition hover:bg-cyan-500/10"
+                type="button"
+                onClick={() => setAuthMode((current) => (current === 'login' ? 'register' : 'login'))}
+              >
+                {authMode === 'login' ? '没有账号，去注册' : '已有账号，去登录'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };

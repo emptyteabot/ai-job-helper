@@ -63,11 +63,11 @@ button {
 }
 
 .glow-radial {
-  background: radial-gradient(circle at center, rgba(76, 215, 246, 0.25) 0%, transparent 70%);
+  background: radial-gradient(circle at center, rgba(76, 215, 246, 0.22) 0%, rgba(33, 121, 153, 0.08) 36%, transparent 72%);
 }
 
 .glow-cyan {
-  background: radial-gradient(circle at center, rgba(76, 215, 246, 0.2) 0%, transparent 65%);
+  background: radial-gradient(circle at center, rgba(76, 215, 246, 0.16) 0%, rgba(20, 58, 78, 0.06) 40%, transparent 68%);
 }
 
 .glass-panel {
@@ -78,9 +78,9 @@ button {
 
 .text-glow {
   text-shadow:
-    0 0 10px rgba(76, 215, 246, 0.8),
-    0 0 20px rgba(76, 215, 246, 0.4),
-    0 0 40px rgba(76, 215, 246, 0.2);
+    0 0 12px rgba(76, 215, 246, 0.78),
+    0 0 24px rgba(76, 215, 246, 0.3),
+    0 0 46px rgba(76, 215, 246, 0.14);
 }
 
 .btn-glow {
@@ -121,11 +121,13 @@ button {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(76, 215, 246, 0.1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(76, 215, 246, 0.1) 1px, transparent 1px);
+    linear-gradient(rgba(76, 215, 246, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(76, 215, 246, 0.08) 1px, transparent 1px);
   background-size: 60px 60px;
   z-index: 0;
-  opacity: 0.5;
+  opacity: 0.24;
+  mask-image: radial-gradient(circle at 50% 24%, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.46) 30%, transparent 84%);
+  -webkit-mask-image: radial-gradient(circle at 50% 24%, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.46) 30%, transparent 84%);
 }
 
 .custom-scrollbar::-webkit-scrollbar {

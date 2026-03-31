@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import argparse
 import logging
-from dotenv import load_dotenv
+import os
 
 # 导入所有 API 路由
 from api import (
@@ -17,11 +17,12 @@ from api import (
     smart_apply,
     feishu,
     boss_applier_api,
-    simple_apply
+    simple_apply,
+    credits
 )
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量（不使用 dotenv）
+# 环境变量通过 systemd 服务配置传入
 
 # 配置日志
 logging.basicConfig(
@@ -56,6 +57,7 @@ app.include_router(smart_apply.router)
 app.include_router(feishu.router)
 app.include_router(boss_applier_api.router)
 app.include_router(simple_apply.router)
+app.include_router(credits.router)
 
 @app.get("/")
 async def root():

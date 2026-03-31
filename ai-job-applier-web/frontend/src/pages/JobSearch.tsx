@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, Card, List, Tag, Space, Checkbox, message, Empty } from 'antd';
-import { SearchOutlined, EnvironmentOutlined, DollarOutlined } from '@ant-design/icons';
+﻿import React, { useState } from 'react';
+import { Button, Card, Checkbox, Empty, Form, Input, List, Space, Tag, message } from 'antd';
+import { DollarOutlined, EnvironmentOutlined, SearchOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import { authFetch } from '../utils/network';
 
 interface Job {
   job_id: string;
@@ -11,10 +13,11 @@ interface Job {
   experience: string;
   education: string;
   description: string;
-  url: string;
+  url?: string;
 }
 
 const JobSearch: React.FC = () => {
+  const navigate = useNavigate();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
@@ -22,48 +25,48 @@ const JobSearch: React.FC = () => {
   const onSearch = async (values: any) => {
     setLoading(true);
     try {
-      const result = await window.electronAPI.pythonCall('/api/jobs/search', values);
-      setJobs(result.jobs || []);
-      setSelectedJobs([]);
-      if (result.jobs && result.jobs.length > 0) {
-        message.success(`找到 ${result.jobs.length} 个岗位`);
-      } else {
-        message.info('未找到匹配的岗位');
+      const response = await authFetch('/api/jobs/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || result.message || '搜索失败');
       }
-    } catch (error) {
-      console.error('搜索失败', error);
-      message.error('搜索失败，请检查是否已登录');
+
+      const nextJobs = result.jobs || [];
+      setJobs(nextJobs);
+      setSelectedJobs([]);
+
+      if (nextJobs.length > 0) {
+        message.success(`找到 ${nextJobs.length} 个岗位`);
+      } else {
+        message.info('未找到匹配岗位，请调整关键词');
+      }
+    } catch (error: any) {
+      message.error(error?.message || '岗位搜索失败');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSelectJob = (jobId: string, checked: boolean) => {
-    if (checked) {
-      setSelectedJobs([...selectedJobs, jobId]);
-    } else {
-      setSelectedJobs(selectedJobs.filter(id => id !== jobId));
-    }
+    setSelectedJobs((prev) => (checked ? [...prev, jobId] : prev.filter((id) => id !== jobId)));
   };
 
   const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedJobs(jobs.map(job => job.job_id));
-    } else {
-      setSelectedJobs([]);
-    }
+    setSelectedJobs(checked ? jobs.map((job) => job.job_id) : []);
   };
 
   const handleBatchApply = () => {
-    if (selectedJobs.length === 0) {
+    if (!selectedJobs.length) {
       message.warning('请先选择要投递的岗位');
       return;
     }
-    // 保存选中的岗位到 localStorage
     localStorage.setItem('selectedJobs', JSON.stringify(selectedJobs));
-    message.success(`已选择 ${selectedJobs.length} 个岗位`);
-    // 跳转到投递页面
-    window.location.hash = '/apply';
+    message.success(`已选择 ${selectedJobs.length} 个岗位，进入批量投递`);
+    navigate('/auto-apply');
   };
 
   return (
@@ -71,37 +74,21 @@ const JobSearch: React.FC = () => {
       <h1>岗位搜索</h1>
 
       <Card style={{ marginBottom: 16 }}>
-        <Form layout="inline" onFinish={onSearch}>
-          <Form.Item
-            name="keywords"
-            label="关键词"
-            rules={[{ required: true, message: '请输入关键词' }]}
-          >
-            <Input
-              placeholder="例如：Python实习"
-              prefix={<SearchOutlined />}
-              style={{ width: 200 }}
-            />
+        <Form layout="inline" onFinish={onSearch} initialValues={{ location: '全国', limit: 20 }}>
+          <Form.Item name="keywords" label="关键词" rules={[{ required: true, message: '请输入关键词' }]}>
+            <Input placeholder="例如：Python实习" prefix={<SearchOutlined />} style={{ width: 220 }} />
           </Form.Item>
           <Form.Item name="location" label="地点">
-            <Input
-              placeholder="例如：北京"
-              prefix={<EnvironmentOutlined />}
-              style={{ width: 150 }}
-            />
+            <Input placeholder="例如：北京" prefix={<EnvironmentOutlined />} style={{ width: 150 }} />
           </Form.Item>
-          <Form.Item name="salary_min" label="最低薪资">
-            <Input
-              placeholder="例如：8000"
-              prefix={<DollarOutlined />}
-              type="number"
-              style={{ width: 120 }}
-            />
+          <Form.Item name="salary_min" label="最低薪资(K)">
+            <Input placeholder="例如：15" prefix={<DollarOutlined />} type="number" style={{ width: 130 }} />
+          </Form.Item>
+          <Form.Item name="limit" label="数量">
+            <Input type="number" min={1} max={100} style={{ width: 100 }} />
           </Form.Item>
           <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading}>
-              搜索
-            </Button>
+            <Button type="primary" htmlType="submit" loading={loading}>搜索</Button>
           </Form.Item>
         </Form>
       </Card>
@@ -116,11 +103,7 @@ const JobSearch: React.FC = () => {
             >
               全选
             </Checkbox>
-            <Button
-              type="primary"
-              disabled={selectedJobs.length === 0}
-              onClick={handleBatchApply}
-            >
+            <Button type="primary" disabled={!selectedJobs.length} onClick={handleBatchApply}>
               批量投递 ({selectedJobs.length})
             </Button>
           </Space>
@@ -154,9 +137,12 @@ const JobSearch: React.FC = () => {
                   <Tag>{job.experience}</Tag>
                   <Tag>{job.education}</Tag>
                 </div>
-                <p style={{ marginTop: 12, color: '#666' }}>
-                  {job.description.substring(0, 100)}...
-                </p>
+                <p style={{ marginTop: 12, color: '#64748b' }}>{job.description.substring(0, 140)}...</p>
+                {job.url && (
+                  <a href={job.url} target="_blank" rel="noreferrer">
+                    查看原始链接
+                  </a>
+                )}
               </Card>
             </List.Item>
           )}

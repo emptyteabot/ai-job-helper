@@ -50,3 +50,8 @@ build/
 *.egg-info/
 
 
+
+# Runtime artifacts
+ai-job-applier-web/reports/
+ai-job-applier-web/backend/data/
+ai-job-applier-web/frontend/build-output.log

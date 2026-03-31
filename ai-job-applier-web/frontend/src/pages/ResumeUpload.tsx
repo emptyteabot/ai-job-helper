@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, Button, message, Card, List, Typography, Popconfirm } from 'antd';
-import { UploadOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons';
+﻿import React, { useEffect, useState } from 'react';
+import { Button, Card, List, message, Popconfirm, Typography, Upload } from 'antd';
+import { DeleteOutlined, FileTextOutlined, UploadOutlined } from '@ant-design/icons';
+import { apiUrl, authFetch, authHeaders } from '../utils/network';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph, Text } = Typography;
 
 interface Resume {
   filename: string;
@@ -13,28 +14,28 @@ interface Resume {
 const ResumeUpload: React.FC = () => {
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedResume, setSelectedResume] = useState<string>('');
-  const [resumeText, setResumeText] = useState<string>('');
-
-  useEffect(() => {
-    loadResumes();
-  }, []);
+  const [selectedResume, setSelectedResume] = useState('');
+  const [resumeText, setResumeText] = useState('');
 
   const loadResumes = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:8765/api/resume/list');
+      const response = await authFetch('/api/resume/list');
       const result = await response.json();
-
-      if (result.success) {
-        setResumes(result.resumes || []);
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || result.message || '加载失败');
       }
-    } catch (error) {
-      console.error('加载简历列表失败', error);
+      setResumes(result.resumes || []);
+    } catch (error: any) {
+      message.error(error?.message || '加载简历列表失败');
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    void loadResumes();
+  }, []);
 
   const handleUpload = async (file: File) => {
     setLoading(true);
@@ -42,23 +43,21 @@ const ResumeUpload: React.FC = () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      // 直接使用 fetch 上传文件
-      const response = await fetch('http://localhost:8765/api/resume/upload', {
+      const response = await fetch(apiUrl('/api/resume/upload'), {
         method: 'POST',
-        body: formData
+        headers: authHeaders(),
+        body: formData,
       });
-
       const result = await response.json();
 
-      if (result.success) {
-        message.success('简历上传成功');
-        loadResumes();
-      } else {
-        message.error(result.detail || '简历上传失败');
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || result.message || '上传失败');
       }
-    } catch (error) {
-      console.error('上传错误:', error);
-      message.error('简历上传失败');
+
+      message.success('简历上传成功');
+      await loadResumes();
+    } catch (error: any) {
+      message.error(error?.message || '简历上传失败');
     } finally {
       setLoading(false);
     }
@@ -67,47 +66,40 @@ const ResumeUpload: React.FC = () => {
 
   const handleDelete = async (filename: string) => {
     try {
-      const response = await fetch(`http://localhost:8765/api/resume/${filename}`, {
-        method: 'DELETE'
-      });
-
+      const response = await authFetch(`/api/resume/${encodeURIComponent(filename)}`, { method: 'DELETE' });
       const result = await response.json();
-
-      if (result.success) {
-        message.success('简历删除成功');
-        loadResumes();
-        if (selectedResume === filename) {
-          setSelectedResume('');
-          setResumeText('');
-        }
-      } else {
-        message.error('简历删除失败');
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || result.message || '删除失败');
       }
-    } catch (error) {
-      message.error('简历删除失败');
+      message.success('简历删除成功');
+      await loadResumes();
+      if (selectedResume === filename) {
+        setSelectedResume('');
+        setResumeText('');
+      }
+    } catch (error: any) {
+      message.error(error?.message || '简历删除失败');
     }
   };
 
   const handleView = async (filename: string) => {
     try {
-      const response = await fetch(`http://localhost:8765/api/resume/text/${filename}`);
+      const response = await authFetch(`/api/resume/text/${encodeURIComponent(filename)}`);
       const result = await response.json();
-
-      if (result.success) {
-        setSelectedResume(filename);
-        setResumeText(result.text || '');
-      } else {
-        message.error('加载简历内容失败');
+      if (!response.ok || !result.success) {
+        throw new Error(result.detail || result.message || '读取失败');
       }
-    } catch (error) {
-      message.error('加载简历内容失败');
+      setSelectedResume(filename);
+      setResumeText(result.text || '');
+    } catch (error: any) {
+      message.error(error?.message || '加载简历内容失败');
     }
   };
 
   const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
   return (
@@ -115,35 +107,28 @@ const ResumeUpload: React.FC = () => {
       <h1>简历管理</h1>
 
       <Card style={{ marginBottom: 16 }}>
-        <Upload
-          beforeUpload={handleUpload}
-          accept=".pdf,.doc,.docx"
-          maxCount={1}
-          showUploadList={false}
-        >
-          <Button icon={<UploadOutlined />} type="primary" size="large">
+        <Upload beforeUpload={handleUpload} accept=".pdf,.doc,.docx,.txt" maxCount={1} showUploadList={false}>
+          <Button icon={<UploadOutlined />} type="primary" size="large" loading={loading}>
             上传简历
           </Button>
         </Upload>
         <Text type="secondary" style={{ marginLeft: 16 }}>
-          支持 PDF、Word 格式，最大 10MB
+          支持 PDF、Word、TXT，最大 10MB
         </Text>
       </Card>
 
       <Card title="我的简历" loading={loading}>
         <List
           dataSource={resumes}
+          locale={{ emptyText: '暂无简历，请先上传' }}
           renderItem={(resume) => (
             <List.Item
               actions={[
-                <Button
-                  type="link"
-                  icon={<FileTextOutlined />}
-                  onClick={() => handleView(resume.filename)}
-                >
+                <Button key="view" type="link" icon={<FileTextOutlined />} onClick={() => handleView(resume.filename)}>
                   查看
                 </Button>,
                 <Popconfirm
+                  key="delete"
                   title="确定删除这份简历吗？"
                   onConfirm={() => handleDelete(resume.filename)}
                   okText="确定"
@@ -152,11 +137,11 @@ const ResumeUpload: React.FC = () => {
                   <Button type="link" danger icon={<DeleteOutlined />}>
                     删除
                   </Button>
-                </Popconfirm>
+                </Popconfirm>,
               ]}
             >
               <List.Item.Meta
-                avatar={<FileTextOutlined style={{ fontSize: 24 }} />}
+                avatar={<FileTextOutlined style={{ fontSize: 22 }} />}
                 title={resume.filename}
                 description={`大小: ${formatFileSize(resume.size)}`}
               />
@@ -167,10 +152,7 @@ const ResumeUpload: React.FC = () => {
 
       {selectedResume && (
         <Card title={`简历内容 - ${selectedResume}`} style={{ marginTop: 16 }}>
-          <Paragraph
-            ellipsis={{ rows: 10, expandable: true, symbol: '展开' }}
-            style={{ whiteSpace: 'pre-wrap' }}
-          >
+          <Paragraph ellipsis={{ rows: 12, expandable: true, symbol: '展开' }} style={{ whiteSpace: 'pre-wrap' }}>
             {resumeText}
           </Paragraph>
         </Card>

@@ -1,5 +1,6 @@
-import React from 'react';
-import { Button, Progress, Card, Input, message, Switch, Space } from 'antd';
+﻿import React from 'react';
+import { Button, Card, Input, Progress, Space, Switch, message } from 'antd';
+import { getToken, wsUrl } from '../utils/network';
 
 const { TextArea } = Input;
 
@@ -12,19 +13,21 @@ const AutoApply: React.FC = () => {
   const [selectedJobs, setSelectedJobs] = React.useState<string[]>([]);
 
   React.useEffect(() => {
-    // 从 localStorage 获取选中的岗位
     const jobs = localStorage.getItem('selectedJobs');
     if (jobs) {
-      setSelectedJobs(JSON.parse(jobs));
+      try {
+        setSelectedJobs(JSON.parse(jobs));
+      } catch {
+        setSelectedJobs([]);
+      }
     }
   }, []);
 
   const startApply = async () => {
     if (selectedJobs.length === 0) {
-      message.warning('请先在岗位搜索页面选择要投递的岗位');
+      message.warning('请先在岗位搜索页面选择岗位');
       return;
     }
-
     if (!resumeText.trim()) {
       message.warning('请输入简历内容');
       return;
@@ -35,100 +38,99 @@ const AutoApply: React.FC = () => {
     setLogs([]);
 
     try {
-      // 获取后端端口
-      const backendPort = 8000; // 根据实际情况调整
-      const ws = new WebSocket(`ws://localhost:${backendPort}/api/apply/ws/apply`);
+      const ws = new WebSocket(wsUrl('/api/apply/ws/apply'));
 
       ws.onopen = () => {
-        // 发送投递任务
-        ws.send(JSON.stringify({
-          job_ids: selectedJobs,
-          resume_text: resumeText,
-          use_ai_cover_letter: useAI
-        }));
+        ws.send(
+          JSON.stringify({
+            token: getToken(),
+            job_ids: selectedJobs,
+            resume_text: resumeText,
+            use_ai_cover_letter: useAI,
+          })
+        );
         setLogs((prev) => [...prev, '开始批量投递...']);
       };
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        
+
         if (data.error) {
-          message.error(data.message);
-          setLogs((prev) => [...prev, `❌ 错误: ${data.message}`]);
+          message.error(data.message || '投递失败');
+          setLogs((prev) => [...prev, `错误: ${data.message || '未知错误'}`]);
           setIsRunning(false);
+          ws.close();
           return;
         }
 
-        if (data.completed) {
-          message.success(data.message);
-          setLogs((prev) => [...prev, `✅ ${data.message}`]);
+        if (data.completed || data.stage === 'completed') {
+          message.success(data.message || '投递完成');
+          setLogs((prev) => [...prev, `完成: ${data.message || '投递结束'}`]);
+          setProgress(100);
           setIsRunning(false);
-          // 清除已投递的岗位
           localStorage.removeItem('selectedJobs');
+          ws.close();
           return;
         }
 
-        // 更新进度
-        if (data.progress !== undefined) {
-          setProgress(data.progress * 100);
-          const status = data.success ? '✅ 成功' : '❌ 失败';
-          setLogs((prev) => [
-            ...prev,
-            `[${data.current}/${data.total}] ${data.company} - ${data.job} ${status}`
-          ]);
+        if (typeof data.progress === 'number') {
+          const raw = data.progress > 1 ? data.progress : data.progress * 100;
+          setProgress(Math.min(100, Math.max(0, Math.round(raw))));
         }
+
+        if (data.job) {
+          const status = data.success ? '成功' : '失败';
+          setLogs((prev) => [...prev, `[${data.current}/${data.total}] ${data.company} - ${data.job} ${status}`]);
+        } else if (data.message) {
+          setLogs((prev) => [...prev, data.message]);
+        }
+      };
+
+      ws.onerror = () => {
+        message.error('连接失败，请稍后重试');
+        setIsRunning(false);
+        setLogs((prev) => [...prev, '错误: WebSocket 连接失败']);
       };
 
       ws.onclose = () => {
         setIsRunning(false);
-        setLogs((prev) => [...prev, '连接已关闭']);
       };
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        message.error('连接失败，请检查后端是否运行');
-        setIsRunning(false);
-        setLogs((prev) => [...prev, '❌ 连接失败']);
-      };
-    } catch (error) {
-      console.error('投递失败', error);
-      message.error('投递失败');
+    } catch (error: any) {
+      message.error(error?.message || '投递失败');
       setIsRunning(false);
     }
   };
 
   return (
     <div>
-      <h1>自动投递</h1>
-      
+      <h1>批量自动投递</h1>
+
       <Card style={{ marginBottom: 16 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
-            <strong>已选择岗位：</strong> {selectedJobs.length} 个
+            <strong>已选岗位:</strong> {selectedJobs.length} 个
           </div>
-          
+
           <div>
-            <strong>简历内容：</strong>
+            <strong>简历内容:</strong>
             <TextArea
               rows={6}
-              placeholder="请输入或粘贴您的简历内容，用于 AI 生成个性化求职信"
+              placeholder="粘贴简历内容，用于生成个性化沟通语"
               value={resumeText}
               onChange={(e) => setResumeText(e.target.value)}
               disabled={isRunning}
             />
           </div>
 
-          <div>
-            <Space>
-              <strong>使用 AI 生成求职信：</strong>
-              <Switch checked={useAI} onChange={setUseAI} disabled={isRunning} />
-            </Space>
-          </div>
+          <Space>
+            <strong>使用 AI 生成求职信:</strong>
+            <Switch checked={useAI} onChange={setUseAI} disabled={isRunning} />
+          </Space>
         </Space>
       </Card>
 
       <Card style={{ marginBottom: 16 }}>
-        <Progress percent={Math.round(progress)} status={isRunning ? 'active' : 'normal'} />
+        <Progress percent={progress} status={isRunning ? 'active' : 'normal'} />
         <Button
           type="primary"
           onClick={startApply}
@@ -143,10 +145,12 @@ const AutoApply: React.FC = () => {
       <Card title="投递日志">
         <div style={{ maxHeight: 400, overflow: 'auto', fontFamily: 'monospace' }}>
           {logs.length === 0 ? (
-            <div style={{ color: '#999' }}>暂无日志</div>
+            <div style={{ color: '#94a3b8' }}>暂无日志</div>
           ) : (
-            logs.map((log, i) => (
-              <div key={i} style={{ padding: '4px 0' }}>{log}</div>
+            logs.map((log, index) => (
+              <div key={index} style={{ padding: '4px 0' }}>
+                {log}
+              </div>
             ))
           )}
         </div>
